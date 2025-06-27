@@ -1,5 +1,5 @@
 import serial
-
+import time
 class EepromLoader:
     def __init__(self, port:str='/dev/ttyACM0', baudrate=115200):
         self.port = port
@@ -22,17 +22,26 @@ class EepromLoader:
         else:
             print("Serial port is already open.")
 
-    def write(self, program_file:str="program.bin"):
-        self.serial.write(b'L')  # Load command
-
-        with open(program_file, "rb") as f:
+    def write(self, bin_path):
+        ser = self.serial
+        with open(bin_path, "rb") as f:
             data = f.read()
-            if len(data) > 65536:
-                raise ValueError("Program çok büyük!")
-            data += b'\x00' * (65536 - len(data)) 
-            self.serial.write(data)
+            print("Yükleme başlatılıyor...")
+            ser.write(b'L')
+            ser.flush()
+            time.sleep(0.1)  # pico hazır olsun
+            ser.write(data)
+            ser.flush()
+            print("Yükleme tamamlandı. Cihaza yazılıyor...")
 
-        print(f"{program_file} loaded")
+        # Serial'den logları oku
+        timeout = time.time() + 5  # max 5 saniye log bekle
+        while True:
+            if ser.in_waiting:
+                line = ser.readline().decode(errors="ignore").strip()
+                print("PICO:", line)
+            if time.time() > timeout:
+                break
 
     def check_file(self, program_file:str="program.bin", top_n=64):
         with open(program_file, "rb") as f:
@@ -48,4 +57,4 @@ class EepromLoader:
             print(line)
             if "3F" in line:
                 break
-            
+

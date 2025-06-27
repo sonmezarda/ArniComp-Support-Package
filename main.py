@@ -4,8 +4,14 @@ from config import *
 from modules.AssemblyHelper import AssemblyHelper
 from modules.EepromLoader import EepromLoader
 
-assembly_helper  = AssemblyHelper(comment_char=';', label_char=':', constant_keyword="const", number_prefix='#')
+assembly_helper  = AssemblyHelper(comment_char=';', 
+                                  label_char=':', 
+                                  constant_keyword="const", 
+                                  number_prefix='#',
+                                  constant_prefix='$',
+                                  label_prefix='@')
 
+comport = "/dev/ttyACM0" # /dev/ttyACM0 for Linux, COM5 for Windows
 def convert_to_machine_code(in_file:str, out_file:str):
     f = open(in_file, 'r')
     raw_lines = f.readlines()
@@ -25,7 +31,7 @@ def convert_to_machine_code(in_file:str, out_file:str):
     
     blines = assembly_helper.convert_to_binary_lines(clines)
 
-    lines_to_write_bin = [f"{line}{'\n'}" for line in blines]
+    lines_to_write_bin = [f"{line}\n" for line in blines]
 
     f = open(out_file, 'w')
     f.writelines(lines_to_write_bin)
@@ -44,7 +50,7 @@ def machine_code_to_bin(in_file:str, out_file:str):
         f.write(program)
 
 def load_bin_file(bin_file: str):
-    eeprom_loader = EepromLoader()
+    eeprom_loader = EepromLoader(comport)
     eeprom_loader.write(bin_file)
 
 def load_assembly_file(asm_file: str):
@@ -63,8 +69,6 @@ def print_help():
     print("  load <in.bin>                     - EEPROM yüklemesi yapar")
     print("  loadAssembly <in.asm>             - Assembly -> yükleme (geçici dosya üretir)")
     print("  help                              - Bu mesajı gösterir")
-
-
 
 def main():
     if len(sys.argv) < 2:
@@ -99,14 +103,13 @@ def main():
         print("EEPROM yükleme tamamlandı.")
     
     elif command == "checkFile":
-        eeprom_loader = EepromLoader()
+        eeprom_loader = EepromLoader(comport)
         top = eeprom_loader.check_file(sys.argv[2], int(sys.argv[3]))
         print(f"İlk {sys.argv[3]} bayt: {top}")
         
     elif command == "checkSerial":
-        eeprom_loader = EepromLoader()
+        eeprom_loader = EepromLoader(comport)
         eeprom_loader.check_serial()
-
 
     elif command == "loadAssembly":
         if len(sys.argv) < 3:

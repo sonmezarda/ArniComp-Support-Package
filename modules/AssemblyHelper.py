@@ -2,7 +2,7 @@
 from config import instructions, opcode_types, argcode_types
 
 class AssemblyHelper:
-    def __init__(self, comment_char:str, label_char:str, constant_keyword:str, number_prefix:str):
+    def __init__(self, comment_char:str, label_char:str, constant_keyword:str, number_prefix:str, constant_prefix:str, label_prefix:str):
         """
         Initializes the AssemblyHelper with a comment character.
         
@@ -13,6 +13,8 @@ class AssemblyHelper:
         self.label_char = label_char
         self.constant_keyword = constant_keyword
         self.number_prefix = number_prefix
+        self.constant_prefix = constant_prefix
+        self.label_prefix = label_prefix
 
     def upper_lines(self, lines:list[str]) -> list[str]:
         """
@@ -149,6 +151,10 @@ class AssemblyHelper:
             argcode = argcode_types[arg_type][args[argcode_order]]
         elif arg_type == "constant":
             argcode = instruction["argcode"]
+        elif arg_type == "number":
+            argcode_order = instruction["argcode_arg_order"]
+            argcode = self.to_decimal(args[argcode_order])
+            argcode = f"{argcode:03b}"  # Convert to 3-bit binary
         return argcode
 
     @staticmethod
@@ -170,7 +176,7 @@ class AssemblyHelper:
         for line in lines:
             for label, line_number in labels.items():
                 if label in line:
-                    line = line.replace(label, self.number_prefix+str(line_number))
+                    line = line.replace(self.label_prefix+label, self.number_prefix+str(line_number))
             changed_lines.append(line)
         return changed_lines
     
@@ -189,7 +195,7 @@ class AssemblyHelper:
         for line in lines:
             for const_name, const_value in constants.items():
                 if const_name in line:
-                    line = line.replace(const_name, self.number_prefix+str(const_value))
+                    line = line.replace(self.constant_prefix+const_name, self.number_prefix+str(const_value))
             changed_lines.append(line)
         return changed_lines
     

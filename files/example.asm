@@ -1,18 +1,23 @@
-const i1 = #0x11
-ldi #10
+const a = 20
 
-mov rd, ra
-ldi i1
-
-add ra
-mov rd, acc
 
 ldi label1
 mov prl, ra
-jmp 
 
-ldi #0x02
+
+ldi #0
+mov rd, ra
+ldi #1
+add ra ; acc = 1
 
 label1:
-   mov prl, ra
-   jmp
+    ldi #1
+    add ra ; acc = rd + 1
+
+    mov rd, acc ; rd = rd + 1 (acc) 
+    ldi #8 ; ra = 8
+    add ra ; acc = ra + rd (flags setted)
+    
+    jne
+
+ldi #0b1010101

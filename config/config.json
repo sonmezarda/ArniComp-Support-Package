@@ -108,7 +108,7 @@
         "JEQ":{
             "IM7": "0",
             "argcode_type": "constant",
-            "argcode": "001",
+            "argcode": "100",
             "opcode_type": "constant",
             "opcode": "0010"
         },
@@ -167,7 +167,7 @@
             "argcode_length": 3,
             "argcode_arg_order": 0,
             "opcode_type": "constant",
-            "opcode_arg_order": "0011"
+            "opcode": "0011"
         },
         "SUBI":{
             "IM7": "0",
@@ -175,7 +175,7 @@
             "argcode_arg_order":0,
             "argcode_length": 3,
             "opcode_type": "constant",
-            "opcode_arg_order": "0110"
+            "opcode": "0110"
         },
         "LDI":{
             "IM7":"1",

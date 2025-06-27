@@ -1,0 +1,10 @@
+byte dene = 10;
+
+byte dene2 = 20;
+
+byte dene3;
+
+dene = 5;
+dene2 = 1;
+dene2 = 30;
+dene2 = 30;
