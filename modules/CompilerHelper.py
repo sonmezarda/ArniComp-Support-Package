@@ -1,94 +1,15 @@
-from enum import StrEnum, auto
+from __future__ import annotations
 
 from dataclasses import dataclass
 from VariableManager import VarTypes, Variable, ByteVariable, VarManager
 from StackManager import StackManager
-from RegisterManager import RegisterManager, RegisterMode
+from RegisterManager import RegisterManager, RegisterMode, Register
 from ConditionHelper import IfElseClause
 import re
-from re import Match
 
-class CommandTypes(StrEnum):
-    ASSIGN = auto()
-    IF = auto()
-    VARDEF = auto()
-    VARDEFWV = auto()
+from Commands import *
 
-class Command:
-    REGEX:str = ""
-    TYPE:CommandTypes = None
-    def __init__(self, command_type:str, line:str):
-        self.command_type = command_type
-        self.line = line
-    
-    def __repr__(self):
-        return f"({self.command_type} : '{self.line}')"
-    
-    def parse_params(self):
-        raise NotImplementedError("This method should be implemented by subclasses.")
-    
-    @classmethod
-    def match_regex(cls, line: str) -> re.Match[str] | None:
-        return re.match(cls.REGEX, line)
-    
-class VarDefCommand(Command):
-    REGEX = r'(\w+)\s+(\w+)\s*=\s*(\w+)'
-    TYPE = CommandTypes.VARDEF
-    def __init__(self, line:str):
-        super().__init__(CommandTypes.VARDEF, line)
-        self.var_name:str = ""
-        self.var_type:VarTypes = VarTypes.BYTE
-        self.var_value:any = None
-        self.parse_params()
-    
-    def parse_params(self):
-        match = self.match_regex(self.line)
-        if match:
-            self.var_name = match.group(2)
-            self.var_type = VarTypes[match.group(1).upper()]
-            if self.var_type == VarTypes.BYTE:
-                self.var_value = int(match.group(3))
-            else:
-                raise ValueError(f"Unsupported variable type: {self.var_type}")
-        else:
-            raise ValueError(f"Invalid variable definition: {self.line}")
 
-class VarDefCommandWithoutValue(VarDefCommand):
-    REGEX = r'(\w+)\s+(\w+)$'
-    TYPE = CommandTypes.VARDEFWV
-    
-    def __init__(self, line:str):
-        super().__init__(line)
-        self.var_name:str = ""
-        self.var_type:VarTypes = VarTypes.BYTE
-        self.parse_params()
-    
-    def parse_params(self):
-        match = self.match_regex(self.line)
-        if match:
-            self.var_name = match.group(2)
-            self.var_type = VarTypes[match.group(1).upper()]
-        else:
-            raise ValueError(f"Invalid variable definition without value: {self.line}")
-
-class AssignCommand(Command):
-    REGEX = r'^(\w+)\s*=\s*(.+)'
-    TYPE = CommandTypes.ASSIGN
-    
-    def __init__(self, line:str):
-        super().__init__(CommandTypes.ASSIGN, line)
-        self.var_name:str = ""
-        self.new_value:any = None
-        self.parse_params()
-    
-    def parse_params(self):
-        match = self.match_regex(self.line)
-        if match:
-            self.var_name = match.group(1)
-            self.new_value = match.group(2)
-        else:
-            raise ValueError(f"Invalid assignment command: {self.line}")
-          
 class Compiler:
     def __init__(self, comment_char:str, variable_start_addr:int = 0x0000, 
                  variable_end_addr:int = 0x0100, 
@@ -115,6 +36,20 @@ class Compiler:
     def clean_lines(self) -> None:
         self.lines = [re.sub(r'\s+', ' ', line).strip() for line in self.lines if line.strip() and not line.startswith(self.comment_char)]
     
+    def is_variable_defined(self, var_name:str) -> bool:
+        return self.var_manager.check_variable_exists(var_name)
+
+    def is_number(self, value:str) -> bool:
+        try:
+            int(value)
+            return True
+        except ValueError:
+            return False
+
+
+    def compile_if_else(self, if_else_clause:IfElseClause) -> list[str]:
+        pass
+
     def compile_lines(self):
         pre_assembly_lines:list[str] = []
         if self.grouped_lines is None:
@@ -129,10 +64,12 @@ class Compiler:
             elif type(command) is AssignCommand:
                 new_lines = self.__assign_variable(command)
                 pre_assembly_lines.extend(new_lines)
+            elif command.command_type == CommandTypes.IF:
+                new_lines = self.__handle_if_else(command)
+                pre_assembly_lines.extend(new_lines)
             else:
                 raise ValueError(f"Unsupported command type: {command.command_type}")
         self.pre_assembly_lines = pre_assembly_lines
-
 
     def __create_var_with_value(self, command:VarDefCommand) -> list[str]:
         pre_assembly_lines = []
@@ -180,7 +117,37 @@ class Compiler:
         ra.set_variable(var, RegisterMode.ADDR)
 
         return pre_assembly_lines
+    
+    def __set_ra_const(self, value:int) -> list[str]:
+        pre_assembly_lines = []
+        ra = self.register_manager.ra
+        reg_with_const = self.register_manager.check_for_const(value)
 
+        if reg_with_const is not None:
+            pre_assembly_lines.append(f"mov ra, {reg_with_const.name}")
+            ra.set_mode(RegisterMode.CONST, value)
+            return pre_assembly_lines
+
+        pre_assembly_lines.append(f"ldi #{value}")
+        ra.set_mode(RegisterMode.CONST, value)
+
+        return pre_assembly_lines
+    
+    def __set_reg_const(self, reg:Register, value:int) -> list[str]:
+        pre_assembly_lines = []
+        reg_with_const = self.register_manager.check_for_const(value)
+
+        if reg_with_const is not None:
+            pre_assembly_lines.append(f"mov {reg.name}, {reg_with_const.name}")
+            reg.set_mode(RegisterMode.CONST, value)
+            return pre_assembly_lines
+
+        pre_assembly_lines.extend(self.__set_ra_const(value))
+        pre_assembly_lines.append(f"mov {reg.name}, ra")
+        reg.set_mode(RegisterMode.CONST, value)
+
+        return pre_assembly_lines
+    
     def __assign_variable(self, command:AssignCommand) -> list[str]:
         pre_assembly_lines = []
         var:Variable = self.var_manager.get_variable(command.var_name)
@@ -188,8 +155,7 @@ class Compiler:
         if var is None:
             raise ValueError(f"Cannot assign to undefined variable: {command.var_name}")
         
-        if type(var) == VarTypes.BYTE.value:
-            
+        if type(var) == VarTypes.BYTE.value:  
             set_mar_lines = self.__set_marl(var)
             pre_assembly_lines.extend(set_mar_lines)
             ra = self.register_manager.ra
@@ -199,9 +165,9 @@ class Compiler:
                     pre_assembly_lines.append(f"strl {reg_with_const.name}")
                     return pre_assembly_lines
                 
-                pre_assembly_lines.append(f"ldi #{command.new_value}")
+                pre_assembly_lines.extend(self.__set_ra_const(int(command.new_value)))
                 pre_assembly_lines.append("strl ra")
-                ra.set_mode(RegisterMode.CONST, int(command.new_value))
+                
                 return pre_assembly_lines
             elif self.var_manager.check_variable_exists(command.new_value):
                 var_to_assign:Variable = self.var_manager.get_variable(command.new_value)
@@ -213,7 +179,26 @@ class Compiler:
             raise ValueError(f"Unsupported variable type for assignment: {var.var_type}")
         
         return pre_assembly_lines
-    
+
+    def _compile_condition(self, condition: Condition) -> list[str]:
+        pre_assembly_lines = []
+        rd = self.register_manager.rd
+        if condition.type is None:
+            raise ValueError("Condition type is not set. Call __set_type() first.")
+
+        left, right = condition.parts
+        if not self.var_manager.check_variable_exists(left):
+            raise ValueError(f"Left part of condition '{left}' is not a defined variable.")
+        
+        left_var = self.var_manager.get_variable(left)
+        if self.is_number(right):
+            right_value = int(right)
+            pre_assembly_lines.extend(self.__set_reg_const(rd, right_value))
+            pre_assembly_lines.extend(self.__set_marl(left_var))
+            pre_assembly_lines.append("sub ml")
+
+            
+        return pre_assembly_lines
     @staticmethod
     def __group_line_commands(lines:list[str]) -> list[Command]:
         grouped_lines:list[Command] = []
@@ -256,6 +241,15 @@ class Compiler:
     def group_commands(self) -> None:
         self.grouped_lines:list[Command] = self.__group_line_commands(self.lines)
 
+    def set_grouped_lines(self, grouped_lines:list[Command]) -> None:
+        self.grouped_lines = grouped_lines
+
+    def create_context_compiler(self) -> Compiler:
+        new_compiler = create_default_compiler()
+        new_compiler.var_manager = self.var_manager
+        new_compiler.register_manager = self.register_manager
+        new_compiler.stack_manager = self.stack_manager
+        return new_compiler
     
     @staticmethod
     def __determine_command_type(line:str) -> str:
@@ -264,23 +258,22 @@ class Compiler:
         return None
             
 
+def create_default_compiler() -> Compiler:
+    return Compiler(comment_char='//', variable_start_addr=0x0000, 
+                    variable_end_addr=0x0100, memory_size=65536)
 
 if __name__ == "__main__":
-    compiler = Compiler(
-        comment_char='//',
-        variable_start_addr=0x0000, 
-        variable_end_addr=0x0100, 
-        memory_size=65536)
+    compiler = create_default_compiler()
+
     
     compiler.load_lines('modules/test2.txt')
     compiler.break_commands()
     compiler.clean_lines()
     compiler.group_commands()
     compiler.compile_lines()
-
+    l = compiler._compile_condition(Condition("dene == 5"))
     print("Grouped Commands:" + str(compiler.grouped_lines))
-
     for i in compiler.pre_assembly_lines:
         print(i)
-    
+    print("Compiled Condition:" + str(l))
 

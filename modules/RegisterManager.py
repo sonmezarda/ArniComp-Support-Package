@@ -6,6 +6,7 @@ class RegisterMode(IntEnum):
     VALUE=0
     ADDR=1
     CONST=2
+    UNKNOWN=3
 
 class Register:
     def __init__(self, name:str, Variable:Variable=None, mode:RegisterMode = RegisterMode.VALUE, value:int = None):

@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-class IfElseClause:
+from enum import StrEnum
+
+class GroupObject:
+    pass
+
+class IfElseClause(GroupObject):
     def __init__(self):
         self.clause = {}
 
@@ -109,7 +114,7 @@ class Statement:
     
 class IfStatement(Statement):
     def __init__(self, condition:str):
-        self.condition = condition
+        self.condition:Condition = Condition(condition)
         super().__init__()
     
 
@@ -117,7 +122,46 @@ class ElseStatement(Statement):
     def __init__(self):
         super().__init__()
 
+class ConditionTypes(StrEnum):
+    EQUAL = "=="
+    NOT_EQUAL = "!="
+    GREATER_EQUAL = ">="
+    LESS_EQUAL = "<="
+    GREATER_THAN = ">"
+    LESS_THAN = "<"
     
+
+class Condition:
+    def __init__(self, condition_str: str):
+        self.condition_str = condition_str
+        self.type: ConditionTypes | None = None
+        self.parts: tuple[str, str] | None = None
+        self.__set_type()
+        self.parts = self.split_parts()
+
+    def get_str(self) -> str:
+        return self.condition_str
+
+    def __set_type(self) -> None:
+        for cond_type in ConditionTypes:
+            if cond_type.value in self.condition_str:
+                self.type = cond_type
+                return
+        raise ValueError(f"Unknown condition type in '{self.condition_str}'")
+
+    def split_parts(self) -> tuple[str, str]:
+        if self.type is None:
+            raise ValueError("Condition type is not set. Call __set_type() first.")
+        
+        parts = self.condition_str.split(self.type.value)
+        if len(parts) != 2:
+            raise ValueError(f"Invalid condition format: '{self.condition_str}'")
+        return parts[0].strip(), parts[1].strip()
+
+class ConditionChain:
+    def __init__(self):
+        raise NotImplementedError("ConditionChain is not implemented yet.")
+
 if __name__ == '__main__':
     # Example usage
     lines = [
