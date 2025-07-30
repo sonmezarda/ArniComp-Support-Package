@@ -1,5 +1,15 @@
 
-from config import instructions, opcode_types, argcode_types
+import json
+import os
+
+# Load config
+config_path = os.path.join(os.path.dirname(__file__), '..', 'config', 'config.json')
+with open(config_path, 'r') as f:
+    config = json.load(f)
+
+instructions = config['instructions']
+opcode_types = config['opcode_types']
+argcode_types = config['argcode_types']
 
 class AssemblyHelper:
     def __init__(self, comment_char:str, label_char:str, constant_keyword:str, number_prefix:str, constant_prefix:str, label_prefix:str):

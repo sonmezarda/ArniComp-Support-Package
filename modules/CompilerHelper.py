@@ -175,25 +175,21 @@ class Compiler:
             
             # Check if new_value contains an addition expression
             elif '+' in command.new_value:
-                # Parse the expression (e.g., "var2 + 5")
-                parts = [part.strip() for part in command.new_value.split('+')]
-                if len(parts) != 2:
-                    raise ValueError(f"Invalid expression format: {command.new_value}")
+                # Parse and normalize the expression
+                normalized_expression = self.__normalize_expression(command.new_value)
                 
-                left_part, right_part = parts
-                
-                # Call __add to compute the expression and store it in ACC
-                add_lines = self.__add(left_part, right_part)
-                pre_assembly_lines.extend(add_lines)
+                # Call __evaluate_expression to compute the expression and store it in ACC
+                eval_lines = self.__evaluate_expression(normalized_expression)
+                pre_assembly_lines.extend(eval_lines)
                 
                 # Check if ACC contains the correct expression
                 if (acc.mode == RegisterMode.TEMPVAR and 
-                    acc.get_expression() == command.new_value):
+                    acc.get_expression() == normalized_expression):
                     # Store ACC to the variable
                     pre_assembly_lines.append("strl acc")
                     return pre_assembly_lines
                 else:
-                    raise RuntimeError(f"ACC does not contain expected expression: {command.new_value}")
+                    raise RuntimeError(f"ACC does not contain expected expression: {normalized_expression}")
             
             # Check if new_value is a simple variable
             elif self.var_manager.check_variable_exists(command.new_value):
@@ -207,22 +203,111 @@ class Compiler:
         
         return pre_assembly_lines
     
-    def __add(self, left:str, right:str) -> list[str]:
+    def __normalize_expression(self, expression: str) -> str:
+        """Normalize expression by removing extra spaces and ensuring consistent formatting"""
+        # Remove all spaces and then add proper spacing around operators
+        expression = expression.replace(' ', '')
+        expression = expression.replace('+', ' + ')
+        return expression
+    
+    def __evaluate_expression(self, expression: str) -> list[str]:
+        """Evaluate an expression and store the result in ACC register"""
         pre_assembly_lines = []
-        rd = self.register_manager.rd
-        if self.is_number(left):
-            raise NotImplementedError("Addition with constant left operand is not implemented yet.")
         
-        if not self.var_manager.check_variable_exists(left):
-            raise ValueError(f"Left part of addition '{left}' is not a defined variable.")
-
-        if self.is_number(right):
-            right_value = int(right)
-            pre_assembly_lines.extend(self.__add_var_const(self.var_manager.get_variable(left), right_value))
+        # Split by + operator and clean up
+        terms = [term.strip() for term in expression.split('+')]
+        
+        if len(terms) < 2:
+            raise ValueError(f"Expression must have at least 2 terms: {expression}")
+        
+        # For simple variable + constant case, use existing efficient method
+        if (len(terms) == 2 and 
+            self.var_manager.check_variable_exists(terms[0]) and 
+            self.is_number(terms[1])):
+            
+            left_var = self.var_manager.get_variable(terms[0])
+            right_value = int(terms[1])
+            pre_assembly_lines.extend(self.__add_var_const(left_var, right_value))
+            return pre_assembly_lines
+        
+        # For more complex expressions, use the general approach
+        # Start with the first term
+        first_term = terms[0]
+        if self.var_manager.check_variable_exists(first_term):
+            # Load first variable into ACC
+            first_var = self.var_manager.get_variable(first_term)
+            pre_assembly_lines.extend(self.__load_var_to_acc(first_var))
+            current_expression = first_term
+        elif self.is_number(first_term):
+            # Load first constant into ACC
+            pre_assembly_lines.extend(self.__load_const_to_acc(int(first_term)))
+            current_expression = first_term
         else:
-            raise NotImplementedError("Addition with non-constant right operand is not implemented yet.")
+            raise ValueError(f"Invalid first term in expression: {first_term}")
+        
+        # Add remaining terms one by one
+        for term in terms[1:]:
+            if self.var_manager.check_variable_exists(term):
+                # Add variable to ACC
+                var_to_add = self.var_manager.get_variable(term)
+                pre_assembly_lines.extend(self.__add_var_to_acc(var_to_add))
+                current_expression += f" + {term}"
+            elif self.is_number(term):
+                # Add constant to ACC
+                pre_assembly_lines.extend(self.__add_const_to_acc(int(term)))
+                current_expression += f" + {term}"
+            else:
+                raise ValueError(f"Invalid term in expression: {term}")
+        
+        # Set ACC to TEMPVAR mode with the complete expression
+        self.register_manager.acc.set_temp_var_mode(current_expression)
         
         return pre_assembly_lines
+    
+    def __load_var_to_acc(self, var: Variable) -> list[str]:
+        """Load a variable's value into ACC register"""
+        pre_assembly_lines = []
+        pre_assembly_lines.extend(self.__set_marl(var))
+        pre_assembly_lines.append("ldl acc")  # Load from memory to ACC
+        return pre_assembly_lines
+    
+    def __load_const_to_acc(self, value: int) -> list[str]:
+        """Load a constant value into ACC register"""
+        pre_assembly_lines = []
+        pre_assembly_lines.append(f"ldi #{value}")
+        pre_assembly_lines.append("mov acc, ra")
+        return pre_assembly_lines
+    
+    def __add_var_to_acc(self, var: Variable) -> list[str]:
+        """Add a variable's value to ACC register"""
+        pre_assembly_lines = []
+        rd = self.register_manager.rd
+        
+        # Load variable value into RD
+        pre_assembly_lines.extend(self.__set_marl(var))
+        pre_assembly_lines.append("ldl rd")  # Load from memory to RD
+        
+        # Add RD to ACC
+        pre_assembly_lines.append("add rd")
+        
+        return pre_assembly_lines
+    
+    def __add_const_to_acc(self, value: int) -> list[str]:
+        """Add a constant value to ACC register"""
+        pre_assembly_lines = []
+        rd = self.register_manager.rd
+        
+        # Load constant into RD and add to ACC
+        pre_assembly_lines.extend(self.__set_reg_const(rd, value))
+        pre_assembly_lines.append("add rd")
+        
+        return pre_assembly_lines
+    
+    def __add(self, left:str, right:str) -> list[str]:
+        """Legacy method for simple two-term addition - now uses __evaluate_expression"""
+        expression = f"{left} + {right}"
+        normalized_expression = self.__normalize_expression(expression)
+        return self.__evaluate_expression(normalized_expression)
 
     def __add_var_const(self, left_var:Variable, right_value:int) -> list[str]:
         pre_assembly_lines = []

@@ -6,5 +6,5 @@ byte dene3;
 
 dene = 9;
 dene2 = 1;
-dene2 = dene + 5;
+dene2 = dene + 5 + dene2;
 
