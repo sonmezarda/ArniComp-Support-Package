@@ -41,6 +41,9 @@ class ByteVariable(Variable):
     def get_size():
         return 1
 
+
+
+
 class VarTypes(Enum):
     BYTE = ByteVariable
 
@@ -68,8 +71,7 @@ class VarManager():
         
         if self.check_variable_exists(var_name):
             raise ValueError(f"Variable '{var_name}' already exists.")
-        
-        if not isinstance(var_value, var_type.value.get_value_type()):
+    
             raise TypeError(f"Value must be of type {var_type.value.__name__}")
         
         is_enough_space =  self.__check_memory_space(var_type)

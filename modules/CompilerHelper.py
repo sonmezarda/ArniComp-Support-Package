@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from VariableManager import VarTypes, Variable, ByteVariable, VarManager
 from StackManager import StackManager
-from RegisterManager import RegisterManager, RegisterMode, Register
+from RegisterManager import RegisterManager, RegisterMode, Register, TempVarMode
 from ConditionHelper import IfElseClause
 import re
 
@@ -159,6 +159,9 @@ class Compiler:
             set_mar_lines = self.__set_marl(var)
             pre_assembly_lines.extend(set_mar_lines)
             ra = self.register_manager.ra
+            acc = self.register_manager.acc
+            
+            # Check if new_value is a simple digit
             if command.new_value.isdigit():
                 reg_with_const = self.register_manager.check_for_const(int(command.new_value))
                 if reg_with_const is not None:
@@ -169,6 +172,30 @@ class Compiler:
                 pre_assembly_lines.append("strl ra")
                 
                 return pre_assembly_lines
+            
+            # Check if new_value contains an addition expression
+            elif '+' in command.new_value:
+                # Parse the expression (e.g., "var2 + 5")
+                parts = [part.strip() for part in command.new_value.split('+')]
+                if len(parts) != 2:
+                    raise ValueError(f"Invalid expression format: {command.new_value}")
+                
+                left_part, right_part = parts
+                
+                # Call __add to compute the expression and store it in ACC
+                add_lines = self.__add(left_part, right_part)
+                pre_assembly_lines.extend(add_lines)
+                
+                # Check if ACC contains the correct expression
+                if (acc.mode == RegisterMode.TEMPVAR and 
+                    acc.get_expression() == command.new_value):
+                    # Store ACC to the variable
+                    pre_assembly_lines.append("strl acc")
+                    return pre_assembly_lines
+                else:
+                    raise RuntimeError(f"ACC does not contain expected expression: {command.new_value}")
+            
+            # Check if new_value is a simple variable
             elif self.var_manager.check_variable_exists(command.new_value):
                 var_to_assign:Variable = self.var_manager.get_variable(command.new_value)
                 raise NotImplementedError("Assignment from variable is not implemented yet.")
@@ -179,7 +206,50 @@ class Compiler:
             raise ValueError(f"Unsupported variable type for assignment: {var.var_type}")
         
         return pre_assembly_lines
+    
+    def __add(self, left:str, right:str) -> list[str]:
+        pre_assembly_lines = []
+        rd = self.register_manager.rd
+        if self.is_number(left):
+            raise NotImplementedError("Addition with constant left operand is not implemented yet.")
+        
+        if not self.var_manager.check_variable_exists(left):
+            raise ValueError(f"Left part of addition '{left}' is not a defined variable.")
 
+        if self.is_number(right):
+            right_value = int(right)
+            pre_assembly_lines.extend(self.__add_var_const(self.var_manager.get_variable(left), right_value))
+        else:
+            raise NotImplementedError("Addition with non-constant right operand is not implemented yet.")
+        
+        return pre_assembly_lines
+
+    def __add_var_const(self, left_var:Variable, right_value:int) -> list[str]:
+        pre_assembly_lines = []
+        rd = self.register_manager.rd
+        marl = self.register_manager.marl
+
+        pre_assembly_lines.extend(self.__set_reg_const(rd, right_value))
+        pre_assembly_lines.extend(self.__set_marl(left_var))
+        pre_assembly_lines.extend(self.__add_ml())
+        expression = f"{left_var.name} + {right_value}"
+        self.register_manager.acc.set_temp_var_mode(expression)
+
+        return pre_assembly_lines
+
+    def __add_reg(self, register:Register) -> list[str]:
+        pre_assembly_lines = []
+        rd = self.register_manager.rd
+        pre_assembly_lines.append(f"add {register.name}")
+        
+        
+        return pre_assembly_lines
+    
+    def __add_ml(self) -> list[str]:
+        preassembly_lines = []
+        preassembly_lines.append("add ml")
+        return preassembly_lines
+    
     def _compile_condition(self, condition: Condition) -> list[str]:
         pre_assembly_lines = []
         rd = self.register_manager.rd
@@ -199,6 +269,7 @@ class Compiler:
 
             
         return pre_assembly_lines
+    
     @staticmethod
     def __group_line_commands(lines:list[str]) -> list[Command]:
         grouped_lines:list[Command] = []
@@ -271,7 +342,7 @@ if __name__ == "__main__":
     compiler.clean_lines()
     compiler.group_commands()
     compiler.compile_lines()
-    l = compiler._compile_condition(Condition("dene == 5"))
+    l = compiler._compile_condition(Condition("dene2 == 5"))
     print("Grouped Commands:" + str(compiler.grouped_lines))
     for i in compiler.pre_assembly_lines:
         print(i)
