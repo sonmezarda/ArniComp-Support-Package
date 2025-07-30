@@ -242,14 +242,16 @@ class CPU:
             self.ra = args[0] & 0xFF
             
         elif inst_name == 'MOV':
-            # MOV source, dest (args[0] = source, args[1] = dest)
+            # MOV dest, source (args[0] = dest, args[1] = source)
             if len(args) >= 2:
-                source_val = self.get_register_value(args[0])
-                self.set_register_value(args[1], source_val)
+                source_val = self.get_register_value(args[1])
+                print(f"DEBUG MOV: {args[1]} ({source_val}) -> {args[0]}")
+                self.set_register_value(args[0], source_val)
+                print(f"DEBUG MOV: {args[0]} now = {self.get_register_value(args[0])}")
                 
                 # Special handling for memory mode
-                if args[1].upper() in ['ML', 'MH']:
-                    self.memory_mode_high = (args[1].upper() == 'MH')
+                if args[0].upper() in ['ML', 'MH']:
+                    self.memory_mode_high = (args[0].upper() == 'MH')
         
         elif inst_name == 'ADD':
             # ADD source - adds source to ACC
