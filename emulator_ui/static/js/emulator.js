@@ -11,11 +11,20 @@ class ArniCompEmulator {
         this.autoRefresh = true;
         this.dataFormat = 'hex'; // Default format
         
+        // Settings
+        this.settings = {
+            memoryStartAddress: '0000',
+            memoryEndAddress: '00FF',
+            disassemblyInstructionCount: 32,
+            autoRefresh: true
+        };
+        
         // Tab system
         this.tabs = new Map();
         this.activeTabId = null;
         this.tabCounter = 1;
         
+        this.loadSettings();
         this.initializeEditor();
         this.initializeEventListeners();
         this.initializeTabs();
@@ -72,6 +81,9 @@ class ArniCompEmulator {
         document.getElementById('step-btn').addEventListener('click', () => this.stepExecution());
         document.getElementById('run-btn').addEventListener('click', () => this.runExecution());
         document.getElementById('stop-btn').addEventListener('click', () => this.stopExecution());
+
+        // Settings button
+        document.getElementById('settings-btn').addEventListener('click', () => this.openSettingsModal());
 
         // Memory refresh buttons
         document.getElementById('refresh-data-memory').addEventListener('click', () => this.refreshDataMemory());
@@ -504,9 +516,10 @@ ldi #0b11111111
             return;
         }
         
-        // Initialize with 32 lines of 0x00 instructions
+        // Initialize with lines based on settings
         container.innerHTML = '';
-        for (let addr = 0; addr < 32; addr++) {
+        const lineCount = this.settings.disassemblyInstructionCount || 32;
+        for (let addr = 0; addr < lineCount; addr++) {
             const lineElement = document.createElement('div');
             lineElement.className = 'disassembly-line';
             lineElement.dataset.address = addr;
@@ -520,7 +533,7 @@ ldi #0b11111111
             container.appendChild(lineElement);
         }
         
-        console.log('Disassembly initialized with 32 empty lines');
+        console.log(`Disassembly initialized with ${lineCount} empty lines`);
     }
 
     async refreshDisassembly(currentPC = null) {
@@ -541,8 +554,9 @@ ldi #0b11111111
                 pcValue = cpuState.cpu ? cpuState.cpu.pc : 0;
             }
 
-            // Get program data from API
-            const result = await this.apiCall('/disassemble?start=0&count=1024');
+            // Get program data from API using settings count
+            const instructionCount = this.settings.disassemblyInstructionCount || 32;
+            const result = await this.apiCall(`/disassemble?start=0&count=${instructionCount}`);
             console.log(`Displaying ${result.instructions.length} instructions, PC=${pcValue}`);
             
             // Clear container and rebuild all lines
@@ -1079,6 +1093,120 @@ ldi #0b11111111
             document.body.style.cursor = '';
             document.body.style.userSelect = '';
         });
+    }
+
+    // Settings methods
+    loadSettings() {
+        const savedSettings = localStorage.getItem('arnicomp-emulator-settings');
+        if (savedSettings) {
+            const settings = JSON.parse(savedSettings);
+            this.settings = { ...this.settings, ...settings };
+            
+            // Update memory input fields when settings are loaded
+            if (this.settings.memoryStartAddress && this.settings.memoryEndAddress) {
+                const startDecimal = parseInt(this.settings.memoryStartAddress, 16);
+                const endDecimal = parseInt(this.settings.memoryEndAddress, 16);
+                
+                // Wait for DOM to be ready
+                setTimeout(() => {
+                    const dataStartInput = document.getElementById('data-memory-start');
+                    const dataEndInput = document.getElementById('data-memory-end');
+                    const programStartInput = document.getElementById('program-memory-start');
+                    const programEndInput = document.getElementById('program-memory-end');
+                    
+                    if (dataStartInput) dataStartInput.value = startDecimal;
+                    if (dataEndInput) dataEndInput.value = endDecimal;
+                    if (programStartInput) programStartInput.value = startDecimal;
+                    if (programEndInput) programEndInput.value = endDecimal;
+                }, 100);
+            }
+        }
+    }
+
+    saveSettings() {
+        localStorage.setItem('arnicomp-emulator-settings', JSON.stringify(this.settings));
+        this.showStatus('Settings saved successfully');
+    }
+
+    openSettingsModal() {
+        // Update UI with current settings
+        document.getElementById('memory-start').value = this.settings.memoryStartAddress;
+        document.getElementById('memory-end').value = this.settings.memoryEndAddress;
+        document.getElementById('disassembly-count').value = this.settings.disassemblyInstructionCount;
+        document.getElementById('auto-refresh').checked = this.settings.autoRefresh;
+        
+        // Show modal
+        document.getElementById('settings-modal').style.display = 'block';
+        
+        // Add event listeners
+        document.querySelector('#settings-modal .close-modal').onclick = () => this.closeSettingsModal();
+        document.getElementById('settings-cancel').onclick = () => this.closeSettingsModal();
+        document.getElementById('apply-settings').onclick = () => this.applySettings();
+        document.getElementById('reset-settings').onclick = () => this.resetSettings();
+        
+        // Close on outside click
+        document.getElementById('settings-modal').onclick = (e) => {
+            if (e.target === e.currentTarget) {
+                this.closeSettingsModal();
+            }
+        };
+    }
+
+    closeSettingsModal() {
+        document.getElementById('settings-modal').style.display = 'none';
+    }
+
+    applySettings() {
+        // Get values from UI
+        const memoryStart = document.getElementById('memory-start').value;
+        const memoryEnd = document.getElementById('memory-end').value;
+        const disassemblyCount = parseInt(document.getElementById('disassembly-count').value);
+        const autoRefresh = document.getElementById('auto-refresh').checked;
+
+        // Update settings
+        this.settings.memoryStartAddress = memoryStart;
+        this.settings.memoryEndAddress = memoryEnd;
+        this.settings.disassemblyInstructionCount = disassemblyCount;
+        this.settings.autoRefresh = autoRefresh;
+
+        // Update memory input fields with hex values
+        const startDecimal = parseInt(memoryStart, 16);
+        const endDecimal = parseInt(memoryEnd, 16);
+        
+        document.getElementById('data-memory-start').value = startDecimal;
+        document.getElementById('data-memory-end').value = endDecimal;
+        document.getElementById('program-memory-start').value = startDecimal;
+        document.getElementById('program-memory-end').value = endDecimal;
+
+        // Save and close
+        this.saveSettings();
+        this.closeSettingsModal();
+        
+        // Refresh displays
+        this.refreshAll();
+    }
+
+    resetSettings() {
+        this.settings = {
+            memoryStartAddress: '0000',
+            memoryEndAddress: '00FF',
+            disassemblyInstructionCount: 32,
+            autoRefresh: true
+        };
+        
+        // Update UI
+        document.getElementById('memory-start').value = this.settings.memoryStartAddress;
+        document.getElementById('memory-end').value = this.settings.memoryEndAddress;
+        document.getElementById('disassembly-count').value = this.settings.disassemblyInstructionCount;
+        document.getElementById('auto-refresh').checked = this.settings.autoRefresh;
+        
+        // Update memory input fields
+        document.getElementById('data-memory-start').value = 0;
+        document.getElementById('data-memory-end').value = 255;
+        document.getElementById('program-memory-start').value = 0;
+        document.getElementById('program-memory-end').value = 255;
+        
+        this.showStatus('Settings reset to defaults');
     }
 }
 
