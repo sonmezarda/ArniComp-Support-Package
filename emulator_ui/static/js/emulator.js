@@ -13,8 +13,10 @@ class ArniCompEmulator {
         
         // Settings
         this.settings = {
-            memoryStartAddress: '0000',
-            memoryEndAddress: '00FF',
+            dataMemoryStartAddress: '0000',
+            dataMemoryEndAddress: '00FF',
+            programMemoryStartAddress: '0000',
+            programMemoryEndAddress: '00FF',
             disassemblyInstructionCount: 32,
             autoRefresh: true
         };
@@ -1103,23 +1105,29 @@ ldi #0b11111111
             this.settings = { ...this.settings, ...settings };
             
             // Update memory input fields when settings are loaded
-            if (this.settings.memoryStartAddress && this.settings.memoryEndAddress) {
-                const startDecimal = parseInt(this.settings.memoryStartAddress, 16);
-                const endDecimal = parseInt(this.settings.memoryEndAddress, 16);
-                
-                // Wait for DOM to be ready
-                setTimeout(() => {
+            setTimeout(() => {
+                if (this.settings.dataMemoryStartAddress && this.settings.dataMemoryEndAddress) {
+                    const dataStartDecimal = parseInt(this.settings.dataMemoryStartAddress, 16);
+                    const dataEndDecimal = parseInt(this.settings.dataMemoryEndAddress, 16);
+                    
                     const dataStartInput = document.getElementById('data-memory-start');
                     const dataEndInput = document.getElementById('data-memory-end');
+                    
+                    if (dataStartInput) dataStartInput.value = dataStartDecimal;
+                    if (dataEndInput) dataEndInput.value = dataEndDecimal;
+                }
+                
+                if (this.settings.programMemoryStartAddress && this.settings.programMemoryEndAddress) {
+                    const programStartDecimal = parseInt(this.settings.programMemoryStartAddress, 16);
+                    const programEndDecimal = parseInt(this.settings.programMemoryEndAddress, 16);
+                    
                     const programStartInput = document.getElementById('program-memory-start');
                     const programEndInput = document.getElementById('program-memory-end');
                     
-                    if (dataStartInput) dataStartInput.value = startDecimal;
-                    if (dataEndInput) dataEndInput.value = endDecimal;
-                    if (programStartInput) programStartInput.value = startDecimal;
-                    if (programEndInput) programEndInput.value = endDecimal;
-                }, 100);
-            }
+                    if (programStartInput) programStartInput.value = programStartDecimal;
+                    if (programEndInput) programEndInput.value = programEndDecimal;
+                }
+            }, 100);
         }
     }
 
@@ -1130,8 +1138,10 @@ ldi #0b11111111
 
     openSettingsModal() {
         // Update UI with current settings
-        document.getElementById('memory-start').value = this.settings.memoryStartAddress;
-        document.getElementById('memory-end').value = this.settings.memoryEndAddress;
+        document.getElementById('data-memory-start-hex').value = this.settings.dataMemoryStartAddress;
+        document.getElementById('data-memory-end-hex').value = this.settings.dataMemoryEndAddress;
+        document.getElementById('program-memory-start-hex').value = this.settings.programMemoryStartAddress;
+        document.getElementById('program-memory-end-hex').value = this.settings.programMemoryEndAddress;
         document.getElementById('disassembly-count').value = this.settings.disassemblyInstructionCount;
         document.getElementById('auto-refresh').checked = this.settings.autoRefresh;
         
@@ -1158,25 +1168,31 @@ ldi #0b11111111
 
     applySettings() {
         // Get values from UI
-        const memoryStart = document.getElementById('memory-start').value;
-        const memoryEnd = document.getElementById('memory-end').value;
+        const dataMemoryStart = document.getElementById('data-memory-start-hex').value;
+        const dataMemoryEnd = document.getElementById('data-memory-end-hex').value;
+        const programMemoryStart = document.getElementById('program-memory-start-hex').value;
+        const programMemoryEnd = document.getElementById('program-memory-end-hex').value;
         const disassemblyCount = parseInt(document.getElementById('disassembly-count').value);
         const autoRefresh = document.getElementById('auto-refresh').checked;
 
         // Update settings
-        this.settings.memoryStartAddress = memoryStart;
-        this.settings.memoryEndAddress = memoryEnd;
+        this.settings.dataMemoryStartAddress = dataMemoryStart;
+        this.settings.dataMemoryEndAddress = dataMemoryEnd;
+        this.settings.programMemoryStartAddress = programMemoryStart;
+        this.settings.programMemoryEndAddress = programMemoryEnd;
         this.settings.disassemblyInstructionCount = disassemblyCount;
         this.settings.autoRefresh = autoRefresh;
 
-        // Update memory input fields with hex values
-        const startDecimal = parseInt(memoryStart, 16);
-        const endDecimal = parseInt(memoryEnd, 16);
+        // Update memory input fields with decimal values
+        const dataStartDecimal = parseInt(dataMemoryStart, 16);
+        const dataEndDecimal = parseInt(dataMemoryEnd, 16);
+        const programStartDecimal = parseInt(programMemoryStart, 16);
+        const programEndDecimal = parseInt(programMemoryEnd, 16);
         
-        document.getElementById('data-memory-start').value = startDecimal;
-        document.getElementById('data-memory-end').value = endDecimal;
-        document.getElementById('program-memory-start').value = startDecimal;
-        document.getElementById('program-memory-end').value = endDecimal;
+        document.getElementById('data-memory-start').value = dataStartDecimal;
+        document.getElementById('data-memory-end').value = dataEndDecimal;
+        document.getElementById('program-memory-start').value = programStartDecimal;
+        document.getElementById('program-memory-end').value = programEndDecimal;
 
         // Save and close
         this.saveSettings();
@@ -1188,15 +1204,19 @@ ldi #0b11111111
 
     resetSettings() {
         this.settings = {
-            memoryStartAddress: '0000',
-            memoryEndAddress: '00FF',
+            dataMemoryStartAddress: '0000',
+            dataMemoryEndAddress: '00FF',
+            programMemoryStartAddress: '0000',
+            programMemoryEndAddress: '00FF',
             disassemblyInstructionCount: 32,
             autoRefresh: true
         };
         
         // Update UI
-        document.getElementById('memory-start').value = this.settings.memoryStartAddress;
-        document.getElementById('memory-end').value = this.settings.memoryEndAddress;
+        document.getElementById('data-memory-start-hex').value = this.settings.dataMemoryStartAddress;
+        document.getElementById('data-memory-end-hex').value = this.settings.dataMemoryEndAddress;
+        document.getElementById('program-memory-start-hex').value = this.settings.programMemoryStartAddress;
+        document.getElementById('program-memory-end-hex').value = this.settings.programMemoryEndAddress;
         document.getElementById('disassembly-count').value = this.settings.disassemblyInstructionCount;
         document.getElementById('auto-refresh').checked = this.settings.autoRefresh;
         
