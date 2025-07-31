@@ -16,7 +16,7 @@ mov marl, ra
 ldi #0
 strl ra ; mem[counter_addr] = 0
 
-ldi sum
+ldi @sum
 mov prl, ra
 
 sum:

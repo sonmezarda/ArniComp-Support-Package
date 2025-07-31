@@ -8,18 +8,26 @@ import os
 
 class CPUFlags:
     def __init__(self):
-        self.zero = False
-        self.carry = False
-        self.negative = False
+        self.equal = False  # Equal flag (EQ) - result == 0
+        self.lt = False     # Less Than flag (LT) - signed comparison 
+        self.gt = False     # Greater Than flag (GT) - signed comparison
     
-    def update_flags(self, result, carry=False):
-        """Update flags based on ALU result"""
-        self.zero = (result & 0xFF) == 0
-        self.carry = carry or (result > 255)
-        self.negative = (result & 0x80) != 0
+    def update_flags(self, alu_input_a, alu_input_b):
+        """Update flags based on ALU inputs - ArniComp uses hardware comparator"""
+        # Hardware comparator directly compares ALU inputs A and B
+        # A is typically ACC, B is typically RD or immediate value
+        
+        # Ensure 8-bit unsigned values
+        a_unsigned = alu_input_a & 0xFF
+        b_unsigned = alu_input_b & 0xFF
+        
+        # Hardware comparator outputs: A<B, A=B, A>B (unsigned comparison)
+        self.lt = a_unsigned < b_unsigned  # LT flag
+        self.equal = a_unsigned == b_unsigned  # EQ flag  
+        self.gt = a_unsigned > b_unsigned  # GT flag
     
     def __str__(self):
-        return f"Z:{int(self.zero)} C:{int(self.carry)} N:{int(self.negative)}"
+        return f"EQ:{int(self.equal)} LT:{int(self.lt)} GT:{int(self.gt)}"
 
 class CPU:
     def __init__(self):
@@ -245,9 +253,7 @@ class CPU:
             # MOV dest, source (args[0] = dest, args[1] = source)
             if len(args) >= 2:
                 source_val = self.get_register_value(args[1])
-                print(f"DEBUG MOV: {args[1]} ({source_val}) -> {args[0]}")
                 self.set_register_value(args[0], source_val)
-                print(f"DEBUG MOV: {args[0]} now = {self.get_register_value(args[0])}")
                 
                 # Special handling for memory mode
                 if args[0].upper() in ['ML', 'MH']:
@@ -257,32 +263,36 @@ class CPU:
             # ADD source - adds source to ACC
             if len(args) >= 1:
                 source_val = self.get_register_value(args[0])
+                # Hardware comparator: RD vs source_val
+                self.flags.update_flags(self.rd, source_val)
                 result = self.acc + source_val
-                self.flags.update_flags(result)
                 self.acc = result & 0xFF
         
         elif inst_name == 'SUB':
             # SUB source - subtracts source from ACC
             if len(args) >= 1:
                 source_val = self.get_register_value(args[0])
+                # Hardware comparator: RD vs source_val
+                self.flags.update_flags(self.rd, source_val)
                 result = self.acc - source_val
-                self.flags.update_flags(result, carry=(result < 0))
                 self.acc = result & 0xFF
         
         elif inst_name == 'ADDI':
             # ADDI immediate - adds immediate to ACC
             if len(args) >= 1:
                 immediate = args[0]
+                # Hardware comparator: RD vs immediate
+                self.flags.update_flags(self.rd, immediate)
                 result = self.acc + immediate
-                self.flags.update_flags(result)
                 self.acc = result & 0xFF
         
         elif inst_name == 'SUBI':
             # SUBI immediate - subtracts immediate from ACC
             if len(args) >= 1:
                 immediate = args[0]
+                # Hardware comparator: RD vs immediate
+                self.flags.update_flags(self.rd, immediate)
                 result = self.acc - immediate
-                self.flags.update_flags(result, carry=(result < 0))
                 self.acc = result & 0xFF
         
         elif inst_name == 'LDRL':
@@ -318,33 +328,33 @@ class CPU:
             self.pc = (self.prh << 8) | self.prl
         
         elif inst_name == 'JEQ':
-            # Jump if equal (zero flag set)
-            if self.flags.zero:
+            # Jump if equal (Equal flag set)
+            if self.flags.equal:
                 self.pc = (self.prh << 8) | self.prl
         
         elif inst_name == 'JNE':
-            # Jump if not equal (zero flag clear)
-            if not self.flags.zero:
+            # Jump if not equal (Equal flag clear)
+            if not self.flags.equal:
                 self.pc = (self.prh << 8) | self.prl
         
         elif inst_name == 'JLT':
-            # Jump if less than (negative flag set)
-            if self.flags.negative:
+            # Jump if less than (LT flag set)
+            if self.flags.lt:
                 self.pc = (self.prh << 8) | self.prl
         
         elif inst_name == 'JGT':
-            # Jump if greater than (not zero and not negative)
-            if not self.flags.zero and not self.flags.negative:
+            # Jump if greater than (GT flag set)
+            if self.flags.gt:
                 self.pc = (self.prh << 8) | self.prl
         
         elif inst_name == 'JLE':
-            # Jump if less than or equal (zero or negative)
-            if self.flags.zero or self.flags.negative:
+            # Jump if less than or equal (LT or Equal)
+            if self.flags.lt or self.flags.equal:
                 self.pc = (self.prh << 8) | self.prl
         
         elif inst_name == 'JGE':
-            # Jump if greater than or equal (not negative)
-            if not self.flags.negative:
+            # Jump if greater than or equal (GT or Equal)
+            if self.flags.gt or self.flags.equal:
                 self.pc = (self.prh << 8) | self.prl
         
         elif inst_name == 'OUT':

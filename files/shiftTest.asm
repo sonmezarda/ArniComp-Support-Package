@@ -1,6 +1,6 @@
 const mahmut = 7
 
-ldi shiftishift
+ldi @shiftishift
 mov prl, ra
 
 ldi #1

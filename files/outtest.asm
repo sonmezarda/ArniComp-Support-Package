@@ -1,4 +1,4 @@
-ldi lbl
+ldi @lbl
 mov prl, ra
 
 ldi #0

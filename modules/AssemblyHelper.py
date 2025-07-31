@@ -185,8 +185,9 @@ class AssemblyHelper:
         changed_lines = []
         for line in lines:
             for label, line_number in labels.items():
-                if label in line:
-                    line = line.replace(self.label_prefix+label, self.number_prefix+str(line_number))
+                label_with_prefix = self.label_prefix + label
+                if label_with_prefix in line:
+                    line = line.replace(label_with_prefix, self.number_prefix+str(line_number))
             changed_lines.append(line)
         return changed_lines
     
@@ -204,8 +205,9 @@ class AssemblyHelper:
         changed_lines = []
         for line in lines:
             for const_name, const_value in constants.items():
-                if const_name in line:
-                    line = line.replace(self.constant_prefix+const_name, self.number_prefix+str(const_value))
+                const_with_prefix = self.constant_prefix + const_name
+                if const_with_prefix in line:
+                    line = line.replace(const_with_prefix, self.number_prefix+str(const_value))
             changed_lines.append(line)
         return changed_lines
     

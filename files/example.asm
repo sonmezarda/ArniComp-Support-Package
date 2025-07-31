@@ -1,7 +1,7 @@
 const a = 20
 
 
-ldi label1
+ldi @label1
 mov prl, ra
 
 
