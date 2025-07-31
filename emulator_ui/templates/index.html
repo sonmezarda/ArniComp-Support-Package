@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ArniComp CPU Emulator</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/ace.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/mode-assembly_x86.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/theme-monokai.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🖥️ ArniComp CPU Emulator</h1>
+            <div class="header-controls">
+                <button id="reset-btn" class="btn btn-reset">🔄 Reset</button>
+                <button id="compile-btn" class="btn btn-primary">🔨 Compile</button>
+                <button id="step-btn" class="btn btn-step">👣 Step</button>
+                <button id="run-btn" class="btn btn-run">▶️ Run</button>
+                <button id="stop-btn" class="btn btn-stop" disabled>⏹️ Stop</button>
+            </div>
+        </header>
+
+        <div class="main-layout">
+            <!-- Left Panel: Code Editor -->
+            <div class="left-panel">
+                <div class="panel">
+                    <h3>📝 Assembly Editor</h3>
+                    <div id="editor" class="code-editor"></div>
+                    <div class="editor-status">
+                        <span id="compile-status">Ready</span>
+                        <span id="cursor-position">Line: 1, Col: 1</span>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <h3>🔍 Disassembly</h3>
+                    <div id="disassembly" class="disassembly-view"></div>
+                </div>
+            </div>
+
+            <!-- Right Panel: CPU State & Memory -->
+            <div class="right-panel">
+                <!-- CPU Registers -->
+                <div class="panel cpu-panel">
+                    <h3>🎛️ CPU Registers</h3>
+                    
+                    <!-- Data Format Selector -->
+                    <div class="format-selector">
+                        <label>Format:</label>
+                        <select id="data-format">
+                            <option value="hex">Hex</option>
+                            <option value="decimal">Dec</option>
+                            <option value="binary">Bin</option>
+                        </select>
+                    </div>
+
+                    <!-- Registers Grid -->
+                    <div class="registers-grid-improved">
+                        <div class="register-column">
+                            <div class="register-group">
+                                <h4>General Purpose</h4>
+                                <div class="register">
+                                    <span class="reg-name">RA:</span>
+                                    <span id="reg-ra" class="reg-value">0x00</span>
+                                </div>
+                                <div class="register">
+                                    <span class="reg-name">RD:</span>
+                                    <span id="reg-rd" class="reg-value">0x00</span>
+                                </div>
+                                <div class="register">
+                                    <span class="reg-name">ACC:</span>
+                                    <span id="reg-acc" class="reg-value">0x00</span>
+                                </div>
+                            </div>
+
+                            <div class="register-group">
+                                <h4>Program Counter</h4>
+                                <div class="register">
+                                    <span class="reg-name">PC:</span>
+                                    <span id="reg-pc" class="reg-value">0x0000</span>
+                                </div>
+                                <div class="register">
+                                    <span class="reg-name">PRL:</span>
+                                    <span id="reg-prl" class="reg-value">0x00</span>
+                                </div>
+                                <div class="register">
+                                    <span class="reg-name">PRH:</span>
+                                    <span id="reg-prh" class="reg-value">0x00</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="register-column">
+                            <div class="register-group">
+                                <h4>Memory Address</h4>
+                                <div class="register">
+                                    <span class="reg-name">MARL:</span>
+                                    <span id="reg-marl" class="reg-value">0x00</span>
+                                </div>
+                                <div class="register">
+                                    <span class="reg-name">MARH:</span>
+                                    <span id="reg-marh" class="reg-value">0x00</span>
+                                </div>
+                                <div class="register">
+                                    <span class="reg-name">ADDR:</span>
+                                    <span id="data-addr" class="reg-value">0x0000</span>
+                                </div>
+                            </div>
+
+                            <div class="register-group">
+                                <h4>Status & I/O</h4>
+                                <div class="flags-compact">
+                                    <span class="flag" id="flag-eq">EQ: 0</span>
+                                    <span class="flag" id="flag-lt">LT: 0</span>
+                                    <span class="flag" id="flag-gt">GT: 0</span>
+                                </div>
+                                <div class="io-compact">
+                                    <span id="memory-mode" class="mode-display">Mode: LOW</span>
+                                    <span>Out: <span id="output-data">0x00</span>@<span id="output-addr">0x00</span></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Memory Viewers -->
+                <div class="memory-panels">
+                    <div class="panel memory-panel">
+                        <h3>💾 Data Memory</h3>
+                        <div class="memory-controls">
+                            <input type="number" id="data-memory-start" value="0" min="0" max="65535" placeholder="Start Address">
+                            <input type="number" id="data-memory-end" value="31" min="0" max="65535" placeholder="End Address">
+                            <button id="refresh-data-memory" class="btn btn-small">🔄</button>
+                        </div>
+                        <div id="data-memory" class="memory-view"></div>
+                    </div>
+
+                    <div class="panel memory-panel">
+                        <h3>📜 Program Memory</h3>
+                        <div class="memory-controls">
+                            <input type="number" id="program-memory-start" value="0" min="0" max="65535" placeholder="Start Address">
+                            <input type="number" id="program-memory-end" value="31" min="0" max="65535" placeholder="End Address">
+                            <button id="refresh-program-memory" class="btn btn-small">🔄</button>
+                        </div>
+                        <div id="program-memory" class="memory-view"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Status Bar -->
+        <footer class="status-bar">
+            <span id="emulator-status">Ready</span>
+            <span id="execution-info">Not running</span>
+        </footer>
+    </div>
+
+    <!-- ACE Editor -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.0/ace.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.0/mode-assembly_x86.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.0/theme-monokai.js"></script>
+    
+    <!-- Emulator Logic -->
+    <script src="{{ url_for('static', filename='js/emulator.js') }}"></script>
+</body>
+</html>
