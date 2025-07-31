@@ -23,22 +23,45 @@
         </header>
 
         <div class="main-layout">
-            <!-- Left Panel: Code Editor -->
+            <!-- Left Panel: Code Editor with Tabs -->
             <div class="left-panel">
-                <div class="panel">
-                    <h3>📝 Assembly Editor</h3>
-                    <div id="editor" class="code-editor"></div>
-                    <div class="editor-status">
-                        <span id="compile-status">Ready</span>
-                        <span id="cursor-position">Line: 1, Col: 1</span>
+                <div class="panel editor-panel">
+                    <div class="editor-header">
+                        <div class="tabs-container">
+                            <div class="tabs">
+                                <!-- Tabs will be added dynamically -->
+                            </div>
+                            <button class="new-tab-btn" title="New File">+</button>
+                        </div>
+                        <div class="file-controls">
+                            <button id="new-file-btn" class="btn btn-small">� New</button>
+                            <button id="open-file-btn" class="btn btn-small">📂 Open</button>
+                            <button id="save-file-btn" class="btn btn-small">💾 Save</button>
+                            <button id="save-as-btn" class="btn btn-small">💾 Save As</button>
+                        </div>
+                    </div>
+                    <div class="editor-content">
+                        <div id="editor" class="code-editor"></div>
+                        <div class="editor-status">
+                            <span id="compile-status">Ready</span>
+                            <span id="cursor-position">Line: 1, Col: 1</span>
+                            <span id="file-status"></span>
+                        </div>
                     </div>
                 </div>
 
-                <div class="panel">
-                    <h3>🔍 Disassembly</h3>
-                    <div id="disassembly" class="disassembly-view"></div>
+                <div class="resizer horizontal-resizer"></div>
+
+                <div class="panel disassembly-panel">
+                    <div class="panel-header collapsible" id="disassembly-header">
+                        <h3>🔍 Disassembly</h3>
+                        <button class="collapse-btn" title="Toggle Disassembly">−</button>
+                    </div>
+                    <div id="disassembly" class="disassembly-view collapsible-content"></div>
                 </div>
             </div>
+
+            <div class="vertical-resizer"></div>
 
             <!-- Right Panel: CPU State & Memory -->
             <div class="right-panel">
@@ -155,6 +178,44 @@
             <span id="emulator-status">Ready</span>
             <span id="execution-info">Not running</span>
         </footer>
+    </div>
+
+    <!-- File Open Modal -->
+    <div id="file-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>📂 Open File</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="file-list" id="file-list">
+                    <div class="loading">Loading files...</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="modal-cancel" class="btn btn-secondary">Cancel</button>
+                <button id="modal-open" class="btn btn-primary" disabled>Open</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Save As Modal -->
+    <div id="save-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>💾 Save As</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <label for="save-filename">Filename:</label>
+                <input type="text" id="save-filename" placeholder="example.asm" class="filename-input">
+                <div class="filename-hint">Files will be saved with .asm extension</div>
+            </div>
+            <div class="modal-footer">
+                <button id="save-modal-cancel" class="btn btn-secondary">Cancel</button>
+                <button id="save-modal-save" class="btn btn-primary">Save</button>
+            </div>
+        </div>
     </div>
 
     <!-- ACE Editor -->

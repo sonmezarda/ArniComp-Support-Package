@@ -11,8 +11,16 @@ class ArniCompEmulator {
         this.autoRefresh = true;
         this.dataFormat = 'hex'; // Default format
         
+        // Tab system
+        this.tabs = new Map();
+        this.activeTabId = null;
+        this.tabCounter = 1;
+        
         this.initializeEditor();
         this.initializeEventListeners();
+        this.initializeTabs();
+        this.initializeResizers();
+        this.initializeCollapsiblePanels();
         this.loadSampleCode();
         this.refreshAll();
         
@@ -459,12 +467,12 @@ ldi #0b11111111
 
             result.instructions.forEach(inst => {
                 const lineElement = document.createElement('div');
-                lineElement.className = 'disasm-line';
+                lineElement.className = 'disassembly-line';
                 
                 lineElement.innerHTML = `
-                    <span class="disasm-addr">${inst.address.toString(16).padStart(4, '0').toUpperCase()}:</span>
-                    <span class="disasm-opcode">${inst.hex}</span>
-                    <span class="disasm-instruction">${inst.instruction} ${inst.args.join(', ')}</span>
+                    <span class="disassembly-address">${inst.address.toString(16).padStart(4, '0').toUpperCase()}:</span>
+                    <span class="disassembly-hex">${inst.hex}</span>
+                    <span class="disassembly-instruction">${inst.instruction}</span>
                 `;
                 
                 container.appendChild(lineElement);
@@ -479,6 +487,413 @@ ldi #0b11111111
         this.refreshCPUState();
         this.refreshDataMemory();
         this.refreshProgramMemory();
+    }
+
+    // Tab System
+    initializeTabs() {
+        // Clear any existing tabs first
+        document.querySelector('.tabs').innerHTML = '';
+        this.tabs.clear();
+        
+        // Create initial tab
+        this.createTab('untitled-1', 'Untitled-1', '', false);
+        this.setActiveTab('untitled-1');
+
+        // Tab event listeners
+        document.querySelector('.new-tab-btn').addEventListener('click', () => this.createNewTab());
+        
+        // File control event listeners
+        document.getElementById('new-file-btn').addEventListener('click', () => this.createNewTab());
+        document.getElementById('open-file-btn').addEventListener('click', () => this.openFileDialog());
+        document.getElementById('save-file-btn').addEventListener('click', () => this.saveFile());
+        document.getElementById('save-as-btn').addEventListener('click', () => this.saveAsDialog());
+    }
+
+    initializeCollapsiblePanels() {
+        // Disassembly panel collapse
+        const disassemblyHeader = document.getElementById('disassembly-header');
+        const disassemblyPanel = document.querySelector('.disassembly-panel');
+        const collapseBtn = disassemblyHeader.querySelector('.collapse-btn');
+        
+        disassemblyHeader.addEventListener('click', () => {
+            disassemblyPanel.classList.toggle('collapsed');
+            collapseBtn.textContent = disassemblyPanel.classList.contains('collapsed') ? '+' : '−';
+            
+            // Resize ace editor after animation
+            setTimeout(() => {
+                if (this.editor) {
+                    this.editor.resize();
+                }
+            }, 300);
+        });
+    }
+
+    createTab(id, title, content = '', saved = false) {
+        const tab = {
+            id: id,
+            title: title,
+            content: content,
+            saved: saved,
+            filepath: null
+        };
+        
+        this.tabs.set(id, tab);
+        this.renderTab(tab);
+        return tab;
+    }
+
+    renderTab(tab) {
+        const tabsContainer = document.querySelector('.tabs');
+        
+        const tabElement = document.createElement('div');
+        tabElement.className = 'tab';
+        tabElement.setAttribute('data-tab-id', tab.id);
+        
+        tabElement.innerHTML = `
+            <span class="tab-title">${tab.title}${tab.saved ? '' : '*'}</span>
+            <button class="tab-close" title="Close">×</button>
+        `;
+        
+        // Tab click events
+        tabElement.addEventListener('click', (e) => {
+            if (!e.target.classList.contains('tab-close')) {
+                this.setActiveTab(tab.id);
+            }
+        });
+        
+        tabElement.querySelector('.tab-close').addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.closeTab(tab.id);
+        });
+        
+        tabsContainer.appendChild(tabElement);
+    }
+
+    setActiveTab(tabId) {
+        const tab = this.tabs.get(tabId);
+        if (!tab) return;
+
+        // Save current editor content to current tab
+        if (this.activeTabId) {
+            const currentTab = this.tabs.get(this.activeTabId);
+            if (currentTab) {
+                currentTab.content = this.editor.getValue();
+                currentTab.saved = false;
+                this.updateTabTitle(this.activeTabId);
+            }
+        }
+
+        // Switch to new tab
+        this.activeTabId = tabId;
+        this.editor.setValue(tab.content, -1);
+        
+        // Update UI
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelector(`[data-tab-id="${tabId}"]`).classList.add('active');
+        
+        // Update file status
+        document.getElementById('file-status').textContent = 
+            tab.filepath ? `File: ${tab.filepath}` : 'Unsaved';
+    }
+
+    updateTabTitle(tabId) {
+        const tab = this.tabs.get(tabId);
+        if (!tab) return;
+        
+        const tabElement = document.querySelector(`[data-tab-id="${tabId}"]`);
+        if (tabElement) {
+            tabElement.querySelector('.tab-title').textContent = 
+                `${tab.title}${tab.saved ? '' : '*'}`;
+        }
+    }
+
+    createNewTab() {
+        const newId = `untitled-${this.tabCounter++}`;
+        const newTab = this.createTab(newId, `Untitled-${this.tabCounter - 1}`, '');
+        this.setActiveTab(newId);
+    }
+
+    closeTab(tabId) {
+        const tab = this.tabs.get(tabId);
+        if (!tab) return;
+
+        if (!tab.saved && tab.content.trim()) {
+            if (!confirm(`Close ${tab.title}? Unsaved changes will be lost.`)) {
+                return;
+            }
+        }
+
+        // Remove tab element
+        const tabElement = document.querySelector(`[data-tab-id="${tabId}"]`);
+        if (tabElement) {
+            tabElement.remove();
+        }
+
+        // Remove from tabs map
+        this.tabs.delete(tabId);
+
+        // If this was the active tab, switch to another one
+        if (this.activeTabId === tabId) {
+            const remainingTabs = Array.from(this.tabs.keys());
+            if (remainingTabs.length > 0) {
+                this.setActiveTab(remainingTabs[0]);
+            } else {
+                // Create a new tab if no tabs remain
+                this.createNewTab();
+            }
+        }
+    }
+
+    // File Operations
+    async saveFile() {
+        const tab = this.tabs.get(this.activeTabId);
+        if (!tab) return;
+
+        if (tab.filepath) {
+            await this.saveToFile(tab.filepath, this.editor.getValue());
+        } else {
+            this.saveAsDialog();
+        }
+    }
+
+    saveAsDialog() {
+        const modal = document.getElementById('save-modal');
+        const filenameInput = document.getElementById('save-filename');
+        
+        modal.style.display = 'block';
+        filenameInput.focus();
+        
+        // Handle save
+        document.getElementById('save-modal-save').onclick = async () => {
+            const filename = filenameInput.value.trim();
+            if (!filename) {
+                alert('Please enter a filename');
+                return;
+            }
+            
+            const fullFilename = filename.endsWith('.asm') ? filename : filename + '.asm';
+            await this.saveToFile(fullFilename, this.editor.getValue());
+            modal.style.display = 'none';
+            filenameInput.value = '';
+        };
+        
+        // Handle cancel
+        document.getElementById('save-modal-cancel').onclick = () => {
+            modal.style.display = 'none';
+            filenameInput.value = '';
+        };
+        
+        // Handle modal close
+        modal.querySelector('.modal-close').onclick = () => {
+            modal.style.display = 'none';
+            filenameInput.value = '';
+        };
+    }
+
+    async saveToFile(filename, content) {
+        try {
+            const response = await fetch('/api/save_file', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    filename: filename,
+                    content: content
+                })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                const tab = this.tabs.get(this.activeTabId);
+                tab.saved = true;
+                tab.filepath = filename;
+                tab.title = filename;
+                this.updateTabTitle(this.activeTabId);
+                
+                document.getElementById('file-status').textContent = `Saved: ${filename}`;
+                console.log('File saved successfully');
+            } else {
+                alert('Error saving file: ' + result.error);
+            }
+        } catch (error) {
+            alert('Error saving file: ' + error.message);
+        }
+    }
+
+    openFileDialog() {
+        const modal = document.getElementById('file-modal');
+        const fileList = document.getElementById('file-list');
+        
+        modal.style.display = 'block';
+        this.loadFileList();
+        
+        // Handle modal close
+        modal.querySelector('.modal-close').onclick = () => {
+            modal.style.display = 'none';
+        };
+        
+        document.getElementById('modal-cancel').onclick = () => {
+            modal.style.display = 'none';
+        };
+    }
+
+    async loadFileList() {
+        const fileList = document.getElementById('file-list');
+        fileList.innerHTML = '<div class="loading">Loading files...</div>';
+        
+        try {
+            const response = await fetch('/api/list_files');
+            const result = await response.json();
+            
+            if (result.success) {
+                if (result.files.length === 0) {
+                    fileList.innerHTML = '<div class="loading">No .asm files found</div>';
+                    return;
+                }
+                
+                fileList.innerHTML = '';
+                result.files.forEach(file => {
+                    const fileItem = document.createElement('div');
+                    fileItem.className = 'file-item';
+                    fileItem.innerHTML = `
+                        <div>
+                            <div class="file-name">${file.name}</div>
+                            <div class="file-info">${file.size} bytes • ${new Date(file.modified * 1000).toLocaleString()}</div>
+                        </div>
+                    `;
+                    
+                    fileItem.addEventListener('click', () => {
+                        document.querySelectorAll('.file-item').forEach(f => f.classList.remove('selected'));
+                        fileItem.classList.add('selected');
+                        document.getElementById('modal-open').disabled = false;
+                        document.getElementById('modal-open').onclick = () => this.loadFile(file.name);
+                    });
+                    
+                    fileList.appendChild(fileItem);
+                });
+            } else {
+                fileList.innerHTML = '<div class="loading">Error loading files</div>';
+            }
+        } catch (error) {
+            fileList.innerHTML = '<div class="loading">Error loading files</div>';
+        }
+    }
+
+    async loadFile(filename) {
+        try {
+            const response = await fetch('/api/load_file', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ filename: filename })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                // Check if file is already open
+                let existingTab = null;
+                for (const [id, tab] of this.tabs.entries()) {
+                    if (tab.filepath === filename) {
+                        existingTab = id;
+                        break;
+                    }
+                }
+                
+                if (existingTab) {
+                    this.setActiveTab(existingTab);
+                } else {
+                    const newId = `file-${filename}-${Date.now()}`;
+                    const newTab = this.createTab(newId, filename, result.content, true);
+                    newTab.filepath = filename;
+                    this.setActiveTab(newId);
+                }
+                
+                document.getElementById('file-modal').style.display = 'none';
+            } else {
+                alert('Error loading file: ' + result.error);
+            }
+        } catch (error) {
+            alert('Error loading file: ' + error.message);
+        }
+    }
+
+    // Resizer System
+    initializeResizers() {
+        this.initializeVerticalResizer();
+        this.initializeHorizontalResizer();
+    }
+
+    initializeVerticalResizer() {
+        const resizer = document.querySelector('.vertical-resizer');
+        const leftPanel = document.querySelector('.left-panel');
+        const rightPanel = document.querySelector('.right-panel');
+        
+        let isResizing = false;
+        
+        resizer.addEventListener('mousedown', (e) => {
+            isResizing = true;
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+        });
+        
+        document.addEventListener('mousemove', (e) => {
+            if (!isResizing) return;
+            
+            const containerRect = document.querySelector('.main-layout').getBoundingClientRect();
+            const newLeftWidth = e.clientX - containerRect.left;
+            const minWidth = 300;
+            const maxWidth = containerRect.width - 300;
+            
+            if (newLeftWidth >= minWidth && newLeftWidth <= maxWidth) {
+                leftPanel.style.width = newLeftWidth + 'px';
+                rightPanel.style.width = (containerRect.width - newLeftWidth - 5) + 'px';
+            }
+        });
+        
+        document.addEventListener('mouseup', () => {
+            isResizing = false;
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+        });
+    }
+
+    initializeHorizontalResizer() {
+        const resizer = document.querySelector('.horizontal-resizer');
+        const editorPanel = document.querySelector('.editor-panel');
+        const disassemblyPanel = document.querySelector('.disassembly-panel');
+        
+        let isResizing = false;
+        
+        resizer.addEventListener('mousedown', (e) => {
+            isResizing = true;
+            document.body.style.cursor = 'row-resize';
+            document.body.style.userSelect = 'none';
+        });
+        
+        document.addEventListener('mousemove', (e) => {
+            if (!isResizing) return;
+            
+            const leftPanelRect = document.querySelector('.left-panel').getBoundingClientRect();
+            const newEditorHeight = e.clientY - leftPanelRect.top;
+            const minHeight = 200;
+            const maxHeight = leftPanelRect.height - 150;
+            
+            if (newEditorHeight >= minHeight && newEditorHeight <= maxHeight) {
+                editorPanel.style.height = newEditorHeight + 'px';
+                editorPanel.style.flex = 'none';
+                disassemblyPanel.style.height = (leftPanelRect.height - newEditorHeight - 5) + 'px';
+            }
+        });
+        
+        document.addEventListener('mouseup', () => {
+            isResizing = false;
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+        });
     }
 }
 

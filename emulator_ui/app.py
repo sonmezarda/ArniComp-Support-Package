@@ -30,6 +30,10 @@ assembly_helper = AssemblyHelper(
     label_prefix='@'
 )
 
+def decode_instruction(instruction_byte):
+    """Decode a single instruction byte to human-readable format"""
+    return assembly_helper.disassemble_instruction(instruction_byte)
+
 @app.route('/')
 def index():
     """Serve the main emulator interface"""
@@ -284,40 +288,130 @@ def disassemble():
             if opcode == 0:
                 continue
                 
-            # Basic disassembly
+            # Decode instruction using our decoder
+            decoded = decode_instruction(opcode)
             hex_str = f"{opcode:02X}"
-            
-            # Simple instruction mapping
-            instruction_map = {
-                0x01: ("LDI", []),
-                0x02: ("MOV", []),
-                0x03: ("ADD", []),
-                0x04: ("SUB", []),
-                0x05: ("JMP", []),
-                0x06: ("JEQ", []),
-                0x07: ("JNE", []),
-                0x08: ("OUT", []),
-                0x09: ("IN", []),
-                0x0A: ("STR", []),
-                0x0B: ("LDR", []),
-                0xFF: ("HLT", [])
-            }
-            
-            if opcode in instruction_map:
-                mnemonic, args = instruction_map[opcode]
-            else:
-                mnemonic, args = "UNK", [f"0x{opcode:02X}"]
             
             instructions.append({
                 'address': addr,
                 'hex': hex_str,
-                'instruction': mnemonic,
-                'args': args
+                'instruction': decoded
             })
         
         return jsonify({
             'success': True,
             'instructions': instructions
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
+
+@app.route('/api/save_file', methods=['POST'])
+def save_file():
+    """Save assembly code to file"""
+    try:
+        data = request.get_json()
+        filename = data.get('filename')
+        content = data.get('content')
+        
+        if not filename or not content:
+            return jsonify({
+                'success': False,
+                'error': 'Filename and content required'
+            })
+        
+        # Ensure files directory exists
+        files_dir = os.path.join(os.path.dirname(__file__), '..', 'files')
+        os.makedirs(files_dir, exist_ok=True)
+        
+        # Save file
+        filepath = os.path.join(files_dir, filename)
+        with open(filepath, 'w', encoding='utf-8') as f:
+            f.write(content)
+        
+        return jsonify({
+            'success': True,
+            'message': f'File {filename} saved successfully',
+            'filepath': filepath
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
+
+@app.route('/api/load_file', methods=['POST'])
+def load_file():
+    """Load assembly code from file"""
+    try:
+        data = request.get_json()
+        filename = data.get('filename')
+        
+        if not filename:
+            return jsonify({
+                'success': False,
+                'error': 'Filename required'
+            })
+        
+        # Load file
+        files_dir = os.path.join(os.path.dirname(__file__), '..', 'files')
+        filepath = os.path.join(files_dir, filename)
+        
+        if not os.path.exists(filepath):
+            return jsonify({
+                'success': False,
+                'error': f'File {filename} not found'
+            })
+        
+        with open(filepath, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        return jsonify({
+            'success': True,
+            'content': content,
+            'filename': filename
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
+
+@app.route('/api/list_files', methods=['GET'])
+def list_files():
+    """List available assembly files"""
+    try:
+        files_dir = os.path.join(os.path.dirname(__file__), '..', 'files')
+        
+        if not os.path.exists(files_dir):
+            return jsonify({
+                'success': True,
+                'files': []
+            })
+        
+        # Get all .asm files
+        files = []
+        for filename in os.listdir(files_dir):
+            if filename.endswith('.asm'):
+                filepath = os.path.join(files_dir, filename)
+                stat = os.stat(filepath)
+                files.append({
+                    'name': filename,
+                    'size': stat.st_size,
+                    'modified': stat.st_mtime
+                })
+        
+        # Sort by modification time (newest first)
+        files.sort(key=lambda x: x['modified'], reverse=True)
+        
+        return jsonify({
+            'success': True,
+            'files': files
         })
         
     except Exception as e:
