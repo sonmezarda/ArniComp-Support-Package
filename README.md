@@ -6,14 +6,15 @@ Assembler-Arnicomp is an assembler project designed for a breadboard computer th
 
 ## Project Overview
 
-- **Assembler:** Fully under development. Converts assembly instructions for the Arnicomp breadboard computer into executable machine code.
-- **Emulator:** Planned feature. Will allow you to simulate and test programs without physical hardware.
-- **Compiler:** Planned feature. Will allow higher-level code to be compiled down to Arnicomp assembly.
+- **Assembler:** ✅ Fully functional. Converts assembly instructions for the Arnicomp breadboard computer into executable machine code.
+- **Emulator:** ✅ Complete and tested. Simulates the ArniComp 8-bit CPU with Harvard Architecture, allowing you to test programs without physical hardware.
+- **Compiler:** 🚧 Under development. Will allow higher-level code to be compiled down to Arnicomp assembly.
 
 ## Status
 
-- The assembler is the primary focus at the moment.
-- Emulator and compiler are not ready yet and are still being developed.
+- ✅ **Assembler**: Complete with label resolution, constant support, and full instruction set
+- ✅ **Emulator**: Complete with interactive debugger, step-by-step execution, and hardware-accurate simulation
+- 🚧 **Compiler**: Expression parsing implemented, full compiler in progress
 
 ## Getting Started
 
