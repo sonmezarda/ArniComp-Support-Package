@@ -20,16 +20,17 @@ class ArniCompEmulator {
         this.initializeEventListeners();
         this.initializeTabs();
         this.initializeResizers();
-        this.initializeCollapsiblePanels();
-        this.loadSampleCode();
+        // Collapsible panels removed due to new tab-based layout
+        
+        this.initializeDisassembly(); // Initialize disassembly with empty lines
         this.refreshAll();
         
-        // Auto-refresh CPU state every 100ms when running
+        // Auto-refresh only when running (much slower interval)
         setInterval(() => {
-            if (this.autoRefresh) {
+            if (this.isRunning && this.autoRefresh) {
                 this.refreshCPUState();
             }
-        }, 100);
+        }, 500); // Reduced frequency from 100ms to 500ms
     }
 
     initializeEditor() {
@@ -51,6 +52,17 @@ class ArniCompEmulator {
             document.getElementById('cursor-position').textContent = 
                 `Line: ${cursor.row + 1}, Col: ${cursor.column + 1}`;
         });
+
+        // Track content changes for dirty state
+        this.editor.session.on('change', () => {
+            if (this.activeTabId) {
+                const tab = this.tabs.get(this.activeTabId);
+                if (tab && tab.saved) {
+                    tab.saved = false;
+                    this.updateTabTitle(this.activeTabId);
+                }
+            }
+        });
     }
 
     initializeEventListeners() {
@@ -64,11 +76,19 @@ class ArniCompEmulator {
         // Memory refresh buttons
         document.getElementById('refresh-data-memory').addEventListener('click', () => this.refreshDataMemory());
         document.getElementById('refresh-program-memory').addEventListener('click', () => this.refreshProgramMemory());
+        document.getElementById('refresh-cpu-btn').addEventListener('click', () => this.refreshCPUState());
 
         // Data format selector
         document.getElementById('data-format').addEventListener('change', (e) => {
             this.dataFormat = e.target.value;
             this.refreshCPUState(); // Update register display
+        });
+
+        // View tabs
+        document.querySelectorAll('.view-tab').forEach(tab => {
+            tab.addEventListener('click', (e) => {
+                this.switchView(e.target.dataset.view);
+            });
         });
 
         // Memory address inputs
@@ -228,6 +248,7 @@ ldi #0b11111111
     async stepExecution() {
         try {
             const result = await this.apiCall('/step', 'POST');
+            console.log('Step result:', result);
             
             if (result.halted) {
                 this.showStatus('Program halted', 'warning');
@@ -241,7 +262,21 @@ ldi #0b11111111
                 this.showStatus('Step executed', 'success');
             }
             
-            this.refreshAll();
+            // Use CPU state returned from step API to avoid additional API calls
+            if (result.cpu) {
+                console.log('Updating CPU state from step result');
+                this.updateCPUStateFromData(result.cpu);
+                this.refreshDisassembly(result.cpu.pc);
+            } else {
+                console.log('No CPU data in step result, falling back to separate refresh');
+                // Fallback to separate refresh calls
+                this.refreshCPUState();
+                this.refreshDisassembly();
+            }
+            
+            // Only refresh data and program memory separately
+            this.refreshDataMemory();
+            this.refreshProgramMemory();
             
         } catch (error) {
             this.showStatus(`Step error: ${error.message}`, 'error');
@@ -294,44 +329,46 @@ ldi #0b11111111
         try {
             const result = await this.apiCall('/cpu_state');
             const cpu = result.cpu;
-
-            // Update registers
-            this.updateRegister('reg-ra', cpu.registers.ra);
-            this.updateRegister('reg-rd', cpu.registers.rd);
-            this.updateRegister('reg-acc', cpu.registers.acc);
-            this.updateRegister('reg-marl', cpu.registers.marl);
-            this.updateRegister('reg-marh', cpu.registers.marh);
-            this.updateRegister('reg-prl', cpu.registers.prl);
-            this.updateRegister('reg-prh', cpu.registers.prh);
-
-            // Update special registers (16-bit)
-            document.getElementById('reg-pc').textContent = this.formatValue(cpu.pc, 16);
-            document.getElementById('data-addr').textContent = this.formatValue(cpu.data_addr, 16);
-
-            // Update flags
-            document.getElementById('flag-eq').textContent = `EQ: ${cpu.flags.equal ? 1 : 0}`;
-            document.getElementById('flag-lt').textContent = `LT: ${cpu.flags.lt ? 1 : 0}`;
-            document.getElementById('flag-gt').textContent = `GT: ${cpu.flags.gt ? 1 : 0}`;
-            document.getElementById('memory-mode').textContent = `Mode: ${cpu.memory_mode}`;
-
-            // Update I/O
-            document.getElementById('output-data').textContent = this.formatValue(cpu.output.data);
-            document.getElementById('output-addr').textContent = this.formatValue(cpu.output.address);
-
-            // Update execution status
-            if (cpu.halted) {
-                document.getElementById('execution-info').textContent = 'Halted';
-            } else if (cpu.running) {
-                document.getElementById('execution-info').textContent = 'Running';
-            } else {
-                document.getElementById('execution-info').textContent = 'Stopped';
-            }
-
+            this.updateCPUStateFromData(cpu);
         } catch (error) {
             // Silently fail for auto-refresh
             if (!this.isRunning) {
                 console.error('CPU state refresh error:', error);
             }
+        }
+    }
+
+    updateCPUStateFromData(cpu) {
+        // Update registers
+        this.updateRegister('reg-ra', cpu.registers.ra);
+        this.updateRegister('reg-rd', cpu.registers.rd);
+        this.updateRegister('reg-acc', cpu.registers.acc);
+        this.updateRegister('reg-marl', cpu.registers.marl);
+        this.updateRegister('reg-marh', cpu.registers.marh);
+        this.updateRegister('reg-prl', cpu.registers.prl);
+        this.updateRegister('reg-prh', cpu.registers.prh);
+
+        // Update special registers (16-bit)
+        document.getElementById('reg-pc').textContent = this.formatValue(cpu.pc, 16);
+        document.getElementById('data-addr').textContent = this.formatValue(cpu.data_addr, 16);
+
+        // Update flags
+        document.getElementById('flag-eq').textContent = `EQ: ${cpu.flags.equal ? 1 : 0}`;
+        document.getElementById('flag-lt').textContent = `LT: ${cpu.flags.lt ? 1 : 0}`;
+        document.getElementById('flag-gt').textContent = `GT: ${cpu.flags.gt ? 1 : 0}`;
+        document.getElementById('memory-mode').textContent = `Mode: ${cpu.memory_mode}`;
+
+        // Update I/O
+        document.getElementById('output-data').textContent = this.formatValue(cpu.output.data);
+        document.getElementById('output-addr').textContent = this.formatValue(cpu.output.address);
+
+        // Update execution status
+        if (cpu.halted) {
+            document.getElementById('execution-info').textContent = 'Halted';
+        } else if (cpu.running) {
+            document.getElementById('execution-info').textContent = 'Running';
+        } else {
+            document.getElementById('execution-info').textContent = 'Stopped';
         }
     }
 
@@ -459,30 +496,74 @@ ldi #0b11111111
         });
     }
 
-    async refreshDisassembly() {
+    // Disassembly Management
+    initializeDisassembly() {
+        const container = document.getElementById('disassembly');
+        if (!container) {
+            console.error('Disassembly container not found');
+            return;
+        }
+        
+        // Initialize with 32 lines of 0x00 instructions
+        container.innerHTML = '';
+        for (let addr = 0; addr < 32; addr++) {
+            const lineElement = document.createElement('div');
+            lineElement.className = 'disassembly-line';
+            lineElement.dataset.address = addr;
+            
+            lineElement.innerHTML = `
+                <span class="disassembly-address">${addr.toString(16).padStart(4, '0').toUpperCase()}:</span>
+                <span class="disassembly-hex">00</span>
+                <span class="disassembly-instruction">NOP</span>
+            `;
+            
+            container.appendChild(lineElement);
+        }
+        
+        console.log('Disassembly initialized with 32 empty lines');
+    }
+
+    async refreshDisassembly(currentPC = null) {
         try {
-            const result = await this.apiCall('/disassemble?start=0&count=20');
+            console.log('Refreshing disassembly with PC:', currentPC);
+            
             const container = document.getElementById('disassembly');
+            
+            if (!container) {
+                console.error('Disassembly container not found');
+                return;
+            }
+
+            // Use provided PC or fetch if not provided
+            let pcValue = currentPC;
+            if (pcValue === null) {
+                const cpuState = await this.apiCall('/cpu_state');
+                pcValue = cpuState.cpu ? cpuState.cpu.pc : 0;
+            }
+
+            // Get program data from API
+            const result = await this.apiCall('/disassemble?start=0&count=1024');
+            console.log(`Displaying ${result.instructions.length} instructions, PC=${pcValue}`);
+            
+            // Clear container and rebuild all lines
             container.innerHTML = '';
-
-            // Get current PC value for highlighting
-            const cpuState = await this.apiCall('/cpu_state');
-            const currentPC = cpuState.cpu ? cpuState.cpu.pc : 0;
-
+            
+            // Create lines for all instructions
             result.instructions.forEach(inst => {
                 const lineElement = document.createElement('div');
                 lineElement.className = 'disassembly-line';
-                
-                // Highlight current instruction
-                if (inst.address === currentPC) {
-                    lineElement.classList.add('current-instruction');
-                }
+                lineElement.setAttribute('data-address', inst.address);
                 
                 lineElement.innerHTML = `
                     <span class="disassembly-address">${inst.address.toString(16).padStart(4, '0').toUpperCase()}:</span>
                     <span class="disassembly-hex">${inst.hex}</span>
                     <span class="disassembly-instruction">${inst.instruction}</span>
                 `;
+                
+                // Highlight current PC instruction
+                if (inst.address === pcValue) {
+                    lineElement.classList.add('current-instruction');
+                }
                 
                 container.appendChild(lineElement);
             });
@@ -492,11 +573,85 @@ ldi #0b11111111
         }
     }
 
-    refreshAll() {
-        this.refreshCPUState();
-        this.refreshDataMemory();
-        this.refreshProgramMemory();
-        this.refreshDisassembly();
+    async refreshAll() {
+        try {
+            // Get CPU state once and use it for both CPU and disassembly updates
+            const result = await this.apiCall('/cpu_state');
+            const cpu = result.cpu;
+            
+            // Update CPU state with the fetched data
+            this.updateCPUStateFromData(cpu);
+            
+            // Update disassembly with the current PC to avoid redundant API call
+            this.refreshDisassembly(cpu.pc);
+            
+            // Refresh other components
+            this.refreshDataMemory();
+            this.refreshProgramMemory();
+            
+        } catch (error) {
+            console.error('RefreshAll error:', error);
+            // Fallback to individual refresh if combined approach fails
+            this.refreshCPUState();
+            this.refreshDataMemory();
+            this.refreshProgramMemory();
+            this.refreshDisassembly();
+        }
+    }
+
+    // View Switching
+    switchView(viewName) {
+        console.log(`Switching to ${viewName} view`);
+        
+        // Update view tabs
+        document.querySelectorAll('.view-tab').forEach(tab => {
+            tab.classList.remove('active');
+        });
+        document.querySelector(`[data-view="${viewName}"]`).classList.add('active');
+
+        // Update view content
+        document.querySelectorAll('.view-content').forEach(content => {
+            content.classList.remove('active');
+        });
+        document.getElementById(`${viewName}-view`).classList.add('active');
+
+        // Resize editor if switching to editor view
+        if (viewName === 'editor' && this.editor) {
+            setTimeout(() => {
+                this.editor.resize();
+            }, 100);
+        }
+
+        // Only update PC highlight when switching to disassembly (no API call)
+        if (viewName === 'disassembly') {
+            console.log('Updating disassembly PC highlight');
+            this.updateDisassemblyHighlight();
+        }
+    }
+
+    async updateDisassemblyHighlight() {
+        try {
+            // Get current PC without making disassembly API call
+            const cpuState = await this.apiCall('/cpu_state');
+            const pcValue = cpuState.cpu ? cpuState.cpu.pc : 0;
+            
+            const container = document.getElementById('disassembly');
+            if (!container) return;
+            
+            // Clear all highlights
+            container.querySelectorAll('.disassembly-line').forEach(line => {
+                line.classList.remove('current-instruction');
+            });
+            
+            // Highlight current PC
+            const currentLine = container.querySelector(`[data-address="${pcValue}"]`);
+            if (currentLine) {
+                currentLine.classList.add('current-instruction');
+            }
+            
+        } catch (error) {
+            console.error('Error updating disassembly highlight:', error);
+        }
     }
 
     // Tab System
@@ -508,10 +663,12 @@ ldi #0b11111111
         // Try to restore tabs from session storage
         this.restoreTabsFromStorage();
         
-        // If no tabs were restored, create initial tab
+        // If no tabs were restored, create initial tab with sample code
         if (this.tabs.size === 0) {
             this.createTab('untitled-1', 'Untitled-1', '', false);
             this.setActiveTab('untitled-1');
+            // Load sample code into the new empty tab
+            this.loadSampleCode();
         }
 
         // Tab event listeners
@@ -585,25 +742,6 @@ ldi #0b11111111
         }
     }
 
-    initializeCollapsiblePanels() {
-        // Disassembly panel collapse
-        const disassemblyHeader = document.getElementById('disassembly-header');
-        const disassemblyPanel = document.querySelector('.disassembly-panel');
-        const collapseBtn = disassemblyHeader.querySelector('.collapse-btn');
-        
-        disassemblyHeader.addEventListener('click', () => {
-            disassemblyPanel.classList.toggle('collapsed');
-            collapseBtn.textContent = disassemblyPanel.classList.contains('collapsed') ? '+' : '−';
-            
-            // Resize ace editor after animation
-            setTimeout(() => {
-                if (this.editor) {
-                    this.editor.resize();
-                }
-            }, 300);
-        });
-    }
-
     createTab(id, title, content = '', saved = false) {
         const tab = {
             id: id,
@@ -662,6 +800,12 @@ ldi #0b11111111
         // Switch to new tab
         this.activeTabId = tabId;
         this.editor.setValue(tab.content, -1);
+        
+        // Reset dirty state for saved files
+        if (tab.saved) {
+            // For ACE editor: Clear undo manager to prevent false dirty state
+            this.editor.session.getUndoManager().reset();
+        }
         
         // Update UI
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -900,7 +1044,7 @@ ldi #0b11111111
     // Resizer System
     initializeResizers() {
         this.initializeVerticalResizer();
-        this.initializeHorizontalResizer();
+        // Horizontal resizer removed due to new tab-based layout
     }
 
     initializeVerticalResizer() {
@@ -927,41 +1071,6 @@ ldi #0b11111111
             if (newLeftWidth >= minWidth && newLeftWidth <= maxWidth) {
                 leftPanel.style.width = newLeftWidth + 'px';
                 rightPanel.style.width = (containerRect.width - newLeftWidth - 5) + 'px';
-            }
-        });
-        
-        document.addEventListener('mouseup', () => {
-            isResizing = false;
-            document.body.style.cursor = '';
-            document.body.style.userSelect = '';
-        });
-    }
-
-    initializeHorizontalResizer() {
-        const resizer = document.querySelector('.horizontal-resizer');
-        const editorPanel = document.querySelector('.editor-panel');
-        const disassemblyPanel = document.querySelector('.disassembly-panel');
-        
-        let isResizing = false;
-        
-        resizer.addEventListener('mousedown', (e) => {
-            isResizing = true;
-            document.body.style.cursor = 'row-resize';
-            document.body.style.userSelect = 'none';
-        });
-        
-        document.addEventListener('mousemove', (e) => {
-            if (!isResizing) return;
-            
-            const leftPanelRect = document.querySelector('.left-panel').getBoundingClientRect();
-            const newEditorHeight = e.clientY - leftPanelRect.top;
-            const minHeight = 200;
-            const maxHeight = leftPanelRect.height - 150;
-            
-            if (newEditorHeight >= minHeight && newEditorHeight <= maxHeight) {
-                editorPanel.style.height = newEditorHeight + 'px';
-                editorPanel.style.flex = 'none';
-                disassemblyPanel.style.height = (leftPanelRect.height - newEditorHeight - 5) + 'px';
             }
         });
         

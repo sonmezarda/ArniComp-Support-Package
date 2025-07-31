@@ -31,6 +31,10 @@
                             <div class="tabs">
                                 <!-- Tabs will be added dynamically -->
                             </div>
+                            <div class="view-tabs">
+                                <button class="view-tab active" data-view="editor">📝 Editor</button>
+                                <button class="view-tab" data-view="disassembly">🔍 Disassembly</button>
+                            </div>
                             <button class="new-tab-btn" title="New File">+</button>
                         </div>
                         <div class="file-controls">
@@ -41,23 +45,18 @@
                         </div>
                     </div>
                     <div class="editor-content">
-                        <div id="editor" class="code-editor"></div>
-                        <div class="editor-status">
-                            <span id="compile-status">Ready</span>
-                            <span id="cursor-position">Line: 1, Col: 1</span>
-                            <span id="file-status"></span>
+                        <div id="editor-view" class="view-content active">
+                            <div id="editor" class="code-editor"></div>
+                            <div class="editor-status">
+                                <span id="compile-status">Ready</span>
+                                <span id="cursor-position">Line: 1, Col: 1</span>
+                                <span id="file-status"></span>
+                            </div>
+                        </div>
+                        <div id="disassembly-view" class="view-content">
+                            <div id="disassembly" class="disassembly-view"></div>
                         </div>
                     </div>
-                </div>
-
-                <div class="resizer horizontal-resizer"></div>
-
-                <div class="panel disassembly-panel">
-                    <div class="panel-header collapsible" id="disassembly-header">
-                        <h3>🔍 Disassembly</h3>
-                        <button class="collapse-btn" title="Toggle Disassembly">−</button>
-                    </div>
-                    <div id="disassembly" class="disassembly-view collapsible-content"></div>
                 </div>
             </div>
 
@@ -67,7 +66,10 @@
             <div class="right-panel">
                 <!-- CPU Registers -->
                 <div class="panel cpu-panel">
-                    <h3>🎛️ CPU Registers</h3>
+                    <div class="panel-header-controls">
+                        <h3>🎛️ CPU Registers</h3>
+                        <button id="refresh-cpu-btn" class="btn btn-small">🔄</button>
+                    </div>
                     
                     <!-- Data Format Selector -->
                     <div class="format-selector">

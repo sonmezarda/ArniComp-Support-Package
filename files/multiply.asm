@@ -1,45 +1,36 @@
-const x = 2
-const y = 2
-const s_addr = #0x0F
-const counter_addr = #0x0A
+; ArniComp Sample Program
+; This program demonstrates basic functionality
 
-ldi $s_addr
-mov marl, ra
+const x = 5
+const y = 10
 
-ldi #0 ; ra = 0
-mov rd, ra ; rd = 0
-add ra ; acc = rd + ra = 0
-strl ra ; mem[s_addr] = 0
-
-ldi $counter_addr
-mov marl, ra
-ldi #0
-strl ra ; mem[counter_addr] = 0
-
-ldi @sum
+ldi @main
 mov prl, ra
 
-sum:
-    ldi $s_addr
-    mov marl, ra
-    ldrl rd     ; rd = mem[s_addr]
-    ldi $x      ; ra = x
-    add ra      ; acc = mem[s_addr] + x
-    strl acc    ; mem[s_addr] = acc
+ldi #0
+mov rd, ra
 
-    ldi $counter_addr
+main:
+    ldi $x      ; Load constant x into RA
+    add ra      ; Add RA to ACC (ACC = RD + RA)
+    
+    ldi $y      ; Load constant y into RA  
+    add ra      ; Add RA to ACC (ACC = ACC + RA)
+    
+    ; Store result in memory
+    ldi #0
     mov marl, ra
-    ldrl rd     ; rd = counter
-
-    ldi #1
-    add ra      ; acc = counter + 1
     strl acc
+    
+    ; Output result
+    out acc
+    
+    ; Simple loop
+    mov rd, acc
+    ldi #15
+    add ra      ; Compare RD with 15
+    
+    jne         ; Jump back if not equal
 
-    ldi $y      ; ra = y
-    add ra      ; acc = ra + counter (ra == counter)
-
-    jne
-
-ldi $s_addr
-mov marl, ra 
-ldrl ra
+; End of program
+ldi #0b11111111

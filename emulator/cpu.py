@@ -260,12 +260,12 @@ class CPU:
                     self.memory_mode_high = (args[0].upper() == 'MH')
         
         elif inst_name == 'ADD':
-            # ADD source - adds source to ACC
+            # ADD source - adds RD + source, stores in ACC
             if len(args) >= 1:
                 source_val = self.get_register_value(args[0])
                 # Hardware comparator: RD vs source_val
                 self.flags.update_flags(self.rd, source_val)
-                result = self.acc + source_val
+                result = self.rd + source_val  # RD + source
                 self.acc = result & 0xFF
         
         elif inst_name == 'SUB':

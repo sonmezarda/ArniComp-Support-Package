@@ -60,7 +60,9 @@ class AssemblyHelper:
             cleaned_line = ' '.join(line.split())
             # Remove comments
             if self.comment_char in cleaned_line:
-                cleaned_line = cleaned_line[:cleaned_line.index(self.comment_char)]
+                comment_pos = cleaned_line.find(self.comment_char)
+                if comment_pos != -1:
+                    cleaned_line = cleaned_line[:comment_pos]
             cleaned_lines.append(cleaned_line)
         return cleaned_lines
 
@@ -212,6 +214,10 @@ class AssemblyHelper:
         return changed_lines
     
     def covert_to_binary(self, line:str):
+        # Skip empty lines
+        if not line or not line.strip():
+            return None
+            
         print(line)
 
         splitted_line = line.split()
@@ -219,14 +225,28 @@ class AssemblyHelper:
             inst_str = splitted_line[0].upper()
             args_list = []
         else:
-            inst_str = line[:line.index(" ")].upper()
-            args_list = line[line.index(" "):].replace(' ','').split(",")
+            space_pos = line.find(" ")
+            if space_pos != -1:
+                inst_str = line[:space_pos].upper()
+                args_list = line[space_pos:].replace(' ','').split(",")
+            else:
+                inst_str = line.upper()
+                args_list = []
+        
+        # Skip if instruction is empty
+        if not inst_str:
+            return None
         
         if inst_str == "LDI":
             arg = self.to_decimal(args_list[0])
             return f"1{arg:07b}"
             
         print(f"Instruction: {inst_str}, Args: {args_list}")
+
+        # Check if instruction exists in config
+        if inst_str not in instructions:
+            print(f"Unknown instruction: {inst_str}")
+            return None
 
         opcode =  self._select_opcode(instructions[inst_str], args_list)
         arg_code = self._select_arg_code(instructions[inst_str], args_list)
@@ -263,6 +283,183 @@ class AssemblyHelper:
                 return int(value)
         else:
             return int(value)
+    
+    def disassemble_instruction(self, instruction_byte):
+        """
+        Disassemble a single instruction byte to human-readable format
+        
+        Args:
+            instruction_byte: The instruction byte to disassemble
+            
+        Returns:
+            str: Human-readable instruction string
+        """
+        if instruction_byte is None:
+            return "NOP"
+        
+        instruction = int(instruction_byte) if isinstance(instruction_byte, str) else instruction_byte
+        
+        # Check if it's an immediate instruction (LDI)
+        if instruction & 0x80:  # MSB = 1 means LDI
+            immediate_value = instruction & 0x7F  # Lower 7 bits
+            return f"LDI #{immediate_value}"
+        
+        # Regular instruction format: 1 bit (0) + 4 bits opcode + 3 bits args
+        opcode = (instruction >> 3) & 0x0F  # Bits 6-3 (4 bits)
+        args = instruction & 0x07  # Bits 2-0 (3 bits)
+        
+        # Create reverse mapping from our config
+        opcode_bin = f"{opcode:04b}"
+        argcode_bin = f"{args:03b}"
+        
+        # Find instruction by opcode and argcode combination
+        # First pass: Look for exact opcode+argcode matches
+        for inst_name, inst_config in instructions.items():
+            if inst_config.get("opcode_type") == "constant":
+                config_opcode = inst_config.get("opcode")
+                config_argcode = inst_config.get("argcode")
+                
+                # For instructions with constant opcode and argcode, match both exactly
+                if (config_opcode == opcode_bin and 
+                    config_argcode is not None and 
+                    config_argcode == argcode_bin):
+                    return inst_name
+        
+        # Second pass: Look for constant opcode instructions that use argcode for register parameters  
+        for inst_name, inst_config in instructions.items():
+            if inst_config.get("opcode_type") == "constant":
+                config_opcode = inst_config.get("opcode")
+                argcode_type = inst_config.get("argcode_type")
+                
+                # Match instructions with constant opcode that use argcode for register selection
+                if config_opcode == opcode_bin and argcode_type in ["out_reg", "in_reg"]:
+                    # Found matching instruction, now decode arguments
+                    if inst_name == "ADD" or inst_name == "SUB":
+                        # These use register arguments in argcode
+                        reg_map = {"000": "RA", "001": "RD", "110": "ACC"}
+                        reg_name = reg_map.get(argcode_bin, f"#{args}")
+                        return f"{inst_name} {reg_name}"
+                    
+                    elif inst_name in ["ADDI", "SUBI"]:
+                        # These use immediate values
+                        return f"{inst_name} #{args}"
+                    
+                    elif inst_name in ["STRL", "STRH"]:
+                        # These use register arguments - STRL/STRH dst <- src format
+                        reg_map = {"000": "RA", "001": "RD", "110": "ACC"}
+                        reg_name = reg_map.get(argcode_bin, f"#{args}")
+                        return f"{inst_name} {reg_name}"
+                    
+                    elif inst_name in ["LDRL", "LDRH"]:
+                        # These use register arguments - LDRL/LDRH dst <- memory format
+                        reg_map = {"000": "RA", "001": "RD", "110": "ACC"}
+                        reg_name = reg_map.get(argcode_bin, f"#{args}")
+                        return f"{inst_name} {reg_name}"
+                    
+                    elif inst_name == "OUT":
+                        # OUT uses register arguments
+                        reg_map = {"000": "RA", "001": "RD", "110": "ACC"}
+                        reg_name = reg_map.get(argcode_bin, f"#{args}")
+                        return f"{inst_name} {reg_name}"
+                        
+                    elif inst_name == "IN":
+                        # IN uses register arguments
+                        reg_map = {"000": "RA", "001": "RD", "110": "ACC"}
+                        reg_name = reg_map.get(argcode_bin, f"#{args}")
+                        return f"{inst_name} {reg_name}"
+                    
+                    else:
+                        return inst_name
+        
+        # Third pass: Look for opcode_type="in_reg" instructions (opcode encodes source register)
+        for inst_name, inst_config in instructions.items():
+            opcode_type = inst_config.get("opcode_type")
+            argcode_type = inst_config.get("argcode_type")
+            config_argcode = inst_config.get("argcode")
+            
+            if opcode_type == "in_reg" and config_argcode is not None:
+                # Match instructions like LDRL, LDRH that have opcode_type="in_reg" and fixed argcode
+                if config_argcode == argcode_bin:
+                    # Found exact argcode match for in_reg instruction
+                    if inst_name in ["LDRL", "LDRH"]:
+                        # For LDRL/LDRH, the opcode field contains the register
+                        reg_map = {
+                            "1000": "RA", "1001": "RD", "1010": "ML", "1011": "MH",
+                            "1100": "PRL", "1101": "PRH", "1110": "MARL", "1111": "P",
+                            "0001": "MARH", "0110": "ACC"
+                        }
+                        reg_name = reg_map.get(opcode_bin, f"0x{instruction:02X}")
+                        return f"{inst_name} {reg_name}"
+                    
+                    elif inst_name == "IN":
+                        # IN also uses opcode for register
+                        reg_map = {
+                            "1000": "RA", "1001": "RD", "1010": "ML", "1011": "MH",
+                            "1100": "PRL", "1101": "PRH", "1110": "MARL", "1111": "P",
+                            "0001": "MARH", "0110": "ACC"
+                        }
+                        reg_name = reg_map.get(opcode_bin, f"0x{instruction:02X}")
+                        return f"{inst_name} {reg_name}"
+                    
+                    else:
+                        return inst_name
+
+        # Fourth pass: Look for opcode-only matches (instructions with argcode=None)
+        for inst_name, inst_config in instructions.items():
+            if inst_config.get("opcode_type") == "constant":
+                config_opcode = inst_config.get("opcode")
+                config_argcode = inst_config.get("argcode")
+                
+                # For instructions with only constant opcode (no argcode defined)
+                if config_opcode == opcode_bin and config_argcode is None:
+                    return inst_name
+            
+        # Fifth pass: Handle MOV separately (it uses opcode for source register)
+        for inst_name, inst_config in instructions.items():
+            if inst_name == "MOV":
+                # MOV has opcode_type="in_reg" and argcode_type="out_reg"
+                # This means the opcode field encodes the source register
+                # and the argcode field encodes the destination register
+                
+                # Source register mapping (from opcode_types.in_reg + missing mappings)
+                src_regs = {
+                    "1000": "RA", "1001": "RD", "1010": "ML", "1011": "MH",
+                    "1100": "PRL", "1101": "PRH", "1110": "MARL", "1111": "P",
+                    "0001": "MARH", "0110": "ACC", "0111": "RA"  # Add missing 0111->RA mapping
+                }
+                
+                # Destination register mapping (from argcode_types.out_reg)
+                dst_regs = {
+                    "000": "RA", "001": "RD", "010": "ML", "011": "MH",
+                    "100": "PCL", "101": "PCH", "110": "ACC", "111": "P"
+                }
+                
+                src_reg = src_regs.get(opcode_bin, None)
+                dst_reg = dst_regs.get(argcode_bin, None)
+                
+                if src_reg and dst_reg:
+                    # MOV syntax analysis:
+                    # Assembly: "mov marl, ra" encodes as 0x70
+                    # 0x70 = 01110000: opcode=0111, argcode=000
+                    # Our mapping: opcode=0111->unknown, argcode=000->RA
+                    # But user expects: MOV MARL, RA (MARL <- RA)
+                    # This suggests: MOV source, destination format
+                    return f"MOV {src_reg}, {dst_reg}"
+                    
+            # Handle other instructions with variable opcodes
+            elif inst_config.get("opcode_type") == "in_reg":
+                # Instructions like LDRL, LDRH, IN where opcode encodes a register
+                reg_map = {
+                    "1000": "RA", "1001": "RD", "1010": "ML", "1011": "MH",
+                    "1100": "PRL", "1101": "PRH", "1110": "MARL", "1111": "P",
+                    "0001": "MARH"
+                }
+                
+                reg_name = reg_map.get(opcode_bin, None)
+                if reg_name:
+                    return f"{inst_name} {reg_name}"
+        
+        return f"UNK 0x{instruction:02X}"
           
 class Assembler:
     def __init__(self):

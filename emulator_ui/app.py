@@ -158,7 +158,13 @@ def compile_code():
             for i, binary_str in enumerate(blines):
                 if binary_str.strip():
                     try:
-                        binary_data.append(int(binary_str.strip(), 2))
+                        value = int(binary_str.strip(), 2)
+                        # Ensure byte is in valid range (0-255)
+                        if 0 <= value <= 255:
+                            binary_data.append(value)
+                        else:
+                            print(f"Warning: Value {value} at line {i} is out of byte range (0-255), skipping")
+                            continue
                     except ValueError as ve:
                         print(f"Invalid binary string at line {i}: {binary_str} - {ve}")
                         continue
@@ -227,7 +233,31 @@ def step_execution():
         return jsonify({
             'success': True,
             'halted': cpu.halted,
-            'continued': not cpu.halted
+            'continued': not cpu.halted,
+            'cpu': {
+                'pc': cpu.pc,
+                'registers': {
+                    'ra': cpu.ra,
+                    'rd': cpu.rd,
+                    'acc': cpu.acc,
+                    'marl': cpu.marl,
+                    'marh': cpu.marh,
+                    'prl': cpu.prl,
+                    'prh': cpu.prh
+                },
+                'data_addr': cpu.get_memory_address(),
+                'flags': {
+                    'equal': cpu.flags.equal,
+                    'lt': cpu.flags.lt,
+                    'gt': cpu.flags.gt
+                },
+                'memory_mode': 'HIGH' if cpu.memory_mode_high else 'LOW',
+                'output': {
+                    'data': cpu.output_data,
+                    'address': cpu.output_address
+                },
+                'running': cpu.running
+            }
         })
         
     except Exception as e:
@@ -275,21 +305,26 @@ def disassemble():
     """Disassemble program memory"""
     try:
         start = int(request.args.get('start', 0))
-        count = int(request.args.get('count', 20))
+        count = int(request.args.get('count', 1024))  # Default to 1024 instructions for better coverage
+        
+        # Limit count to prevent excessive memory usage
+        max_count = min(count, len(cpu.program_memory) - start)
         
         instructions = []
         
-        for i in range(count):
+        for i in range(max_count):
             addr = start + i
             if addr >= len(cpu.program_memory):
                 break
                 
             opcode = cpu.program_memory[addr]
-            if opcode == 0:
-                continue
-                
+            
+            # Include all opcodes (including 0x00 for complete memory view)
             # Decode instruction using our decoder
-            decoded = decode_instruction(opcode)
+            if opcode != 0:
+                decoded = decode_instruction(opcode)
+            else:
+                decoded = "NOP"  # 0x00 = No Operation
             hex_str = f"{opcode:02X}"
             
             instructions.append({
