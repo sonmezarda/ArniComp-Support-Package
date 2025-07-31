@@ -465,9 +465,18 @@ ldi #0b11111111
             const container = document.getElementById('disassembly');
             container.innerHTML = '';
 
+            // Get current PC value for highlighting
+            const cpuState = await this.apiCall('/cpu_state');
+            const currentPC = cpuState.cpu ? cpuState.cpu.pc : 0;
+
             result.instructions.forEach(inst => {
                 const lineElement = document.createElement('div');
                 lineElement.className = 'disassembly-line';
+                
+                // Highlight current instruction
+                if (inst.address === currentPC) {
+                    lineElement.classList.add('current-instruction');
+                }
                 
                 lineElement.innerHTML = `
                     <span class="disassembly-address">${inst.address.toString(16).padStart(4, '0').toUpperCase()}:</span>
@@ -487,6 +496,7 @@ ldi #0b11111111
         this.refreshCPUState();
         this.refreshDataMemory();
         this.refreshProgramMemory();
+        this.refreshDisassembly();
     }
 
     // Tab System
@@ -495,9 +505,14 @@ ldi #0b11111111
         document.querySelector('.tabs').innerHTML = '';
         this.tabs.clear();
         
-        // Create initial tab
-        this.createTab('untitled-1', 'Untitled-1', '', false);
-        this.setActiveTab('untitled-1');
+        // Try to restore tabs from session storage
+        this.restoreTabsFromStorage();
+        
+        // If no tabs were restored, create initial tab
+        if (this.tabs.size === 0) {
+            this.createTab('untitled-1', 'Untitled-1', '', false);
+            this.setActiveTab('untitled-1');
+        }
 
         // Tab event listeners
         document.querySelector('.new-tab-btn').addEventListener('click', () => this.createNewTab());
@@ -507,6 +522,67 @@ ldi #0b11111111
         document.getElementById('open-file-btn').addEventListener('click', () => this.openFileDialog());
         document.getElementById('save-file-btn').addEventListener('click', () => this.saveFile());
         document.getElementById('save-as-btn').addEventListener('click', () => this.saveAsDialog());
+        
+        // Save tabs state before page unload
+        window.addEventListener('beforeunload', () => {
+            this.saveTabsToStorage();
+        });
+        
+        // Save tabs state periodically
+        setInterval(() => {
+            this.saveTabsToStorage();
+        }, 5000); // Save every 5 seconds
+    }
+
+    saveTabsToStorage() {
+        try {
+            // Save current editor content to active tab
+            if (this.activeTabId) {
+                const currentTab = this.tabs.get(this.activeTabId);
+                if (currentTab) {
+                    currentTab.content = this.editor.getValue();
+                }
+            }
+            
+            const tabsData = {
+                tabs: Array.from(this.tabs.entries()).map(([id, tab]) => ({
+                    id: tab.id,
+                    title: tab.title,
+                    content: tab.content,
+                    saved: tab.saved,
+                    filepath: tab.filepath
+                })),
+                activeTabId: this.activeTabId,
+                tabCounter: this.tabCounter
+            };
+            
+            sessionStorage.setItem('arnicomp_tabs', JSON.stringify(tabsData));
+        } catch (error) {
+            console.warn('Failed to save tabs to storage:', error);
+        }
+    }
+
+    restoreTabsFromStorage() {
+        try {
+            const stored = sessionStorage.getItem('arnicomp_tabs');
+            if (!stored) return;
+            
+            const tabsData = JSON.parse(stored);
+            this.tabCounter = tabsData.tabCounter || 1;
+            
+            // Restore tabs
+            tabsData.tabs.forEach(tabData => {
+                const tab = this.createTab(tabData.id, tabData.title, tabData.content, tabData.saved);
+                tab.filepath = tabData.filepath;
+            });
+            
+            // Restore active tab
+            if (tabsData.activeTabId && this.tabs.has(tabsData.activeTabId)) {
+                this.setActiveTab(tabsData.activeTabId);
+            }
+        } catch (error) {
+            console.warn('Failed to restore tabs from storage:', error);
+        }
     }
 
     initializeCollapsiblePanels() {

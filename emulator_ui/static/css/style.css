@@ -231,6 +231,13 @@ header h1 {
     display: flex;
     margin-bottom: 4px;
     padding: 2px 0;
+    transition: background-color 0.2s;
+}
+
+.disassembly-line.current-instruction {
+    background-color: rgba(255, 255, 0, 0.2);
+    border-left: 3px solid #ffeb3b;
+    padding-left: 7px;
 }
 
 .disassembly-address {
