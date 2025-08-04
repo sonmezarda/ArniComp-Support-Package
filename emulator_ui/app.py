@@ -58,9 +58,96 @@ class FileContent(BaseModel):
     filename: str
     content: str
 
+class SaveFileRequest(BaseModel):
+    content: str
+
 def decode_instruction(instruction_byte):
     """Decode a single instruction byte to human-readable format"""
-    return assembly_helper.disassemble_instruction(instruction_byte)
+    try:
+        # Get binary representation
+        binary = format(instruction_byte, '08b')
+        
+        # Check if it's LDI instruction (IM7 = 1)
+        if binary[0] == '1':
+            # LDI instruction - immediate value
+            value = instruction_byte & 0x7F  # Remove IM7 bit
+            return f"LDI #{value}"
+        
+        # Extract opcode (bits 1-4) and argcode (bits 5-7)
+        opcode = binary[1:5]
+        argcode = binary[5:8]
+        
+        # Opcode to instruction mapping
+        opcode_map = {
+            '0010': 'JMP',
+            '0011': 'ADDI',
+            '0100': 'ADD',
+            '0101': 'SUB',
+            '0110': 'SUBI',
+            '1000': 'MOV RA',
+            '1001': 'MOV RD', 
+            '1010': 'STRL/LDRL',
+            '1011': 'STRH/LDRH',
+            '1100': 'MOV PRL',
+            '1101': 'MOV PRH',
+            '1110': 'MOV MARL',
+            '1111': 'OUT/IN',
+            '0001': 'MOV MARH'
+        }
+        
+        # Argcode to register mapping
+        argcode_map = {
+            '000': 'RA',
+            '001': 'RD',
+            '010': 'ML',
+            '011': 'MH',
+            '100': 'PCL',
+            '101': 'PCH',
+            '110': 'ACC',
+            '111': 'P'
+        }
+        
+        instruction = opcode_map.get(opcode, f'UNK_{opcode}')
+        
+        # Handle specific instructions
+        if opcode == '0010':  # Jump instructions
+            jump_map = {
+                '000': 'JMP',
+                '001': 'JGT',
+                '010': 'JLT',
+                '100': 'JEQ',
+                '101': 'JGE',
+                '110': 'JLE',
+                '111': 'JNE'
+            }
+            return jump_map.get(argcode, f'JMP_{argcode}')
+        elif opcode == '1010':  # STRL/LDRL
+            if argcode in ['010', '011']:
+                return f'LDR{argcode_map.get(argcode, argcode)}'
+            else:
+                return f'STRL {argcode_map.get(argcode, argcode)}'
+        elif opcode == '1011':  # STRH/LDRH
+            if argcode in ['010', '011']:
+                return f'LDR{argcode_map.get(argcode, argcode)}'
+            else:
+                return f'STRH {argcode_map.get(argcode, argcode)}'
+        elif opcode == '1111':  # OUT/IN
+            if argcode == '111':
+                return 'IN'
+            else:
+                return f'OUT {argcode_map.get(argcode, argcode)}'
+        elif opcode in ['0100', '0101']:  # ADD/SUB
+            base_inst = 'ADD' if opcode == '0100' else 'SUB'
+            return f'{base_inst} {argcode_map.get(argcode, argcode)}'
+        elif opcode.startswith('10'):  # MOV instructions
+            src_reg = instruction.split()[-1] if ' ' in instruction else 'UNK'
+            dst_reg = argcode_map.get(argcode, argcode)
+            return f'MOV {src_reg}, {dst_reg}'
+        else:
+            return f'{instruction} {argcode_map.get(argcode, argcode)}'
+            
+    except Exception as e:
+        return f"ERR_{instruction_byte:02X}"
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
@@ -135,27 +222,11 @@ async def get_memory(
 async def compile_code(request: CompileRequest):
     """Compile assembly code"""
     try:
+        
         lines = request.code.strip().split('\n')
-        
-        # Process assembly code using AssemblyHelper
-        lines = assembly_helper.remove_whitespaces_lines(lines)
-        lines = assembly_helper.upper_lines(lines)
-        
-        # Extract labels and constants
-        labels = assembly_helper.get_labels(lines)
-        constants = assembly_helper.get_constants(lines)
-        
-        # Remove labels and constants from lines
-        lines = assembly_helper.remove_labels(lines)
-        lines = assembly_helper.remove_constants(lines)
-        
-        # Replace labels and constants with their values
-        lines = assembly_helper.change_labels(lines, labels)
-        lines = assembly_helper.change_constants(lines, constants)
-        
-        # Convert to binary
-        binary_lines = assembly_helper.convert_to_binary_lines(lines)
-        
+        print(f"Raw lines: {lines}")  # Debug
+        binary_lines, labels, constants = assembly_helper.convert_to_machine_code(lines)
+        print(f"Binary lines: {binary_lines}")  # Debug
         if not binary_lines:
             return {'success': False, 'error': 'No valid instructions found'}
         
@@ -164,6 +235,8 @@ async def compile_code(request: CompileRequest):
         for binary_line in binary_lines:
             if binary_line:
                 program.append(int(binary_line, 2))
+        
+        print(f"Program: {program[:5]}...")  # Debug
         
         # Reset CPU and load program
         cpu.reset()
@@ -177,6 +250,9 @@ async def compile_code(request: CompileRequest):
             'constants': constants
         }
     except Exception as e:
+        print(f"Compilation error: {str(e)}")  # Debug
+        import traceback
+        traceback.print_exc()  # Debug
         return {'success': False, 'error': str(e)}
 
 @app.post("/api/step")
@@ -391,7 +467,7 @@ async def load_file(filename: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/files/{filename}")
-async def save_file(filename: str, request: FileContent):
+async def save_file(filename: str, request: SaveFileRequest):
     """Save an assembly file"""
     try:
         files_dir = os.path.join(os.path.dirname(__file__), '..', 'files')

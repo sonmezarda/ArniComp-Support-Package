@@ -278,21 +278,21 @@ class CPU:
                 self.acc = result & 0xFF
         
         elif inst_name == 'ADDI':
-            # ADDI immediate - adds immediate to ACC
+            # ADDI immediate - adds RD + immediate, stores in ACC
             if len(args) >= 1:
                 immediate = args[0]
                 # Hardware comparator: RD vs immediate
                 self.flags.update_flags(self.rd, immediate)
-                result = self.acc + immediate
+                result = self.rd + immediate
                 self.acc = result & 0xFF
         
         elif inst_name == 'SUBI':
-            # SUBI immediate - subtracts immediate from ACC
+            # SUBI immediate - subtracts immediate from RD, stores in ACC
             if len(args) >= 1:
                 immediate = args[0]
                 # Hardware comparator: RD vs immediate
                 self.flags.update_flags(self.rd, immediate)
-                result = self.acc - immediate
+                result = self.rd - immediate
                 self.acc = result & 0xFF
         
         elif inst_name == 'LDRL':

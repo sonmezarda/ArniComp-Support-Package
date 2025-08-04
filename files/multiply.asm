@@ -1,36 +1,46 @@
-; ArniComp Sample Program
-; This program demonstrates basic functionality
-
-const x = 5
-const y = 10
-
-ldi @main
-mov prl, ra
+const x = 9
+const y = 12
+const caddr = 0
+const resaddr = 1
 
 ldi #0
 mov rd, ra
+ldi $caddr
+mov marl, ra
+ldi $y
+strl ra     ; MEM[marl] = y
 
-main:
-    ldi $x      ; Load constant x into RA
-    add ra      ; Add RA to ACC (ACC = RD + RA)
-    
-    ldi $y      ; Load constant y into RA  
-    add ra      ; Add RA to ACC (ACC = ACC + RA)
-    
-    ; Store result in memory
-    ldi #0
+ldi $resaddr
+mov marl, ra
+strl rd
+
+
+ldi @mult
+mov prl, ra
+
+; Clear registers
+ldi #0      ; ra  = 0
+mov rd, ra  ; rd  = 0
+add ra      ; acc = 0
+
+
+mult:
+    ldi $x       ; ra = x
+    mov rd, ra   ; rd = x
+    ldi $resaddr    
     mov marl, ra
+    ldrl ra      ; ra = MEM[resaddr]
+    add ra       ; acc = rd + ra
     strl acc
     
-    ; Output result
-    out acc
+    ldi $caddr
+    mov marl, ra
+    ldrl rd      ; rd = MEM[marl] (counter)
+    subi #1      ; acc = rd - 1 (counter - 1)
+    strl acc
     
-    ; Simple loop
-    mov rd, acc
-    ldi #15
-    add ra      ; Compare RD with 15
+    jne
     
-    jne         ; Jump back if not equal
-
-; End of program
-ldi #0b11111111
+ldi $resaddr
+mov marl, ra
+ldrl rd

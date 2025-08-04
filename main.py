@@ -12,26 +12,15 @@ assembly_helper  = AssemblyHelper(comment_char=';',
                                   label_prefix='@')
 
 comport = "/dev/ttyACM0" # /dev/ttyACM0 for Linux, COM5 for Windows
-def convert_to_machine_code(in_file:str, out_file:str):
+
+
+
+def convert_to_machine_code_file(in_file:str, out_file:str):
     f = open(in_file, 'r')
     raw_lines = f.readlines()
     f.close()
-    
-    clines = assembly_helper.upper_lines(raw_lines)
-    clines = assembly_helper.remove_whitespaces_lines(raw_lines)
-    print(f"Cleaned lines: {clines}")
-    constants = assembly_helper.get_constants(clines)
-    print(f"Constants found: {constants}")
-    clines = assembly_helper.remove_constants(clines)
-    labels = assembly_helper.get_labels(clines)
-    clines = assembly_helper.remove_labels(clines)
-    print(f"Labels found: {labels}")
-    clines = assembly_helper.change_labels(clines, labels)
-    clines = assembly_helper.change_constants(clines, constants)
-    
-    blines = assembly_helper.convert_to_binary_lines(clines)
 
-    lines_to_write_bin = [f"{line}\n" for line in blines]
+    lines_to_write_bin = assembly_helper.convert_to_machine_code(raw_lines)
 
     f = open(out_file, 'w')
     f.writelines(lines_to_write_bin)
@@ -56,7 +45,7 @@ def load_bin_file(bin_file: str):
 def load_assembly_file(asm_file: str):
     tmp_machine = "_tmp_machine.txt"
     tmp_bin = "_tmp_program.bin"
-    convert_to_machine_code(asm_file, tmp_machine)
+    convert_to_machine_code_file(asm_file, tmp_machine)
     machine_code_to_bin(tmp_machine, tmp_bin)
     load_bin_file(tmp_bin)
     os.remove(tmp_machine)
@@ -83,7 +72,7 @@ def main():
             return
         in_file = sys.argv[2]
         out_file = sys.argv[3] if len(sys.argv) >= 4 else os.path.splitext(in_file)[0] + ".binary"
-        convert_to_machine_code(in_file, out_file)
+        convert_to_machine_code_file(in_file, out_file)
         print(f"Makine kodu üretildi: {out_file}")
 
     elif command == "createbin":

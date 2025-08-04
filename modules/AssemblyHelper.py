@@ -1,4 +1,4 @@
-
+from __future__ import annotations
 import json
 import os
 
@@ -460,6 +460,25 @@ class AssemblyHelper:
                     return f"{inst_name} {reg_name}"
         
         return f"UNK 0x{instruction:02X}"
+    
+
+    def convert_to_machine_code(self, raw_lines:list[str]):
+        clines = self.upper_lines(raw_lines)
+        clines = self.remove_whitespaces_lines(raw_lines)
+        print(f"Cleaned lines: {clines}")
+        constants = self.get_constants(clines)
+        print(f"Constants found: {constants}")
+        clines = self.remove_constants(clines)
+        labels = self.get_labels(clines)
+        clines = self.remove_labels(clines)
+        print(f"Labels found: {labels}")
+        clines = self.change_labels(clines, labels)
+        clines = self.change_constants(clines, constants)
+
+        blines = self.convert_to_binary_lines(clines)
+
+        lines_to_write_bin = [f"{line}\n" for line in blines]
+        return lines_to_write_bin, labels, constants
           
 class Assembler:
     def __init__(self):

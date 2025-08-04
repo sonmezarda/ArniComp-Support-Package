@@ -377,6 +377,9 @@ ldi #0b11111111
         } else {
             document.getElementById('execution-info').textContent = 'Stopped';
         }
+        
+        // Update disassembly highlight with current PC
+        this.updateDisassemblyHighlightWithPC(cpu.pc);
     }
 
     formatValue(value, bits = 8) {
@@ -644,25 +647,30 @@ ldi #0b11111111
         try {
             // Get current PC without making disassembly API call
             const cpuState = await this.apiCall('/api/cpu_state');
+            let pcValue = 0;
             if (cpuState.success) {
-                const pcValue = cpuState.cpu ? cpuState.cpu.pc : 0;
+                pcValue = cpuState.cpu ? cpuState.cpu.pc : 0;
             }
-            const container = document.getElementById('disassembly');
-            if (!container) return;
-            
-            // Clear all highlights
-            container.querySelectorAll('.disassembly-line').forEach(line => {
-                line.classList.remove('current-instruction');
-            });
-            
-            // Highlight current PC
-            const currentLine = container.querySelector(`[data-address="${pcValue}"]`);
-            if (currentLine) {
-                currentLine.classList.add('current-instruction');
-            }
+            this.updateDisassemblyHighlightWithPC(pcValue);
             
         } catch (error) {
             console.error('Error updating disassembly highlight:', error);
+        }
+    }
+
+    updateDisassemblyHighlightWithPC(pcValue) {
+        const container = document.getElementById('disassembly');
+        if (!container) return;
+        
+        // Clear all highlights
+        container.querySelectorAll('.disassembly-line').forEach(line => {
+            line.classList.remove('current-instruction');
+        });
+        
+        // Highlight current PC
+        const currentLine = container.querySelector(`[data-address="${pcValue}"]`);
+        if (currentLine) {
+            currentLine.classList.add('current-instruction');
         }
     }
 
