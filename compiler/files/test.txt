@@ -1,0 +1,15 @@
+byte v1 = 10; // sa
+      byte v2;
+
+if var == 10:
+    v2           = 1            ;
+
+else:
+    v2 = 2;
+endif
+
+
+//as
+
+
+    // saaa
