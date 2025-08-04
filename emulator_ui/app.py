@@ -18,8 +18,9 @@ import asyncio
 # Add parent directory to path to import emulator modules
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
+
 from emulator.cpu import CPU
-from modules.AssemblyHelper import AssemblyHelper
+from assembler.modules.AssemblyHelper import AssemblyHelper
 
 app = FastAPI(title="ArniComp Emulator", description="8-bit CPU Emulator Web Interface")
 
