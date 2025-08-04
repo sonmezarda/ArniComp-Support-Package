@@ -54,7 +54,7 @@ class AssemblyHelper:
         """
         cleaned_lines = []
         for line in lines:
-            if line == "\n" or line.isspace() or line.startswith(self.comment_char): 
+            if line == "\n" or line.isspace() or line.startswith(self.comment_char) or line=="": 
                 continue
             # Remove whitespace characters
             cleaned_line = ' '.join(line.split())
