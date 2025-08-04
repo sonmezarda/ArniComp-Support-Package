@@ -11,6 +11,9 @@ class ArniCompEmulator {
         this.autoRefresh = true;
         this.dataFormat = 'hex'; // Default format
         
+        // Breakpoint system
+        this.breakpoints = new Set();
+        
         // Settings
         this.settings = {
             dataMemoryStartAddress: '0000',
@@ -83,6 +86,10 @@ class ArniCompEmulator {
         document.getElementById('step-btn').addEventListener('click', () => this.stepExecution());
         document.getElementById('run-btn').addEventListener('click', () => this.runExecution());
         document.getElementById('stop-btn').addEventListener('click', () => this.stopExecution());
+
+        // Breakpoint controls
+        document.getElementById('toggle-breakpoint-btn').addEventListener('click', () => this.toggleCurrentBreakpoint());
+        document.getElementById('clear-breakpoints-btn').addEventListener('click', () => this.clearAllBreakpoints());
 
         // Settings button
         document.getElementById('settings-btn').addEventListener('click', () => this.openSettingsModal());
@@ -171,7 +178,7 @@ ldi #0b11111111
                 options.body = JSON.stringify(data);
             }
 
-            const response = await fetch(`/api${endpoint}`, options);
+            const response = await fetch(endpoint, options);
             const result = await response.json();
 
             if (!result.success) {
@@ -206,20 +213,20 @@ ldi #0b11111111
             document.getElementById('compile-status').textContent = 'Compiling...';
 
             const code = this.editor.getValue();
-            const result = await this.apiCall('/compile', 'POST', { code });
+            const result = await this.apiCall('/api/compile', 'POST', { code });
 
-            this.compiledProgram = result.binary_data;
-            
-            document.getElementById('compile-status').textContent = 
-                `Compiled: ${result.lines_processed} instructions, ${result.binary_data.length} bytes`;
-            
-            this.showStatus('Compilation successful', 'success');
-            
-            // Auto-load compiled program
-            await this.loadProgram();
-            
-            // Refresh disassembly
-            this.refreshDisassembly();
+            if (result.success) {
+                document.getElementById('compile-status').textContent = 
+                    `Compiled: ${result.instructions} instructions loaded`;
+                
+                this.showStatus('Compilation successful', 'success');
+                
+                // Refresh disassembly and state
+                this.refreshAll();
+            } else {
+                document.getElementById('compile-status').textContent = 'Compilation failed';
+                this.showStatus(`Compilation error: ${result.error}`, 'error');
+            }
             
         } catch (error) {
             document.getElementById('compile-status').textContent = 'Compilation failed';
@@ -227,28 +234,9 @@ ldi #0b11111111
         }
     }
 
-    async loadProgram() {
-        if (!this.compiledProgram) {
-            this.showStatus('No compiled program to load', 'warning');
-            return;
-        }
-
-        try {
-            await this.apiCall('/load_program', 'POST', { 
-                binary_data: this.compiledProgram 
-            });
-            
-            this.showStatus('Program loaded', 'success');
-            this.refreshAll();
-            
-        } catch (error) {
-            this.showStatus(`Load error: ${error.message}`, 'error');
-        }
-    }
-
     async resetEmulator() {
         try {
-            await this.apiCall('/reset', 'POST');
+            await this.apiCall('/api/reset', 'POST');
             this.showStatus('Emulator reset', 'info');
             this.isRunning = false;
             this.updateRunControls();
@@ -261,38 +249,31 @@ ldi #0b11111111
 
     async stepExecution() {
         try {
-            const result = await this.apiCall('/step', 'POST');
+            const stepCount = parseInt(document.getElementById('step-count').value) || 1;
+            const result = await this.apiCall('/api/step', 'POST', { count: stepCount });
             console.log('Step result:', result);
             
-            if (result.halted) {
-                this.showStatus('Program halted', 'warning');
-                this.isRunning = false;
-                this.updateRunControls();
-            } else if (!result.continued) {
-                this.showStatus('Execution stopped', 'info');
-                this.isRunning = false;
-                this.updateRunControls();
+            if (result.success) {
+                if (result.cpu.halted) {
+                    this.showStatus(`Program halted after ${result.steps_executed} steps`, 'warning');
+                    this.isRunning = false;
+                    this.updateRunControls();
+                } else if (result.cpu.hit_breakpoint) {
+                    this.showStatus(`Hit breakpoint at address ${result.cpu.pc} after ${result.steps_executed} steps`, 'info');
+                    this.isRunning = false;
+                    this.updateRunControls();
+                } else {
+                    this.showStatus(`Executed ${result.steps_executed} step${result.steps_executed > 1 ? 's' : ''}`, 'success');
+                }
+                
+                // Refresh all displays
+                this.refreshAll();
             } else {
-                this.showStatus('Step executed', 'success');
+                this.showStatus(result.error, 'error');
             }
-            
-            // Use CPU state returned from step API to avoid additional API calls
-            if (result.cpu) {
-                console.log('Updating CPU state from step result');
-                this.updateCPUStateFromData(result.cpu);
-                this.refreshDisassembly(result.cpu.pc);
-            } else {
-                console.log('No CPU data in step result, falling back to separate refresh');
-                // Fallback to separate refresh calls
-                this.refreshCPUState();
-                this.refreshDisassembly();
-            }
-            
-            // Only refresh data and program memory separately
-            this.refreshDataMemory();
-            this.refreshProgramMemory();
             
         } catch (error) {
+            console.error('Step execution error:', error);
             this.showStatus(`Step error: ${error.message}`, 'error');
         }
     }
@@ -303,18 +284,24 @@ ldi #0b11111111
             this.updateRunControls();
             this.showStatus('Running...', 'info');
             
-            const result = await this.apiCall('/run', 'POST', { max_cycles: 1000 });
+            const result = await this.apiCall('/api/run', 'POST');
             
             this.isRunning = false;
             this.updateRunControls();
             
-            document.getElementById('execution-info').textContent = 
-                `Executed ${result.cycles_executed} cycles`;
-            
-            if (result.halted) {
-                this.showStatus('Program completed', 'success');
+            if (result.success) {
+                document.getElementById('execution-info').textContent = 
+                    `Executed ${result.steps_executed} steps`;
+                
+                if (result.hit_breakpoint) {
+                    this.showStatus(`Hit breakpoint at address ${result.breakpoint_address}`, 'info');
+                } else if (result.message.includes('finished')) {
+                    this.showStatus('Program completed', 'success');
+                } else {
+                    this.showStatus(result.message, 'warning');
+                }
             } else {
-                this.showStatus('Execution stopped (max cycles)', 'warning');
+                this.showStatus(result.error, 'error');
             }
             
             this.refreshAll();
@@ -326,10 +313,15 @@ ldi #0b11111111
         }
     }
 
-    stopExecution() {
-        this.isRunning = false;
-        this.updateRunControls();
-        this.showStatus('Execution stopped', 'info');
+    async stopExecution() {
+        try {
+            await this.apiCall('/api/stop', 'POST');
+            this.isRunning = false;
+            this.updateRunControls();
+            this.showStatus('Execution stopped', 'info');
+        } catch (error) {
+            console.error('Stop error:', error);
+        }
     }
 
     updateRunControls() {
@@ -341,9 +333,10 @@ ldi #0b11111111
 
     async refreshCPUState() {
         try {
-            const result = await this.apiCall('/cpu_state');
-            const cpu = result.cpu;
-            this.updateCPUStateFromData(cpu);
+            const result = await this.apiCall('/api/cpu_state');
+            if (result.success) {
+                this.updateCPUStateFromData(result.cpu);
+            }
         } catch (error) {
             // Silently fail for auto-refresh
             if (!this.isRunning) {
@@ -420,7 +413,7 @@ ldi #0b11111111
             const end = parseInt(document.getElementById('data-memory-end').value) || 31;
             
             console.log(`Refreshing data memory: ${start}-${end}`);
-            const result = await this.apiCall(`/memory/data?start=${start}&end=${end}`);
+            const result = await this.apiCall(`/api/memory/data?start=${start}&end=${end}`);
             console.log('Data memory result:', result);
             this.displayMemory('data-memory', result.memory);
             
@@ -436,7 +429,7 @@ ldi #0b11111111
             const end = parseInt(document.getElementById('program-memory-end').value) || 31;
             
             console.log(`Refreshing program memory: ${start}-${end}`);
-            const result = await this.apiCall(`/memory/program?start=${start}&end=${end}`);
+            const result = await this.apiCall(`/api/memory/program?start=${start}&end=${end}`);
             console.log('Program memory result:', result);
             this.displayMemory('program-memory', result.memory);
             
@@ -552,13 +545,13 @@ ldi #0b11111111
             // Use provided PC or fetch if not provided
             let pcValue = currentPC;
             if (pcValue === null) {
-                const cpuState = await this.apiCall('/cpu_state');
+                const cpuState = await this.apiCall('/api/cpu_state');
                 pcValue = cpuState.cpu ? cpuState.cpu.pc : 0;
             }
 
             // Get program data from API using settings count
             const instructionCount = this.settings.disassemblyInstructionCount || 32;
-            const result = await this.apiCall(`/disassemble?start=0&count=${instructionCount}`);
+            const result = await this.apiCall(`/api/disassemble?start=0&count=${instructionCount}`);
             console.log(`Displaying ${result.instructions.length} instructions, PC=${pcValue}`);
             
             // Clear container and rebuild all lines
@@ -592,14 +585,16 @@ ldi #0b11111111
     async refreshAll() {
         try {
             // Get CPU state once and use it for both CPU and disassembly updates
-            const result = await this.apiCall('/cpu_state');
-            const cpu = result.cpu;
-            
-            // Update CPU state with the fetched data
-            this.updateCPUStateFromData(cpu);
-            
-            // Update disassembly with the current PC to avoid redundant API call
-            this.refreshDisassembly(cpu.pc);
+            const result = await this.apiCall('/api/cpu_state');
+            if (result.success) {
+                const cpu = result.cpu;
+                
+                // Update CPU state with the fetched data
+                this.updateCPUStateFromData(cpu);
+                
+                // Update disassembly with the current PC to avoid redundant API call
+                this.refreshDisassembly(cpu.pc);
+            }
             
             // Refresh other components
             this.refreshDataMemory();
@@ -648,9 +643,10 @@ ldi #0b11111111
     async updateDisassemblyHighlight() {
         try {
             // Get current PC without making disassembly API call
-            const cpuState = await this.apiCall('/cpu_state');
-            const pcValue = cpuState.cpu ? cpuState.cpu.pc : 0;
-            
+            const cpuState = await this.apiCall('/api/cpu_state');
+            if (cpuState.success) {
+                const pcValue = cpuState.cpu ? cpuState.cpu.pc : 0;
+            }
             const container = document.getElementById('disassembly');
             if (!container) return;
             
@@ -928,13 +924,12 @@ ldi #0b11111111
 
     async saveToFile(filename, content) {
         try {
-            const response = await fetch('/api/save_file', {
+            const response = await fetch(`/api/files/${filename}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    filename: filename,
                     content: content
                 })
             });
@@ -980,7 +975,7 @@ ldi #0b11111111
         fileList.innerHTML = '<div class="loading">Loading files...</div>';
         
         try {
-            const response = await fetch('/api/list_files');
+            const response = await fetch('/api/files');
             const result = await response.json();
             
             if (result.success) {
@@ -1019,12 +1014,11 @@ ldi #0b11111111
 
     async loadFile(filename) {
         try {
-            const response = await fetch('/api/load_file', {
-                method: 'POST',
+            const response = await fetch(`/api/files/${filename}`, {
+                method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ filename: filename })
+                }
             });
             
             const result = await response.json();
@@ -1228,6 +1222,77 @@ ldi #0b11111111
         
         this.showStatus('Settings reset to defaults');
     }
+
+    // Breakpoint Management
+    async toggleCurrentBreakpoint() {
+        try {
+            const result = await this.apiCall('/api/cpu_state');
+            if (result.success) {
+                const pc = result.cpu.pc;
+                const hasBreakpoint = this.breakpoints.has(pc);
+                
+                const response = await this.apiCall('/api/breakpoints', 'POST', {
+                    address: pc,
+                    enabled: !hasBreakpoint
+                });
+                
+                if (response.success) {
+                    if (hasBreakpoint) {
+                        this.breakpoints.delete(pc);
+                        this.showStatus(`Breakpoint removed from address ${pc}`, 'success');
+                    } else {
+                        this.breakpoints.add(pc);
+                        this.showStatus(`Breakpoint set at address ${pc}`, 'success');
+                    }
+                    this.updateDisassemblyBreakpoints();
+                }
+            }
+        } catch (error) {
+            this.showStatus(`Breakpoint error: ${error.message}`, 'error');
+        }
+    }
+
+    async clearAllBreakpoints() {
+        try {
+            const response = await this.apiCall('/api/breakpoints', 'DELETE');
+            if (response.success) {
+                this.breakpoints.clear();
+                this.showStatus('All breakpoints cleared', 'success');
+                this.updateDisassemblyBreakpoints();
+            }
+        } catch (error) {
+            this.showStatus(`Clear breakpoints error: ${error.message}`, 'error');
+        }
+    }
+
+    async loadBreakpoints() {
+        try {
+            const response = await this.apiCall('/api/breakpoints');
+            if (response.success) {
+                this.breakpoints = new Set(response.breakpoints);
+                this.updateDisassemblyBreakpoints();
+            }
+        } catch (error) {
+            console.error('Load breakpoints error:', error);
+        }
+    }
+
+    updateDisassemblyBreakpoints() {
+        // Update disassembly view to show breakpoints
+        const container = document.getElementById('disassembly');
+        if (container) {
+            const lines = container.querySelectorAll('.disassembly-line');
+            lines.forEach(line => {
+                const address = parseInt(line.getAttribute('data-address'));
+                if (this.breakpoints.has(address)) {
+                    line.classList.add('breakpoint');
+                } else {
+                    line.classList.remove('breakpoint');
+                }
+            });
+        }
+    }
+
 }
 
 // Initialize emulator when page loads

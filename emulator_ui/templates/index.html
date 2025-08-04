@@ -4,7 +4,7 @@
       <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ArniComp CPU Emulator</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/ace.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/mode-assembly_x86.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/theme-monokai.js"></script>
@@ -16,9 +16,23 @@
             <div class="header-controls">
                 <button id="reset-btn" class="btn btn-reset">🔄 Reset</button>
                 <button id="compile-btn" class="btn btn-primary">🔨 Compile</button>
-                <button id="step-btn" class="btn btn-step">👣 Step</button>
+                <div class="step-controls">
+                    <button id="step-btn" class="btn btn-step">👣 Step</button>
+                    <select id="step-count" class="step-count-select">
+                        <option value="1">1</option>
+                        <option value="5">5</option>
+                        <option value="10">10</option>
+                        <option value="20">20</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
+                </div>
                 <button id="run-btn" class="btn btn-run">▶️ Run</button>
                 <button id="stop-btn" class="btn btn-stop" disabled>⏹️ Stop</button>
+                <div class="breakpoint-controls">
+                    <button id="toggle-breakpoint-btn" class="btn btn-small">🔴 Breakpoint</button>
+                    <button id="clear-breakpoints-btn" class="btn btn-small">🗑️ Clear All</button>
+                </div>
             </div>
         </header>
 
@@ -285,6 +299,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.0/theme-monokai.js"></script>
     
     <!-- Emulator Logic -->
-    <script src="{{ url_for('static', filename='js/emulator.js') }}"></script>
+    <script src="{{ url_for('static', path='js/emulator.js') }}"></script>
 </body>
 </html>
