@@ -8,6 +8,7 @@ class CommandTypes(StrEnum):
     CONDITION = auto()
     VARDEF = auto()
     VARDEFWV = auto()
+    IF = auto()
 
 class Command:
     REGEX:str = ""

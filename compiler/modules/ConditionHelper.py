@@ -47,6 +47,15 @@ class IfElseClause(GroupObject):
     def get_else(self) -> ElseStatement | None:
         return self.clause.get('else', None)
     
+    def is_contains_if(self) -> bool:
+        return self.get_if() is not None
+    
+    def is_contains_elif(self) -> bool:
+        return len(self.get_elif()) > 0
+    
+    def is_contains_else(self) -> bool:
+        return self.get_else() is not None
+    
     def apply_to_all_lines(self, func: callable) -> None:
         if 'if' in self.clause:
             new_lines = func(self.get_if().get_lines())
@@ -142,6 +151,7 @@ class Condition:
     def get_str(self) -> str:
         return self.condition_str
 
+    
     def __set_type(self) -> None:
         for cond_type in ConditionTypes:
             if cond_type.value in self.condition_str:

@@ -5,3 +5,8 @@ byte temp;
 temp = b;
 b = a;
 a = temp;
+
+if temp==20
+    b=20
+endif
+a = 10;

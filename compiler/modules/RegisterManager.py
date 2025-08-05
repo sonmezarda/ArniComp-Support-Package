@@ -15,6 +15,7 @@ class RegisterMode(IntEnum):
     CONST=2
     UNKNOWN=3
     TEMPVAR=4
+    LABEL=5
 
 class TempVarMode(IntEnum):
     VAR_VAR_ADD=0
@@ -42,6 +43,20 @@ class Register:
             if value is not None:
                 raise ValueError("Value cannot be set in VALUE or ADDR mode")
     
+    def set_unknown_mode(self):
+        self.mode = RegisterMode.UNKNOWN
+        self.variable = None
+        self.value = None
+        self.special_expression = None
+        
+    def set_label_mode(self, label_name:str):
+        if not label_name:
+            raise ValueError("Label name cannot be empty in LABEL mode")
+        
+        self.mode = RegisterMode.LABEL
+        self.value = label_name
+        self.variable = None
+
     def set_temp_var_mode(self,  expression:str):
         if not expression:
             raise ValueError("Expression cannot be empty in TEMPVAR mode")

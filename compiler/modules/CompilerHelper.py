@@ -3,8 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from VariableManager import VarTypes, Variable, ByteVariable, VarManager
 from StackManager import StackManager
+from LabelManager import LabelManager
 from RegisterManager import RegisterManager, RegisterMode, Register, TempVarMode
-from ConditionHelper import IfElseClause
+from ConditionHelper import IfElseClause, ConditionTypes
 import re
 
 from Commands import *
@@ -17,6 +18,13 @@ class Compiler:
                  stack_size:int = 256,
                  memory_size:int = 65536):
         
+        self.comment_char = comment_char
+        self.variable_start_addr = variable_start_addr
+        self.variable_end_addr = variable_end_addr
+        self.stack_start_addr = stack_start_addr
+        self.stack_size = stack_size
+        self.memory_size = memory_size
+
         if stack_size != 256:
             raise ValueError("Stack size must be 256 bytes.")
         
@@ -24,6 +32,7 @@ class Compiler:
         self.var_manager = VarManager(variable_start_addr, variable_end_addr, memory_size)
         self.register_manager = RegisterManager()
         self.stack_manager = StackManager(stack_start_addr, memory_size)
+        self.label_manager = LabelManager()
         self.lines:list[str] = []
 
     def load_lines(self, filename:str) -> None:
@@ -45,7 +54,18 @@ class Compiler:
             return True
         except ValueError:
             return False
-
+    def copy_commpiler_as_context(self) -> Compiler:
+        new_compiler = Compiler(self.comment_char, 
+                                self.variable_start_addr, 
+                                self.variable_end_addr, 
+                                self.stack_start_addr, 
+                                self.stack_size,
+                                self.memory_size)
+        new_compiler.var_manager = self.var_manager
+        new_compiler.register_manager = self.register_manager
+        new_compiler.stack_manager = self.stack_manager
+        new_compiler.label_manager = self.label_manager
+        return new_compiler
 
     def compile_if_else(self, if_else_clause:IfElseClause) -> list[str]:
         pass
@@ -269,6 +289,53 @@ class Compiler:
         
         return pre_assembly_lines
     
+    def __handle_if_else(self, command:Command) -> list[str]:
+        pre_assembly_lines = []
+        if not isinstance(command.line, IfElseClause):
+            raise ValueError("Command line must be an IfElseClause instance.")
+        if_else_clause:IfElseClause = command.line
+        
+        if if_else_clause.get_if() is None:
+            raise ValueError("IfElseClause must have an 'if' condition defined.")
+        
+        is_contains_else = if_else_clause.is_contains_else()
+        is_contains_elif = if_else_clause.is_contains_elif()
+        print(f"Contains else: {is_contains_else}, Contains elif: {is_contains_elif}")
+
+        if (not is_contains_else) and (not is_contains_elif):
+            compiled_condition = self._compile_condition(if_else_clause.get_if().condition)
+            print(f"Compiled condition: {compiled_condition}")
+            pre_assembly_lines.extend(compiled_condition)
+            if_label = self.label_manager.create_if_label()
+            pre_assembly_lines.extend(self.__set_prl_as_label(if_label))
+            if if_else_clause.get_if().condition.type == ConditionTypes.EQUAL:
+                pre_assembly_lines.append("jne")
+                if_context_compiler = self.create_context_compiler()
+                if_context_compiler.grouped_lines = if_else_clause.get_if().get_lines()
+                if_context_compiler.compile_lines()
+                if_compiled_lines = if_context_compiler.pre_assembly_lines
+                pre_assembly_lines.extend(if_compiled_lines)
+                del if_context_compiler
+                pre_assembly_lines.append(f"{if_label}:")
+            else:
+                raise NotImplementedError("Only EQUAL condition type is implemented for if statements.")
+            return pre_assembly_lines
+        else:
+            raise NotImplementedError("If-Else chains with 'elif' or 'else' are not implemented yet.")
+        pass
+    
+    def __set_prl_as_label(self, label_name:str) -> list[str]:
+        pre_assembly_lines = []
+        label = self.label_manager.get_label(label_name)
+        if label is None:
+            raise ValueError(f"Label '{label_name}' does not exist.")
+        
+        pre_assembly_lines.append(f"ldi @{label}")
+        pre_assembly_lines.append("mov prl, ra")
+        self.register_manager.prl.set_label_mode(label)
+        self.register_manager.ra.set_unknown_mode()
+
+        return pre_assembly_lines
     def __normalize_expression(self, expression: str) -> str:
         """Normalize expression by removing extra spaces and ensuring consistent formatting"""
         # Remove all spaces and then add proper spacing around operators
@@ -442,6 +509,15 @@ class Compiler:
         new_compiler.stack_manager = self.stack_manager
         return new_compiler
     
+    def directly_compile_lines(self, lines:list[str]) -> list[str]:
+        """Directly compile a list of lines without grouping or pre-processing."""
+        self.lines = lines
+        self.break_commands()
+        self.clean_lines()
+        self.group_commands()
+        self.compile_lines()
+        return self.pre_assembly_lines
+
     @staticmethod
     def __determine_command_type(line:str) -> str:
         if re.match(r'^\w+\s*=\s*.+$', line):
