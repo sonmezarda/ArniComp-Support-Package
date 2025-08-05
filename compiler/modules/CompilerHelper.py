@@ -79,12 +79,10 @@ class Compiler:
                     var_value=command.var_value)
         
         if command.var_type == VarTypes.BYTE:
-            pre_assembly_lines.append(f"ldi #{new_var.address}")
-            pre_assembly_lines.append("mov marl, ra")
-            pre_assembly_lines.append(f"ldi #{command.var_value}")
+            pre_assembly_lines.extend(self.__set_marl(new_var))
+            pre_assembly_lines.extend(self.__set_ra_const(command.var_value))
             pre_assembly_lines.append("strl ra")
 
-            self.register_manager.ra.set_variable(new_var, RegisterMode.VALUE)
             self.register_manager.marl.set_variable(new_var, RegisterMode.ADDR)
 
         else:
@@ -163,7 +161,7 @@ class Compiler:
             pre_assembly_lines.append(f"strl {right_var_reg.name}")
             return pre_assembly_lines
         
-        print(marl.variable)
+        print(right_var, marl.variable)
         if marl.variable.name == right_var.name and marl.mode == RegisterMode.ADDR:
             pre_assembly_lines.append(f"ldrl rd")
             self.register_manager.rd.set_variable(right_var, RegisterMode.VALUE)
@@ -216,18 +214,25 @@ class Compiler:
             raise ValueError(f"Cannot assign to undefined variable: {command.var_name}")
         
         if type(var) == VarTypes.BYTE.value:  
-            set_mar_lines = self.__set_marl(var)
-            pre_assembly_lines.extend(set_mar_lines)
             ra = self.register_manager.ra
+            rd = self.register_manager.rd
             acc = self.register_manager.acc
             
             # Check if new_value is a simple digit
             if command.new_value.isdigit():
                 reg_with_const = self.register_manager.check_for_const(int(command.new_value))
                 if reg_with_const is not None:
+                    if reg_with_const.name == ra.name:
+                        pre_assembly_lines.append(f"mov {rd.name}, {reg_with_const.name}")
+                        rd.set_variable(var, RegisterMode.VALUE)
+                        pre_assembly_lines.extend(self.__set_marl(var))
+                        pre_assembly_lines.append("strl rd")
+                        return pre_assembly_lines
+                    pre_assembly_lines.extend(self.__set_marl(var))
                     pre_assembly_lines.append(f"strl {reg_with_const.name}")
                     return pre_assembly_lines
                 
+                pre_assembly_lines.extend(self.__set_marl(var))
                 pre_assembly_lines.extend(self.__set_ra_const(int(command.new_value)))
                 pre_assembly_lines.append("strl ra")
                 
@@ -235,7 +240,7 @@ class Compiler:
             
             # Check if new_value contains an addition expression
             elif '+' in command.new_value:
-                # Parse and normalize the expression
+                raise NotImplementedError("Addition expressions are not implemented yet.")
                 normalized_expression = self.__normalize_expression(command.new_value)
                 
                 # Call __evaluate_expression to compute the expression and store it in ACC
