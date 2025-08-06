@@ -479,15 +479,22 @@ class Compiler:
                 print(f"'{line}' matches AssignCommand regex")
                 grouped_lines.append(AssignCommand(line))
                 lindex += 1
-            elif line.startswith('if'):
+            elif line.startswith('if '):
                 print(f"'{line}' starts an if clause")
+                # Handle nested if-else clauses
+                nested_count = 0
                 group = []
                 while lindex < len(lines):
-                    if lines[lindex].startswith('endif'):
-                        del lines[lindex]
-                        break
                     group.append(lines[lindex])
+                    if lines[lindex].startswith('endif'):
+                        nested_count -= 1
+                        if nested_count < 1:
+                            break
+                    elif lines[lindex].startswith('if '):
+                        nested_count += 1
                     lindex += 1
+                print(f"Grouped lines for if clause: {group}")
+                
                 if_clause = IfElseClause.parse_from_lines(group)
                 print(if_clause)
                 if_clause.apply_to_all_lines(Compiler.__group_line_commands)

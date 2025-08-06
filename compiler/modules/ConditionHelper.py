@@ -88,25 +88,73 @@ class IfElseClause(GroupObject):
         
         return '\n'.join(result)
     
+    @staticmethod
+    def group_nested_if_else(lines: list[str]) -> list[str]:
+        """
+        Groups nested if-else clauses into a single list of lines.
+        This is useful for parsing and processing the if-else structure.
+        """
+        grouped_lines = []
+        if_flag = False
+        lines = [line.strip() for line in lines if line.strip()]  # Remove empty lines
+        for i in range(0, len(lines)):
+            line = lines[i]
+            if line.startswith('if '):
+                if if_flag:
+                    new_group = []
+                    x = i
+                    for j in range(x, len(lines)):
+                        new_group.append(lines[j])
+                        if lines[j].startswith('endif'):
+                            grouped_lines.append(new_group)
+                            break
+                else:
+                    if_flag = True
+                    grouped_lines.append(line)
+            else:
+                grouped_lines.append(line)
+
+        return grouped_lines
 
     @staticmethod
     def parse_from_lines(lines: list[str]) -> IfElseClause:
+        grouped_lines = IfElseClause.group_nested_if_else(lines)
         clause = IfElseClause()
         current_if = None
-        
-        for line in lines:
-            line = line.strip()
+        nested_count = 1
+        for group in grouped_lines:
+            
+            if isinstance(group, list):
+                nested_count += 1
+                nested_clause = IfElseClause.parse_from_lines(group)
+                if current_if is None:
+                    current_if = clause.add_if(nested_clause.get_if().condition.get_str())
+                else:
+                    current_if.add_line(nested_clause)
+                continue
+            line = group.strip()
+            
+            # Process the line based on its type
             if line.startswith('if '):
                 condition = line[3:].strip()
-                current_if = clause.add_if(condition)
+                if current_if is None:
+                    current_if = clause.add_if(condition)
+                    continue
+                else: 
+                    raise ValueError("Nested 'if' clauses are not supported. Use 'elif' or 'else' for additional conditions.")
+
             elif line.startswith('elif '):
                 condition = line[5:].strip()
                 current_if = clause.add_elif(condition)
             elif line.startswith('else'):
                 current_if = clause.add_else()
+            elif line.startswith('endif'):
+                nested_count -= 1
+                if nested_count == 0:
+                    return clause
             else:
-                if current_if is not None:
-                    current_if.add_line(line)
+                current_if.add_line(line)
+                
         
         return clause
 
@@ -151,6 +199,8 @@ class Condition:
     def get_str(self) -> str:
         return self.condition_str
 
+    def __str__(self) -> str:
+        return f"Condition(type= {self.type}, parts={self.parts})"
     
     def __set_type(self) -> None:
         for cond_type in ConditionTypes:
@@ -177,17 +227,24 @@ if __name__ == '__main__':
     lines = [
         "if x > 10",
         "    do_something()",
+        "   if x < 10",
+        "        do_something_else2()",
+        "   endif",
         "elif x < 5",
         "    do_something_else()",
         "    do_another_thing()",
         "elif x < 5",
+        "    if y == 0",
+        "        do_something_special()",
+        "    endif",
         "    do_something_else()",
         "    do_another_thing()",
         "else",
-        "    do_default()"
+        "    do_default()",
+        "endif"
     ]
     
     clause = IfElseClause.parse_from_lines(lines)
     
-
+    print(clause.get_else().lines)
     print(clause)
