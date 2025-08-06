@@ -25,6 +25,7 @@ class Compiler:
         self.stack_start_addr = stack_start_addr
         self.stack_size = stack_size
         self.memory_size = memory_size
+        self.assembly_lines:list[str] = []
 
         if stack_size != 256:
             raise ValueError("Stack size must be 256 bytes.")
@@ -55,6 +56,7 @@ class Compiler:
             return True
         except ValueError:
             return False
+        
     def copy_commpiler_as_context(self) -> Compiler:
         new_compiler = Compiler(self.comment_char, 
                                 self.variable_start_addr, 
@@ -72,104 +74,97 @@ class Compiler:
         pass
 
     def compile_lines(self):
-        pre_assembly_lines:list[str] = []
         if self.grouped_lines is None:
             raise ValueError("Commands must be grouped before compilation.")
          
         for command in self.grouped_lines:
             if type(command) is VarDefCommand:                
-                new_lines = self.__create_var_with_value(command)
-                pre_assembly_lines.extend(new_lines)
+                self.__create_var_with_value(command)
             elif type(command) is VarDefCommandWithoutValue:
                 self.__create_var(command)
             elif type(command) is AssignCommand:
-                new_lines = self.__assign_variable(command)
-                pre_assembly_lines.extend(new_lines)
+                self.__assign_variable(command)
             elif command.command_type == CommandTypes.IF:
-                new_lines = self.__handle_if_else(command)
-                pre_assembly_lines.extend(new_lines)
+                self.__handle_if_else(command)
             else:
                 raise ValueError(f"Unsupported command type: {command.command_type}")
-        self.pre_assembly_lines = pre_assembly_lines
+        return self.assembly_lines
 
-    def __create_var_with_value(self, command:VarDefCommand) -> list[str]:
-        pre_assembly_lines = []
+    def __create_var_with_value(self, command:VarDefCommand) -> int:
         new_var = self.var_manager.create_variable(
                     var_name=command.var_name, 
                     var_type=command.var_type, 
                     var_value=command.var_value)
         
         if command.var_type == VarTypes.BYTE:
-            pre_assembly_lines.extend(self.__set_marl(new_var))
-            pre_assembly_lines.extend(self.__set_ra_const(command.var_value))
-            pre_assembly_lines.append("strl ra")
+            self.__set_marl(new_var)
+            self.__set_ra_const(command.var_value)
+            self.__add_assembly_line("strl ra")
 
             self.register_manager.marl.set_variable(new_var, RegisterMode.ADDR)
 
         else:
             raise ValueError(f"Unsupported variable type: {command.var_type}")
         
-        return pre_assembly_lines
     
-    def __create_var(self, command:VarDefCommandWithoutValue)-> list[str]:
-        pre_assembly_lines = []
+    def __create_var(self, command:VarDefCommandWithoutValue)-> int:
         new_var:Variable = self.var_manager.create_variable(var_name=command.var_name, var_type=command.var_type, var_value=0)
-        
-        return pre_assembly_lines
+        self.__get_assembly_lines_len()
     
-    def __set_marl(self, var:Variable) -> list[str]:
-        pre_assembly_lines = []
+
+    def __get_assembly_lines_len(self) -> int:
+        if not self.assembly_lines:
+            return 0
+        return len(self.assembly_lines)
+    
+    def __set_marl(self, var:Variable) -> int:
         marl = self.register_manager.marl
         ra = self.register_manager.ra
 
         if marl.variable == var and marl.mode == RegisterMode.ADDR:
-            return pre_assembly_lines
+            return self.__get_assembly_lines_len()
         
         if (ra.variable == var and ra.mode == RegisterMode.ADDR):
-            pre_assembly_lines.append("mov marl, ra")
+            self.__add_assembly_line("mov marl, ra")
             marl.set_variable(var, RegisterMode.ADDR)
-            return pre_assembly_lines
-        
-        pre_assembly_lines.append(f"ldi #{var.address}")
-        pre_assembly_lines.append("mov marl, ra")
+            return self.__get_assembly_lines_len()
+
+        self.__add_assembly_line(f"ldi #{var.address}")
+        self.__add_assembly_line("mov marl, ra")
         marl.set_variable(var, RegisterMode.ADDR)
         ra.set_variable(var, RegisterMode.ADDR)
 
-        return pre_assembly_lines
+        return self.__get_assembly_lines_len()
 
-    def __mov_marl_to_reg(self, reg:Register) -> list[str]:
-        pre_assembly_lines = []
+    def __mov_marl_to_reg(self, reg:Register) -> int:
         marl = self.register_manager.marl
-
+    
         if marl.mode == RegisterMode.ADDR:
-            pre_assembly_lines.append(f"ldrl {reg.name}")
+            self.__add_assembly_line(f"ldrl {reg.name}")
             reg.set_variable(marl.variable, RegisterMode.VALUE)
         else:
             raise ValueError("MARL must be set to an address before moving to a register.")
-        
-        return pre_assembly_lines
+        return self.__get_assembly_lines_len()
 
-    def __set_ra_const(self, value:int) -> list[str]:
-        pre_assembly_lines = []
+    def __set_ra_const(self, value:int) -> int:
         ra = self.register_manager.ra
         reg_with_const = self.register_manager.check_for_const(value)
 
         if reg_with_const is not None:
-            pre_assembly_lines.append(f"mov ra, {reg_with_const.name}")
+            self.__add_assembly_line(f"mov ra, {reg_with_const.name}")
             ra.set_mode(RegisterMode.CONST, value)
-            return pre_assembly_lines
+            return self.__get_assembly_lines_len()
 
-        pre_assembly_lines.append(f"ldi #{value}")
+        self.__add_assembly_line(f"ldi #{value}")
         ra.set_mode(RegisterMode.CONST, value)
 
-        return pre_assembly_lines
-    
-    def __mov_var_to_var(self, left_var:Variable, right_var:Variable) -> list[str]: 
+        return self.__get_assembly_lines_len()
+
+    def __mov_var_to_var(self, left_var:Variable, right_var:Variable) -> int:
         """Move value from right variable to left, ensuring types match."""
-        pre_assembly_lines = []
         marl = self.register_manager.marl
         if left_var.address == right_var.address:
-            return pre_assembly_lines
+            return self.__get_assembly_lines_len()
         
         if left_var.value_type != right_var.value_type:
             raise ValueError(f"Cannot move variable of type {right_var.value_type} to {left_var.value_type}")
@@ -178,37 +173,37 @@ class Compiler:
         right_var_reg = self.register_manager.check_for_variable(right_var.name)
 
         if right_var_reg is not None:
-            pre_assembly_lines.append(self.__set_marl(left_var))
-            pre_assembly_lines.append(f"strl {right_var_reg.name}")
-            return pre_assembly_lines
+            self.__set_marl(left_var)
+            self.__add_assembly_line(f"strl {right_var_reg.name}")
+            self.__get_assembly_lines_len()
         
         print(right_var, marl.variable)
         if marl.variable.name == right_var.name and marl.mode == RegisterMode.ADDR:
-            pre_assembly_lines.append(f"ldrl rd")
+            self.__add_assembly_line(f"ldrl rd")
             self.register_manager.rd.set_variable(right_var, RegisterMode.VALUE)
-            pre_assembly_lines.extend(self.__set_marl(left_var))
-            pre_assembly_lines.append("strl rd")
-            return pre_assembly_lines
+            self.__set_marl(left_var)
+            self.__add_assembly_line("strl rd")
+            self.__get_assembly_lines_len()
 
-        pre_assembly_lines.extend(self.__set_reg_variable(self.register_manager.rd, right_var))
-        pre_assembly_lines.extend(self.__set_marl(left_var))
-        pre_assembly_lines.append("strl rd")
-        return pre_assembly_lines
+        self.__set_reg_variable(self.register_manager.rd, right_var)
+        self.__set_marl(left_var)
+        self.__add_assembly_line("strl rd")
+        self.__get_assembly_lines_len()
 
     def __set_reg_const(self, reg:Register, value:int) -> list[str]:
         pre_assembly_lines = []
         reg_with_const = self.register_manager.check_for_const(value)
 
         if reg_with_const is not None:
-            pre_assembly_lines.append(f"mov {reg.name}, {reg_with_const.name}")
+            self.__add_assembly_line(f"mov {reg.name}, {reg_with_const.name}")
             reg.set_mode(RegisterMode.CONST, value)
-            return pre_assembly_lines
+            self.__get_assembly_lines_len()
 
-        pre_assembly_lines.extend(self.__set_ra_const(value))
-        pre_assembly_lines.append(f"mov {reg.name}, ra")
+        self.__set_ra_const(value)
+        self.__add_assembly_line(f"mov {reg.name}, ra")
         reg.set_mode(RegisterMode.CONST, value)
 
-        return pre_assembly_lines
+        self.__get_assembly_lines_len()
     
     def __set_reg_variable(self, reg:Register, variable:Variable) -> list[str]:
         pre_assembly_lines = []
@@ -216,16 +211,16 @@ class Compiler:
         
         if reg_with_var is not None:
             if reg_with_var.name == reg.name:
-                return pre_assembly_lines
-            pre_assembly_lines.append(f"mov {reg.name}, {reg_with_var.name}")
+                self.__get_assembly_lines_len()
+            self.__add_assembly_line(f"mov {reg.name}, {reg_with_var.name}")
             reg.set_variable(variable, RegisterMode.VALUE)
-            return pre_assembly_lines
+            self.__get_assembly_lines_len()
         
-        pre_assembly_lines.extend(self.__set_marl(variable))
-        pre_assembly_lines.append(f"ldrl {reg.name}")
+        (self.__set_marl(variable))
+        self.__add_assembly_line(f"ldrl {reg.name}")
         reg.set_variable(variable, RegisterMode.VALUE)
 
-        return pre_assembly_lines
+        self.__get_assembly_lines_len()
     
     def __assign_variable(self, command:AssignCommand) -> list[str]:
         pre_assembly_lines = []
@@ -244,20 +239,20 @@ class Compiler:
                 reg_with_const = self.register_manager.check_for_const(int(command.new_value))
                 if reg_with_const is not None:
                     if reg_with_const.name == ra.name:
-                        pre_assembly_lines.append(f"mov {rd.name}, {reg_with_const.name}")
+                        self.__add_assembly_line(f"mov {rd.name}, {reg_with_const.name}")
                         rd.set_variable(var, RegisterMode.VALUE)
-                        pre_assembly_lines.extend(self.__set_marl(var))
-                        pre_assembly_lines.append("strl rd")
-                        return pre_assembly_lines
-                    pre_assembly_lines.extend(self.__set_marl(var))
-                    pre_assembly_lines.append(f"strl {reg_with_const.name}")
-                    return pre_assembly_lines
+                        (self.__set_marl(var))
+                        self.__add_assembly_line("strl rd")
+                        self.__get_assembly_lines_len()
+                    (self.__set_marl(var))
+                    self.__add_assembly_line(f"strl {reg_with_const.name}")
+                    self.__get_assembly_lines_len()
                 
-                pre_assembly_lines.extend(self.__set_marl(var))
-                pre_assembly_lines.extend(self.__set_ra_const(int(command.new_value)))
-                pre_assembly_lines.append("strl ra")
+                (self.__set_marl(var))
+                (self.__set_ra_const(int(command.new_value)))
+                self.__add_assembly_line("strl ra")
                 
-                return pre_assembly_lines
+                self.__get_assembly_lines_len()
             
             # Check if new_value contains an addition expression
             elif '+' in command.new_value:
@@ -266,29 +261,29 @@ class Compiler:
                 
                 # Call __evaluate_expression to compute the expression and store it in ACC
                 eval_lines = self.__evaluate_expression(normalized_expression)
-                pre_assembly_lines.extend(eval_lines)
+                (eval_lines)
                 
                 # Check if ACC contains the correct expression
                 if (acc.mode == RegisterMode.TEMPVAR and 
                     acc.get_expression() == normalized_expression):
                     # Store ACC to the variable
-                    pre_assembly_lines.append("strl acc")
-                    return pre_assembly_lines
+                    self.__add_assembly_line("strl acc")
+                    self.__get_assembly_lines_len()
                 else:
                     raise RuntimeError(f"ACC does not contain expected expression: {normalized_expression}")
             
             # Check if new_value is a simple variable
             elif self.var_manager.check_variable_exists(command.new_value):
                 var_to_assign:Variable = self.var_manager.get_variable(command.new_value)
-                pre_assembly_lines.extend(self.__mov_var_to_var(var, var_to_assign))
-                return pre_assembly_lines
+                (self.__mov_var_to_var(var, var_to_assign))
+                self.__get_assembly_lines_len()
             else:
                 raise NotImplementedError("Assignment from non-constant or non-variable is not implemented yet.")
 
         else:
             raise ValueError(f"Unsupported variable type for assignment: {var.var_type}")
         
-        return pre_assembly_lines
+        self.__get_assembly_lines_len()
     
 
     def __handle_if_else(self, command:Command) -> list[str]:
@@ -305,43 +300,46 @@ class Compiler:
         print(f"Contains else: {is_contains_else}, Contains elif: {is_contains_elif}")
 
         if (not is_contains_else) and (not is_contains_elif):
-            compiled_condition = self._compile_condition(if_else_clause.get_if().condition)
-            print(f"Compiled condition: {compiled_condition}")
-            pre_assembly_lines.extend(compiled_condition)
-            if_label = self.label_manager.create_if_label()
-            pre_assembly_lines.extend(self.__set_prl_as_label(if_label))
+            self._compile_condition(if_else_clause.get_if().condition)
             
-            condition_type = if_else_clause.get_if().condition.type
-            pre_assembly_lines.append(CompilerStaticMethods.get_inverted_jump_str(condition_type))
-
             self.register_manager.reset_change_detector()
             if_context_compiler = self.create_context_compiler()
             if_context_compiler.grouped_lines = if_else_clause.get_if().get_lines()
-            if_context_compiler.compile_lines()
-            if_compiled_lines = if_context_compiler.pre_assembly_lines
-            pre_assembly_lines.extend(if_compiled_lines)
+            if_context_compiler.compile_lines() 
+            if_inner_len = if_context_compiler.__get_assembly_lines_len()
+
+            if_label, if_label_position = self.label_manager.create_if_label(self.__get_assembly_lines_len() + if_inner_len)
+            self.__set_prl_as_label(if_label, if_label_position)
+            
+            condition_type = if_else_clause.get_if().condition.type
+            self.__add_assembly_line(CompilerStaticMethods.get_inverted_jump_str(condition_type))
+
+            self.__add_assembly_line(if_context_compiler.assembly_lines)
+            self.label_manager.update_label_position(if_label, self.__get_assembly_lines_len())
             del if_context_compiler
-            pre_assembly_lines.append(f"{if_label}:")
+            self.__add_assembly_line(f"{if_label}:")
             print("changed regs:", [reg.name for reg in self.register_manager.changed_registers])
             self.register_manager.set_changed_registers_as_unknown()
-            return pre_assembly_lines
+            self.__get_assembly_lines_len()
             
         else:
             raise NotImplementedError("If-Else chains with 'elif' or 'else' are not implemented yet.")
         pass
-    
-    def __set_prl_as_label(self, label_name:str) -> list[str]:
-        pre_assembly_lines = []
-        label = self.label_manager.get_label(label_name)
-        if label is None:
+
+    def __set_prl_as_label(self, label_name:str, label_position:int) -> int:
+        if label_position + 2 > 0b1111111:
+            raise NotImplementedError("Label position over 7 bits is not supported yet.")
+
+        if not self.label_manager.is_label_defined(label_name):
             raise ValueError(f"Label '{label_name}' does not exist.")
         
-        pre_assembly_lines.append(f"ldi @{label}")
-        pre_assembly_lines.append("mov prl, ra")
-        self.register_manager.prl.set_label_mode(label)
+        self.__add_assembly_line(f"ldi @{label_name}")
+        self.__add_assembly_line("mov prl, ra")
+        self.register_manager.prl.set_label_mode(label_name)
         self.register_manager.ra.set_unknown_mode()
 
-        return pre_assembly_lines
+        self.__get_assembly_lines_len()
+
     def __normalize_expression(self, expression: str) -> str:
         """Normalize expression by removing extra spaces and ensuring consistent formatting"""
         # Remove all spaces and then add proper spacing around operators
@@ -391,26 +389,26 @@ class Compiler:
                 left = eval_stack.pop()
             # Load left operand into RD
             if left.isdigit():
-                pre_assembly_lines.extend(self.__set_reg_const(self.register_manager.rd, int(left)))
+                (self.__set_reg_const(self.register_manager.rd, int(left)))
             else:
                 var_left = self.var_manager.get_variable(left)
-                pre_assembly_lines.extend(self.__set_marl(var_left))
-                pre_assembly_lines.append("ldl rd")
+                (self.__set_marl(var_left))
+                self.__add_assembly_line("ldl rd")
             # Add/Sub right operand to RD and store result in ACC
             if right.isdigit():
-                pre_assembly_lines.extend(self.__set_ra_const(int(right)))
+                (self.__set_ra_const(int(right)))
             else:
                 var_right = self.var_manager.get_variable(right)
-                pre_assembly_lines.extend(self.__set_marl(var_right))
-                pre_assembly_lines.append("ldl ra")
+                (self.__set_marl(var_right))
+                self.__add_assembly_line("ldl ra")
             if token == '+':
-                pre_assembly_lines.append("add ra")
+                self.__add_assembly_line("add ra")
             elif token == '-':
-                pre_assembly_lines.append("sub ra")
+                self.__add_assembly_line("sub ra")
             # After operation, result is in ACC, push a dummy for stack logic
             eval_stack.append("acc")
         
-        return pre_assembly_lines    
+        self.__get_assembly_lines_len()    
     
     def __add(self, left:str, right:str) -> list[str]:
         """Legacy method for simple two-term addition - now uses __evaluate_expression"""
@@ -423,20 +421,20 @@ class Compiler:
         rd = self.register_manager.rd
         marl = self.register_manager.marl
 
-        pre_assembly_lines.extend(self.__set_reg_const(rd, right_value))
-        pre_assembly_lines.extend(self.__set_marl(left_var))
-        pre_assembly_lines.extend(self.__add_ml())
+        (self.__set_reg_const(rd, right_value))
+        (self.__set_marl(left_var))
+        (self.__add_ml())
         expression = f"{left_var.name} + {right_value}"
         self.register_manager.acc.set_temp_var_mode(expression)
 
-        return pre_assembly_lines
+        self.__get_assembly_lines_len()
 
     def __add_reg(self, register:Register) -> list[str]:
         pre_assembly_lines = []
         rd = self.register_manager.rd
-        pre_assembly_lines.append(f"add {register.name}")
+        self.__add_assembly_line(f"add {register.name}")
         
-        return pre_assembly_lines
+        self.__get_assembly_lines_len()
     
     def __add_ml(self) -> list[str]:
         preassembly_lines = []
@@ -456,12 +454,12 @@ class Compiler:
         left_var = self.var_manager.get_variable(left)
         if self.is_number(right):
             right_value = int(right)
-            pre_assembly_lines.extend(self.__set_reg_const(rd, right_value))
-            pre_assembly_lines.extend(self.__set_marl(left_var))
-            pre_assembly_lines.append("sub ml")
+            (self.__set_reg_const(rd, right_value))
+            (self.__set_marl(left_var))
+            self.__add_assembly_line("sub ml")
 
             
-        return pre_assembly_lines
+        self.__get_assembly_lines_len()
     
     @staticmethod
     def __group_line_commands(lines:list[str]) -> list[Command]:
@@ -513,6 +511,8 @@ class Compiler:
         new_compiler.var_manager = self.var_manager
         new_compiler.register_manager = self.register_manager
         new_compiler.stack_manager = self.stack_manager
+        new_compiler.label_manager = self.label_manager
+        new_compiler.assembly_lines = []
         return new_compiler
     
     def directly_compile_lines(self, lines:list[str]) -> list[str]:
@@ -524,6 +524,25 @@ class Compiler:
         self.compile_lines()
         return self.pre_assembly_lines
 
+    def __add_assembly_line(self, lines:str|list[str]) -> int:
+
+        if isinstance(lines, list):
+            self.assembly_lines.extend(lines)
+            return self.assembly_lines.__len__()
+        if not isinstance(lines, str):
+            raise ValueError("Line must be a string or a list of strings.")
+
+        self.assembly_lines.append(lines)
+        return self.assembly_lines.__len__()
+    
+    def clear_assembly_lines(self) -> None:
+        """Clear all assembly lines."""
+        self.assembly_lines.clear()
+
+    def get_assembly_lines(self) -> list[str]:
+        """Get all assembly lines."""
+        return self.assembly_lines
+    
     @staticmethod
     def __determine_command_type(line:str) -> str:
         if re.match(r'^\w+\s*=\s*.+$', line):
@@ -545,8 +564,9 @@ if __name__ == "__main__":
     compiler.group_commands()
     compiler.compile_lines()
     #l = compiler._compile_condition(Condition("dene2 == 5"))
+    print(compiler.label_manager.labels)
     print("Grouped Commands:" + str(compiler.grouped_lines))
-    for i in compiler.pre_assembly_lines:
+    for i in compiler.assembly_lines:
         print(i)
     #print("Compiled Condition:" + str(l))
 

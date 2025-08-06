@@ -2,7 +2,7 @@ byte a = 5;
 byte b = 10;
 
 
-if b >= 15
+if b >= 5
     b = 9;
 endif
 a = 7;
