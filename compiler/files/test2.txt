@@ -1,12 +1,8 @@
 byte a = 5;
 byte b = 10;
-byte temp;
 
-temp = b;
-b = a;
-a = temp;
 
-if temp==20
-    b=20
+if b >= 15
+    b = 9;
 endif
-a = 10;
+a = 7;

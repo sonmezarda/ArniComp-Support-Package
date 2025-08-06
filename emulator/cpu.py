@@ -22,9 +22,9 @@ class CPUFlags:
         b_unsigned = alu_input_b & 0xFF
         
         # Hardware comparator outputs: A<B, A=B, A>B (unsigned comparison)
-        self.lt = a_unsigned < b_unsigned  # LT flag
+        self.lt = a_unsigned > b_unsigned  # LT flag
         self.equal = a_unsigned == b_unsigned  # EQ flag  
-        self.gt = a_unsigned > b_unsigned  # GT flag
+        self.gt = a_unsigned < b_unsigned  # GT flag
     
     def __str__(self):
         return f"EQ:{int(self.equal)} LT:{int(self.lt)} GT:{int(self.gt)}"
@@ -99,6 +99,7 @@ class CPU:
     
     def load_program(self, binary_data, start_address=0):
         """Load binary program into PROGRAM memory (EEPROM)"""
+        self.program_memory = bytearray(65536)  # Reset program memory
         for i, byte in enumerate(binary_data):
             if start_address + i < len(self.program_memory):
                 self.program_memory[start_address + i] = byte

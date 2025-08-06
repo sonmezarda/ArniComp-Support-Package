@@ -6,6 +6,7 @@ from StackManager import StackManager
 from LabelManager import LabelManager
 from RegisterManager import RegisterManager, RegisterMode, Register, TempVarMode
 from ConditionHelper import IfElseClause, ConditionTypes
+import CompilerStaticMethods as CompilerStaticMethods
 import re
 
 from Commands import *
@@ -289,6 +290,7 @@ class Compiler:
         
         return pre_assembly_lines
     
+
     def __handle_if_else(self, command:Command) -> list[str]:
         pre_assembly_lines = []
         if not isinstance(command.line, IfElseClause):
@@ -308,18 +310,22 @@ class Compiler:
             pre_assembly_lines.extend(compiled_condition)
             if_label = self.label_manager.create_if_label()
             pre_assembly_lines.extend(self.__set_prl_as_label(if_label))
-            if if_else_clause.get_if().condition.type == ConditionTypes.EQUAL:
-                pre_assembly_lines.append("jne")
-                if_context_compiler = self.create_context_compiler()
-                if_context_compiler.grouped_lines = if_else_clause.get_if().get_lines()
-                if_context_compiler.compile_lines()
-                if_compiled_lines = if_context_compiler.pre_assembly_lines
-                pre_assembly_lines.extend(if_compiled_lines)
-                del if_context_compiler
-                pre_assembly_lines.append(f"{if_label}:")
-            else:
-                raise NotImplementedError("Only EQUAL condition type is implemented for if statements.")
+            
+            condition_type = if_else_clause.get_if().condition.type
+            pre_assembly_lines.append(CompilerStaticMethods.get_inverted_jump_str(condition_type))
+
+            self.register_manager.reset_change_detector()
+            if_context_compiler = self.create_context_compiler()
+            if_context_compiler.grouped_lines = if_else_clause.get_if().get_lines()
+            if_context_compiler.compile_lines()
+            if_compiled_lines = if_context_compiler.pre_assembly_lines
+            pre_assembly_lines.extend(if_compiled_lines)
+            del if_context_compiler
+            pre_assembly_lines.append(f"{if_label}:")
+            print("changed regs:", [reg.name for reg in self.register_manager.changed_registers])
+            self.register_manager.set_changed_registers_as_unknown()
             return pre_assembly_lines
+            
         else:
             raise NotImplementedError("If-Else chains with 'elif' or 'else' are not implemented yet.")
         pass

@@ -1,3 +1,4 @@
+from __future__ import annotations
 from enum import IntEnum
 
 from VariableManager import Variable
@@ -24,12 +25,13 @@ class TempVarMode(IntEnum):
     VAR_CONST_SUB=3
     
 class Register:
-    def __init__(self, name:str, Variable:Variable=None, mode:RegisterMode = RegisterMode.VALUE, value:int = None):
+    def __init__(self, name:str, Variable:Variable=None, mode:RegisterMode = RegisterMode.VALUE, value:int = None, manager:RegisterManager=None):
         self.name = name
         self.variable = Variable
         self.mode = mode
         self.value = None
         self.special_expression = None
+        self.manager:RegisterManager = manager
     
     def set_mode(self, mode:RegisterMode, value:int = None):
         self.mode = mode
@@ -39,15 +41,17 @@ class Register:
                 raise ValueError("Value must be provided in CONST mode")
             self.value = value
         else:
-            self.value = None
             if value is not None:
                 raise ValueError("Value cannot be set in VALUE or ADDR mode")
+            self.value = None
+        self.manager.add_changed_register(self)
     
     def set_unknown_mode(self):
         self.mode = RegisterMode.UNKNOWN
         self.variable = None
         self.value = None
         self.special_expression = None
+        self.manager.add_changed_register(self)
         
     def set_label_mode(self, label_name:str):
         if not label_name:
@@ -56,6 +60,8 @@ class Register:
         self.mode = RegisterMode.LABEL
         self.value = label_name
         self.variable = None
+        self.special_expression = None
+        self.manager.add_changed_register(self)
 
     def set_temp_var_mode(self,  expression:str):
         if not expression:
@@ -65,6 +71,7 @@ class Register:
         self.special_expression = expression
         self.variable= None
         self.value = None
+        self.manager.add_changed_register(self)
         
     def get_expression(self) -> str:
         if self.mode != RegisterMode.TEMPVAR:
@@ -80,22 +87,20 @@ class Register:
         if variable is None:
             self.mode = RegisterMode.CONST
         self.variable = variable
-        self.mode = mode
-        
-
-        
-        
-    
+        self.mode = mode     
+        self.manager.add_changed_register(self)
+  
     
 class RegisterManager():
     def __init__(self):
-        self.ra:Register = Register("ra")
-        self.rd:Register = Register("rd")
-        self.acc:Register = Register("acc")
-        self.marl:Register= Register("marl")
-        self.marh:Register = Register("marh")
-        self.prl:Register = Register("prl")
-        self.prh:Register = Register("prh")
+        self.ra:Register = Register("ra", manager=self)
+        self.rd:Register = Register("rd", manager=self)
+        self.acc:Register = Register("acc", manager=self)
+        self.marl:Register= Register("marl", manager=self)
+        self.marh:Register = Register("marh", manager=self)
+        self.prl:Register = Register("prl", manager=self)
+        self.prh:Register = Register("prh", manager=self)
+        self.changed_registers:list[Register] = []
 
     def check_for_variable(self, variable:Variable) -> Register | None:
         for reg in [self.ra, self.rd, self.marl, self.marh]:
@@ -115,5 +120,20 @@ class RegisterManager():
         if hasattr(self, name):
             return getattr(self, name)
         return None
+    
+    def reset_change_detector(self):
+        self.changed_registers:list[Register] = []
+    
+    def add_changed_register(self, register:Register):
+        if register not in self.changed_registers:
+            self.changed_registers.append(register)
+    
+    def get_changed_registers(self) -> list[Register]:
+        return self.changed_registers
+    
+    def set_changed_registers_as_unknown(self):
+        for reg in self.changed_registers:
+            reg.set_unknown_mode()
+        self.reset_change_detector()
 
     
