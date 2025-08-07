@@ -58,51 +58,23 @@ class IfElseClause(GroupObject):
     
     def apply_to_all_lines(self, func: callable) -> None:
         if 'if' in self.clause:
-            if_statement = self.get_if()
-            if_lines = if_statement.get_lines()
-            processed_lines = []
+            if_lines = self.get_if().get_lines()
             for i, line in enumerate(if_lines):
-                print(f"Processing if line {i}: '{line}'")
+                print(f"Processing line {i}: '{line}'")
                 if isinstance(line, IfElseClause):
+                    print(f"Applying function to nested IfElseClause: {line}")
                     line.apply_to_all_lines(func)
-                    processed_lines.append(line)
-                elif isinstance(line, str):
-                    # String satırları Command listesine dönüştür
-                    commands = func([line])
-                    processed_lines.extend(commands)
                 else:
-                    processed_lines.append(line)
-            if_statement.lines = processed_lines
+                    if_lines[i] = func(line)
 
         if 'elif' in self.clause:
             for elif_clause in self.get_elif():
-                elif_lines = elif_clause.get_lines()
-                processed_lines = []
-                for line in elif_lines:
-                    if isinstance(line, IfElseClause):
-                        line.apply_to_all_lines(func)
-                        processed_lines.append(line)
-                    elif isinstance(line, str):
-                        commands = func([line])
-                        processed_lines.extend(commands)
-                    else:
-                        processed_lines.append(line)
-                elif_clause.lines = processed_lines
+                new_lines = func(elif_clause.get_lines())
+                elif_clause.lines = new_lines
         
         if 'else' in self.clause:
-            else_statement = self.get_else()
-            else_lines = else_statement.get_lines()
-            processed_lines = []
-            for line in else_lines:
-                if isinstance(line, IfElseClause):
-                    line.apply_to_all_lines(func)
-                    processed_lines.append(line)
-                elif isinstance(line, str):
-                    commands = func([line])
-                    processed_lines.extend(commands)
-                else:
-                    processed_lines.append(line)
-            else_statement.lines = processed_lines
+            new_lines = func(self.get_else().get_lines())
+            self.get_else().lines = new_lines
 
     def __repr__(self) -> str:
         result = []

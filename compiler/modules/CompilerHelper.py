@@ -76,7 +76,7 @@ class Compiler:
     def compile_lines(self):
         if self.grouped_lines is None:
             raise ValueError("Commands must be grouped before compilation.")
-         
+        print("Grouped lines to compile: ", self.grouped_lines)
         for command in self.grouped_lines:
             if type(command) is VarDefCommand:                
                 self.__create_var_with_value(command)
@@ -86,8 +86,8 @@ class Compiler:
                 self.__assign_variable(command)
             elif type(command) is Command and command.command_type == CommandTypes.IF:
                 self.__handle_if_else(command)
-            elif type(command) is IfElseClause:
-                self.__handle_if_else(Command(CommandTypes.IF, command))
+            #elif type(command) is IfElseClause:
+            #    self.__handle_if_else(Command(CommandTypes.IF, command))
             else:
                 raise ValueError(f"Unsupported command type: {command.command_type}")
         return self.assembly_lines
@@ -243,15 +243,15 @@ class Compiler:
                     if reg_with_const.name == ra.name:
                         self.__add_assembly_line(f"mov {rd.name}, {reg_with_const.name}")
                         rd.set_variable(var, RegisterMode.VALUE)
-                        (self.__set_marl(var))
+                        self.__set_marl(var)
                         self.__add_assembly_line("strl rd")
                         self.__get_assembly_lines_len()
-                    (self.__set_marl(var))
+                    self.__set_marl(var)
                     self.__add_assembly_line(f"strl {reg_with_const.name}")
                     self.__get_assembly_lines_len()
                 
-                (self.__set_marl(var))
-                (self.__set_ra_const(int(command.new_value)))
+                self.__set_marl(var)
+                self.__set_ra_const(int(command.new_value))
                 self.__add_assembly_line("strl ra")
                 
                 self.__get_assembly_lines_len()
@@ -288,8 +288,7 @@ class Compiler:
         self.__get_assembly_lines_len()
     
 
-    def __handle_if_else(self, command:Command) -> list[str]:
-        pre_assembly_lines = []
+    def __handle_if_else(self, command:Command) -> int:
         if not isinstance(command.line, IfElseClause):
             raise ValueError("Command line must be an IfElseClause instance.")
         if_else_clause:IfElseClause = command.line
@@ -299,7 +298,6 @@ class Compiler:
         
         is_contains_else = if_else_clause.is_contains_else()
         is_contains_elif = if_else_clause.is_contains_elif()
-        print(f"Contains else: {is_contains_else}, Contains elif: {is_contains_elif}")
 
         if (not is_contains_else) and (not is_contains_elif):
             self._compile_condition(if_else_clause.get_if().condition)
@@ -322,7 +320,7 @@ class Compiler:
             self.__add_assembly_line(f"{if_label}:")
             print("changed regs:", [reg.name for reg in self.register_manager.changed_registers])
             self.register_manager.set_changed_registers_as_unknown()
-            self.__get_assembly_lines_len()
+            return self.__get_assembly_lines_len()
             
         else:
             raise NotImplementedError("If-Else chains with 'elif' or 'else' are not implemented yet.")
@@ -456,8 +454,8 @@ class Compiler:
         left_var = self.var_manager.get_variable(left)
         if self.is_number(right):
             right_value = int(right)
-            (self.__set_reg_const(rd, right_value))
-            (self.__set_marl(left_var))
+            self.__set_reg_const(rd, right_value)
+            self.__set_marl(left_var)
             self.__add_assembly_line("sub ml")
 
             
@@ -486,7 +484,6 @@ class Compiler:
                 lindex += 1
             elif line.startswith('if '):
                 print(f"'{line}' starts an if clause")
-                # Handle nested if-else clauses
                 nested_count = 0
                 group = []
                 while lindex < len(lines):
@@ -494,6 +491,7 @@ class Compiler:
                     if lines[lindex].startswith('endif'):
                         nested_count -= 1
                         if nested_count < 1:
+                            lindex += 1
                             break
                     elif lines[lindex].startswith('if '):
                         nested_count += 1
@@ -503,7 +501,8 @@ class Compiler:
                 print(f"Grouped if-else lines: {grouped_if_else}")
                 if_clause = IfElseClause.parse_from_lines(grouped_if_else)
                 print(if_clause)
-                if_clause.apply_to_all_lines(lambda lines: Compiler.__group_line_commands(lines) if isinstance(lines, list) else Compiler.__group_line_commands([lines]))
+                if_clause.apply_to_all_lines(Compiler.__group_line_commands)
+                print(f"Processed if-else clause: {if_clause}")
                 grouped_lines.append(Command(CommandTypes.IF, if_clause))
 
             elif line.startswith('endif'):
@@ -579,10 +578,11 @@ if __name__ == "__main__":
     compiler.break_commands()
     compiler.clean_lines()
     compiler.group_commands()
-    compiler.compile_lines()
-    #l = compiler._compile_condition(Condition("dene2 == 5"))
     print(compiler.label_manager.labels)
     print("Grouped Commands:" + str(compiler.grouped_lines))
+    compiler.compile_lines()
+    #l = compiler._compile_condition(Condition("dene2 == 5"))
+    
     for i in compiler.assembly_lines:
         print(i)
     #print("Compiled Condition:" + str(l))

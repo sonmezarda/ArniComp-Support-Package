@@ -1,12 +1,15 @@
 byte a = 5;
 byte b = 10;
+byte c;
+byte d;
 
-
-if b >= 5
-    b = 9;
-    if a == 5
-        a = 20;
-    endif
+if b > 5
+    a = 6;
+    if b >= 5
+        a=7;
+    endif 
+    c = 1;
 endif
 
-a = 7;
+d = 5;
+
