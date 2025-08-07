@@ -58,17 +58,51 @@ class IfElseClause(GroupObject):
     
     def apply_to_all_lines(self, func: callable) -> None:
         if 'if' in self.clause:
-            new_lines = func(self.get_if().get_lines())
-            self.get_if().lines = new_lines
+            if_statement = self.get_if()
+            if_lines = if_statement.get_lines()
+            processed_lines = []
+            for i, line in enumerate(if_lines):
+                print(f"Processing if line {i}: '{line}'")
+                if isinstance(line, IfElseClause):
+                    line.apply_to_all_lines(func)
+                    processed_lines.append(line)
+                elif isinstance(line, str):
+                    # String satırları Command listesine dönüştür
+                    commands = func([line])
+                    processed_lines.extend(commands)
+                else:
+                    processed_lines.append(line)
+            if_statement.lines = processed_lines
 
         if 'elif' in self.clause:
             for elif_clause in self.get_elif():
-                new_lines=func(elif_clause.get_lines())
-                elif_clause.lines = new_lines
+                elif_lines = elif_clause.get_lines()
+                processed_lines = []
+                for line in elif_lines:
+                    if isinstance(line, IfElseClause):
+                        line.apply_to_all_lines(func)
+                        processed_lines.append(line)
+                    elif isinstance(line, str):
+                        commands = func([line])
+                        processed_lines.extend(commands)
+                    else:
+                        processed_lines.append(line)
+                elif_clause.lines = processed_lines
         
         if 'else' in self.clause:
-            new_lines = func(self.get_else().get_lines())
-            self.get_else().lines = new_lines
+            else_statement = self.get_else()
+            else_lines = else_statement.get_lines()
+            processed_lines = []
+            for line in else_lines:
+                if isinstance(line, IfElseClause):
+                    line.apply_to_all_lines(func)
+                    processed_lines.append(line)
+                elif isinstance(line, str):
+                    commands = func([line])
+                    processed_lines.extend(commands)
+                else:
+                    processed_lines.append(line)
+            else_statement.lines = processed_lines
 
     def __repr__(self) -> str:
         result = []
@@ -89,74 +123,74 @@ class IfElseClause(GroupObject):
         return '\n'.join(result)
     
     @staticmethod
-    def group_nested_if_else(lines: list[str]) -> list[str]:
-        """
-        Groups nested if-else clauses into a single list of lines.
-        This is useful for parsing and processing the if-else structure.
-        """
-        grouped_lines = []
-        if_flag = False
-        lines = [line.strip() for line in lines if line.strip()]  # Remove empty lines
-        for i in range(0, len(lines)):
-            line = lines[i]
-            if line.startswith('if '):
-                if if_flag:
-                    new_group = []
-                    x = i
-                    for j in range(x, len(lines)):
-                        new_group.append(lines[j])
-                        if lines[j].startswith('endif'):
-                            grouped_lines.append(new_group)
-                            break
-                else:
-                    if_flag = True
-                    grouped_lines.append(line)
-            else:
-                grouped_lines.append(line)
+    def group_nested_if_else(lines):
+        def parse_block(iter_lines):
+            result = []
+            try:
+                while True:
+                    line = next(iter_lines).strip()
+                    if line.startswith("if "):
+                        # nested blok olabilir — blok gövdesini listele
+                        header = line
+                        nested = [header]
+                        nested.extend(parse_block(iter_lines))
+                        result.append(nested)
+                    elif line.startswith("elif ") or line == "else":
+                        result.append(line)
+                    elif line == "endif":
+                        return result
+                    else:
+                        result.append(line)
+            except StopIteration:
+                return result
 
-        return grouped_lines
+        return parse_block(iter(lines))[0]
+
+
 
     @staticmethod
-    def parse_from_lines(lines: list[str]) -> IfElseClause:
-        grouped_lines = IfElseClause.group_nested_if_else(lines)
-        clause = IfElseClause()
-        current_if = None
-        nested_count = 1
-        for group in grouped_lines:
-            
-            if isinstance(group, list):
-                nested_count += 1
-                nested_clause = IfElseClause.parse_from_lines(group)
-                if current_if is None:
-                    current_if = clause.add_if(nested_clause.get_if().condition.get_str())
-                else:
-                    current_if.add_line(nested_clause)
-                continue
-            line = group.strip()
-            
-            # Process the line based on its type
-            if line.startswith('if '):
-                condition = line[3:].strip()
-                if current_if is None:
-                    current_if = clause.add_if(condition)
-                    continue
-                else: 
-                    raise ValueError("Nested 'if' clauses are not supported. Use 'elif' or 'else' for additional conditions.")
-
-            elif line.startswith('elif '):
-                condition = line[5:].strip()
-                current_if = clause.add_elif(condition)
-            elif line.startswith('else'):
-                current_if = clause.add_else()
-            elif line.startswith('endif'):
-                nested_count -= 1
-                if nested_count == 0:
-                    return clause
-            else:
-                current_if.add_line(line)
-                
+    def parse_from_lines(lines: list[str | list]) -> IfElseClause:
         
+        clause = IfElseClause()
+        current_branch = None  # Şu anda hangi blok üzerinde çalışıyoruz (if/elif/else)
+
+        for i, item in enumerate(lines):
+            if isinstance(item, list):
+                # Liste içindeyse bu nested bir if bloğudur
+                nested_clause = IfElseClause.parse_from_lines(item)
+                if current_branch is None:
+                    raise ValueError(f"Nested if must come after a condition (if/elif/else), but got nested block at index {i} with no active branch.")
+                current_branch.add_line(nested_clause)
+
+            elif isinstance(item, str):
+                stripped = item.strip()
+
+                if stripped.startswith("if "):
+                    condition = stripped[3:].strip()
+                    if clause.is_contains_if():
+                        raise ValueError(f"Multiple top-level 'if' clauses detected! Already have: {clause.get_if().condition}, tried to add: {condition}")
+                    current_branch = clause.add_if(condition)
+
+                elif stripped.startswith("elif "):
+                    condition = stripped[5:].strip()
+                    current_branch = clause.add_elif(condition)
+
+                elif stripped == "else":
+                    current_branch = clause.add_else()
+
+                else:
+                    if current_branch is None:
+                        raise ValueError(f"Unexpected line outside of any condition block: {item}")
+                    current_branch.add_line(stripped)
+
+            else:
+                raise TypeError(f"Unexpected item type at index {i}: {type(item)}")
+
         return clause
+
+
+                    
+
 
 class Statement:
     def __init__(self):
@@ -229,6 +263,11 @@ if __name__ == '__main__':
         "    do_something()",
         "   if x < 10",
         "        do_something_else2()",
+        "           if y == 0",
+        "               do_something_special()",
+        "           endif",
+        "    else",
+        "        do_something_else3()",
         "   endif",
         "elif x < 5",
         "    do_something_else()",
@@ -244,7 +283,8 @@ if __name__ == '__main__':
         "endif"
     ]
     
-    clause = IfElseClause.parse_from_lines(lines)
-    
-    print(clause.get_else().lines)
-    print(clause)
+    lines = [line.strip() for line in lines if line.strip()]  
+    glines = IfElseClause.group_nested_if_else(lines)
+    parsed = IfElseClause.parse_from_lines(glines)
+    print(parsed.get_if().lines[1].get_if().lines[1].get_if().lines)
+

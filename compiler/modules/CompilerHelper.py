@@ -84,8 +84,10 @@ class Compiler:
                 self.__create_var(command)
             elif type(command) is AssignCommand:
                 self.__assign_variable(command)
-            elif command.command_type == CommandTypes.IF:
+            elif type(command) is Command and command.command_type == CommandTypes.IF:
                 self.__handle_if_else(command)
+            elif type(command) is IfElseClause:
+                self.__handle_if_else(Command(CommandTypes.IF, command))
             else:
                 raise ValueError(f"Unsupported command type: {command.command_type}")
         return self.assembly_lines
@@ -465,8 +467,11 @@ class Compiler:
     def __group_line_commands(lines:list[str]) -> list[Command]:
         grouped_lines:list[Command] = []
         lindex = 0
+        if isinstance(lines, str):
+            lines = [lines]
         while lindex < len(lines):
             line = lines[lindex]
+            print(f"Processing line {lindex}: '{line}'")
             if VarDefCommand.match_regex(line):
                 print(f"'{line}' matches VarDefCommand regex")
                 grouped_lines.append(VarDefCommand(line))
@@ -493,12 +498,17 @@ class Compiler:
                     elif lines[lindex].startswith('if '):
                         nested_count += 1
                     lindex += 1
-                print(f"Grouped lines for if clause: {group}")
                 
-                if_clause = IfElseClause.parse_from_lines(group)
+                grouped_if_else = IfElseClause.group_nested_if_else(group)
+                print(f"Grouped if-else lines: {grouped_if_else}")
+                if_clause = IfElseClause.parse_from_lines(grouped_if_else)
                 print(if_clause)
-                if_clause.apply_to_all_lines(Compiler.__group_line_commands)
+                if_clause.apply_to_all_lines(lambda lines: Compiler.__group_line_commands(lines) if isinstance(lines, list) else Compiler.__group_line_commands([lines]))
                 grouped_lines.append(Command(CommandTypes.IF, if_clause))
+
+            elif line.startswith('endif'):
+                print(f"'{line}' is an endif, skipping")
+                lindex += 1
             else:
                 command_type = Compiler.__determine_command_type(line)
                 if command_type is None:
