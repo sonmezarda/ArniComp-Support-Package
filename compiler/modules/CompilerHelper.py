@@ -148,8 +148,6 @@ class Compiler:
         marh = self.register_manager.marh
         ra = self.register_manager.ra
         high_addr = var.get_high_address()
-        if high_addr > MAX_LDI:
-             raise NotImplementedError(f"Setting MARH for high addresses than {MAX_LDI} is not implemented yet.")
 
         if marh.variable == var and marh.mode == RegisterMode.ADDR_HIGH:
             return self.__get_assembly_lines_len()
@@ -161,16 +159,21 @@ class Compiler:
          # if var high_addr in another register
         if ra.variable == var:
             if ra.mode == RegisterMode.ADDR_HIGH:
-                self.__add_assembly_line("mov marl, ra")
+                self.__add_assembly_line("mov marh, ra")
                 marh.set_variable(var, RegisterMode.ADDR_HIGH)
                 return self.__get_assembly_lines_len()
         elif ra.mode == RegisterMode.CONST and ra.value == var.get_high_address():
-            self.__add_assembly_line("mov marl, ra")
+            self.__add_assembly_line("mov marh, ra")
             marh.set_variable(var, RegisterMode.ADDR_HIGH)
             return self.__get_assembly_lines_len()
 
-        self.__add_assembly_line(f"ldi #{high_addr}")
-        self.__add_assembly_line("mov marh, ra")
+        # Build/load constant into MARH
+        if high_addr <= MAX_LDI:
+            self.__add_assembly_line(f"ldi #{high_addr}")
+            self.__add_assembly_line("mov marh, ra")
+            ra.set_mode(RegisterMode.CONST, high_addr)
+        else:
+            self.__build_const_in_reg(high_addr, marh)
         marh.set_variable(var, RegisterMode.ADDR_HIGH)
 
     def __set_marl(self, var:Variable) -> int:
@@ -178,9 +181,6 @@ class Compiler:
         ra = self.register_manager.ra
         low_addr = var.get_low_address()
         is_addr_fit_low = var.address == var.get_low_address()
-
-        if low_addr > MAX_LDI:
-            raise NotImplementedError(f"Setting MARL for high addresses than {MAX_LDI} is not implemented yet.")
 
         # If already variable is set in MARL
         if marl.variable == var and marl.mode in [RegisterMode.ADDR, RegisterMode.ADDR_LOW]:
@@ -215,17 +215,158 @@ class Compiler:
                 marl.set_variable(var, RegisterMode.ADDR_LOW)
             return self.__get_assembly_lines_len()
             
-
-        self.__add_assembly_line(f"ldi #{var.get_low_address()}")
-        self.__add_assembly_line("mov marl, ra")
-        if is_addr_fit_low:
-            marl.set_variable(var, RegisterMode.ADDR)
-            ra.set_variable(var, RegisterMode.ADDR)
+        # Load/build constant into MARL
+        if low_addr <= MAX_LDI:
+            self.__add_assembly_line(f"ldi #{low_addr}")
+            self.__add_assembly_line("mov marl, ra")
+            if is_addr_fit_low:
+                marl.set_variable(var, RegisterMode.ADDR)
+                ra.set_variable(var, RegisterMode.ADDR)
+            else:
+                ra.set_variable(var, RegisterMode.ADDR_LOW)
+                marl.set_variable(var, RegisterMode.ADDR_LOW)
         else:
-            ra.set_variable(var, RegisterMode.ADDR_LOW)
-            marl.set_variable(var, RegisterMode.ADDR_LOW)
+            self.__build_const_in_reg(low_addr, marl)
+            if is_addr_fit_low:
+                marl.set_variable(var, RegisterMode.ADDR)
+            else:
+                marl.set_variable(var, RegisterMode.ADDR_LOW)
 
         return self.__get_assembly_lines_len()
+
+    def __ldi(self, value:int) -> int:
+        if value > MAX_LDI:
+            raise ValueError(f"Value {value} exceeds maximum LDI value of {MAX_LDI}.")
+        self.__add_assembly_line(f"ldi #{value}")
+        self.register_manager.ra.set_mode(RegisterMode.CONST, value)
+        return self.__get_assembly_lines_len()
+
+    def __build_const_in_reg(self, value: int, target_reg: Register) -> int:
+        """Build any 8-bit constant (0-255) into specified register using optimal combination of LDI/ADDI/SUBI.
+        Strategy: Find the most efficient method among:
+        1. Single LDI (if <= 127)
+        2. LDI + ADDI sequence 
+        3. LDI + LDI + ADD sequence
+        4. 127*2 - SUBI sequence
+        """
+        ra = self.register_manager.ra
+        rd = self.register_manager.rd
+        acc = self.register_manager.acc
+        if value > 255:
+            raise ValueError(f"Value {value} exceeds maximum 8-bit value of 255.")
+        
+        target = value & 0xFF
+        if target <= MAX_LDI:
+            self.__ldi(target)
+            if target_reg.name != "ra":
+                self.__add_assembly_line(f"mov {target_reg.name}, ra")
+                target_reg.set_mode(RegisterMode.CONST, target)
+            return self.__get_assembly_lines_len()
+
+        # Calculate cost for different strategies
+        strategies = []
+        
+        # Strategy 1: LDI base + ADDI remainder
+        for base in range(MAX_LDI, 0, -1):  # Try from 127 down
+            remainder = target - base
+            if remainder > 0:
+                addi_steps = (remainder + 6) // 7  # Ceiling division for 7-bit chunks
+                if remainder <= 7 * 7:  # Max 7 ADDI instructions (7*7=49 max remainder)
+                    cost = 3 + (2 * addi_steps)  # ldi + mov rd,ra + N*(addi + mov rd,acc) + mov target,acc
+                    strategies.append(('addi', base, remainder, cost))
+        
+        # Strategy 2: LDI + LDI + ADD (for values that can be sum of two LDIs)
+        for base1 in range(MAX_LDI, target // 2, -1):  # First LDI
+            base2 = target - base1
+            if base2 <= MAX_LDI and base2 > 0:
+                cost = 4  # ldi + mov rd,ra + ldi + add ra + mov target,acc
+                strategies.append(('add_two_ldi', base1, base2, cost))
+        
+        # Strategy 3: 127*2 - SUBI (current approach for high values)
+        if target >= 128:
+            remainder = 254 - target
+            subi_steps = (remainder + 6) // 7
+            if remainder <= 7 * 7:  # Max 7 SUBI instructions
+                cost = 4 + subi_steps  # ldi + mov rd,ra + add rd + N*subi + mov target,acc
+                strategies.append(('subi_from_254', 127, remainder, cost))
+        
+        # Choose the strategy with minimum cost
+        if not strategies:
+            # Fallback to simple ADDI approach
+            self.__ldi(MAX_LDI)
+            remainder = target - MAX_LDI
+            self.__add_assembly_line("mov rd, ra")
+            rd.set_mode(RegisterMode.CONST, MAX_LDI)
+            
+            current = MAX_LDI
+            while remainder > 0:
+                step = min(7, remainder)
+                self.__add_assembly_line(f"addi {step}")
+                current += step
+                if remainder > step:  # Don't mov rd,acc on last iteration
+                    self.__add_assembly_line("mov rd, acc")
+                    rd.set_mode(RegisterMode.CONST, current)
+                remainder -= step
+            
+            self.__add_assembly_line(f"mov {target_reg.name}, acc")
+            target_reg.set_mode(RegisterMode.CONST, current)
+            ra.set_unknown_mode()
+            return self.__get_assembly_lines_len()
+        
+        # Execute the best strategy
+        best_strategy = min(strategies, key=lambda x: x[3])
+        strategy_type, param1, param2, cost = best_strategy
+        
+        if strategy_type == 'addi':
+            base, remainder = param1, param2
+            self.__ldi(base)
+            self.__add_assembly_line("mov rd, ra")
+            rd.set_mode(RegisterMode.CONST, base)
+            
+            current = base
+            while remainder > 0:
+                step = min(7, remainder)
+                self.__add_assembly_line(f"addi {step}")
+                current += step
+                if remainder > step:  # Don't mov rd,acc on last iteration
+                    self.__add_assembly_line("mov rd, acc")
+                    rd.set_mode(RegisterMode.CONST, current)
+                remainder -= step
+            
+            self.__add_assembly_line(f"mov {target_reg.name}, acc")
+            target_reg.set_mode(RegisterMode.CONST, current)
+            
+        elif strategy_type == 'add_two_ldi':
+            base1, base2 = param1, param2
+            self.__ldi(base1)
+            self.__add_assembly_line("mov rd, ra")
+            self.__ldi(base2)
+            self.__add_assembly_line("add ra")  # acc = rd + ra
+            self.__add_assembly_line(f"mov {target_reg.name}, acc")
+            target_reg.set_mode(RegisterMode.CONST, target)
+            
+        elif strategy_type == 'subi_from_254':
+            _, remainder = param1, param2
+            self.__ldi(MAX_LDI)  # 127
+            self.__add_assembly_line("mov rd, ra")
+            self.__add_assembly_line("add rd")  # ACC = 254
+            
+            current = 254
+            while remainder > 0:
+                step = min(7, remainder)
+                self.__add_assembly_line(f"subi {step}")
+                current -= step
+                remainder -= step
+            
+            self.__add_assembly_line(f"mov {target_reg.name}, acc")
+            target_reg.set_mode(RegisterMode.CONST, current)
+        
+        ra.set_unknown_mode()  # RA is used for intermediate calculations
+        return self.__get_assembly_lines_len()
+
+    def __build_const_in_ra(self, value: int) -> int:
+        """Legacy wrapper - builds constant in RA register"""
+        return self.__build_const_in_reg(value, self.register_manager.ra)
 
     def __store_with_current_mar(self, var: Variable, src: Register) -> int:
         """Store using current MAR (does not modify MAR registers)."""
@@ -281,7 +422,7 @@ class Compiler:
             ra.set_mode(RegisterMode.CONST, value)
             return self.__get_assembly_lines_len()
 
-        self.__add_assembly_line(f"ldi #{value}")
+        self.__ldi(value)
         ra.set_mode(RegisterMode.CONST, value)
 
         return self.__get_assembly_lines_len()
@@ -692,7 +833,7 @@ class Compiler:
             
 
 def create_default_compiler() -> Compiler:
-    return Compiler(comment_char='//', variable_start_addr=0x0100, 
+    return Compiler(comment_char='//', variable_start_addr=0x00FD, 
                     variable_end_addr=0x0200, memory_size=65536)
 
 if __name__ == "__main__":
