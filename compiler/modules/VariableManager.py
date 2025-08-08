@@ -19,6 +19,12 @@ class Variable():
         if self.address < 0:
             raise ValueError("Variable address must be non-negative")
     
+    def get_low_address(self) -> int:
+        return self.address & 0xFF
+    
+    def get_high_address(self) -> int:
+        return (self.address >> 8) & 0xFF
+    
     @staticmethod
     def get_value_type():
         return None

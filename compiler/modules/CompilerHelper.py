@@ -11,6 +11,8 @@ import re
 
 from Commands import *
 
+MAX_LDI = 0b1111111  # Maximum value for LDI instruction (7 bits)
+MAX_LOW_ADDRESS = 0b11111111  # Maximum low address for LDI instruction (8 bits)
 
 class Compiler:
     def __init__(self, comment_char:str, variable_start_addr:int = 0x0000, 
@@ -102,7 +104,7 @@ class Compiler:
                     var_value=command.var_value)
         
         if command.var_type == VarTypes.BYTE:
-            self.__set_marl(new_var)
+            self.__set_mar(new_var)
             self.__set_ra_const(command.var_value)
             self.__add_assembly_line("strl ra")
 
@@ -132,22 +134,94 @@ class Compiler:
             return 0
         return len(self.assembly_lines)
     
+    def __set_mar(self, var:Variable) -> int:
+        if var.address <= MAX_LOW_ADDRESS:
+            self.__set_marl(var)
+        else:
+            self.__set_marl(var)
+            self.__set_marh(var)
+        return self.__get_assembly_lines_len()
+    
+    def __set_marh(self, var:Variable) -> int:
+        marh = self.register_manager.marh
+        ra = self.register_manager.ra
+        high_addr = var.get_high_address()
+        if high_addr > MAX_LDI:
+             raise NotImplementedError(f"Setting MARH for high addresses than {MAX_LDI} is not implemented yet.")
+
+        if marh.variable == var and marh.mode == RegisterMode.ADDR_HIGH:
+            return self.__get_assembly_lines_len()
+        
+        if marh.variable != None and marh.variable.get_high_address() == var.get_high_address():
+            marh.set_variable(var, RegisterMode.ADDR_HIGH)
+            return self.__get_assembly_lines_len()
+        
+         # if var high_addr in another register
+        if ra.variable == var:
+            if ra.mode == RegisterMode.ADDR_HIGH:
+                self.__add_assembly_line("mov marl, ra")
+                marh.set_variable(var, RegisterMode.ADDR_HIGH)
+                return self.__get_assembly_lines_len()
+        elif ra.mode == RegisterMode.CONST and ra.value == var.get_high_address():
+            self.__add_assembly_line("mov marl, ra")
+            marh.set_variable(var, RegisterMode.ADDR_HIGH)
+            return self.__get_assembly_lines_len()
+
+        self.__add_assembly_line(f"ldi #{high_addr}")
+        self.__add_assembly_line("mov marh, ra")
+        marh.set_variable(var, RegisterMode.ADDR_HIGH)
+
     def __set_marl(self, var:Variable) -> int:
         marl = self.register_manager.marl
         ra = self.register_manager.ra
+        low_addr = var.get_low_address()
+        is_addr_fit_low = var.address == var.get_low_address()
 
-        if marl.variable == var and marl.mode == RegisterMode.ADDR:
+        if low_addr > MAX_LDI:
+            raise NotImplementedError(f"Setting MARL for high addresses than {MAX_LDI} is not implemented yet.")
+
+        # If already variable is set in MARL
+        if marl.variable == var and marl.mode in [RegisterMode.ADDR, RegisterMode.ADDR_LOW]:
             return self.__get_assembly_lines_len()
         
-        if (ra.variable == var and ra.mode == RegisterMode.ADDR):
-            self.__add_assembly_line("mov marl, ra")
-            marl.set_variable(var, RegisterMode.ADDR)
+        # If MARL already contains the lower address of the variable
+        if marl.variable != None and marl.variable.get_low_address() == var.get_low_address():
+            if is_addr_fit_low:
+                marl.set_variable(var, RegisterMode.ADDR)
+            else:
+                marl.set_variable(var, RegisterMode.ADDR_LOW)
             return self.__get_assembly_lines_len()
+        
+        # if var addr in another register
+        if ra.variable == var:
+            if ra.mode == RegisterMode.ADDR:
+                self.__add_assembly_line("mov marl, ra")
+                marl.set_variable(var, RegisterMode.ADDR)
+                return self.__get_assembly_lines_len()
+            elif ra.mode == RegisterMode.ADDR_LOW:
+                self.__add_assembly_line("mov marl, ra")
+                if is_addr_fit_low:
+                    marl.set_variable(var, RegisterMode.ADDR)
+                else:
+                    marl.set_variable(var, RegisterMode.ADDR_LOW)
+                return self.__get_assembly_lines_len()
+        elif ra.mode == RegisterMode.CONST and ra.value == var.get_low_address():
+            self.__add_assembly_line("mov marl, ra")
+            if is_addr_fit_low:
+                marl.set_variable(var, RegisterMode.ADDR)
+            else:
+                marl.set_variable(var, RegisterMode.ADDR_LOW)
+            return self.__get_assembly_lines_len()
+            
 
-        self.__add_assembly_line(f"ldi #{var.address}")
+        self.__add_assembly_line(f"ldi #{var.get_low_address()}")
         self.__add_assembly_line("mov marl, ra")
-        marl.set_variable(var, RegisterMode.ADDR)
-        ra.set_variable(var, RegisterMode.ADDR)
+        if is_addr_fit_low:
+            marl.set_variable(var, RegisterMode.ADDR)
+            ra.set_variable(var, RegisterMode.ADDR)
+        else:
+            ra.set_variable(var, RegisterMode.ADDR_LOW)
+            marl.set_variable(var, RegisterMode.ADDR_LOW)
 
         return self.__get_assembly_lines_len()
 

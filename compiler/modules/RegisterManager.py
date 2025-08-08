@@ -17,6 +17,8 @@ class RegisterMode(IntEnum):
     UNKNOWN=3
     TEMPVAR=4
     LABEL=5
+    ADDR_LOW=6
+    ADDR_HIGH=7
 
 class TempVarMode(IntEnum):
     VAR_VAR_ADD=0
