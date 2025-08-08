@@ -1,6 +1,6 @@
+elif - else
 while
 stack
     directly pop push
 array
-set_marl - set_marh
 function

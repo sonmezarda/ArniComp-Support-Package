@@ -595,28 +595,67 @@ class Compiler:
         is_contains_elif = if_else_clause.is_contains_elif()
 
         if (not is_contains_else) and (not is_contains_elif):
+            # set flags for if condition
             self.__compile_condition(if_else_clause.get_if().condition)
-            
+
+            # create context compiler for 'if' block
             self.register_manager.reset_change_detector()
             if_context_compiler = self.create_context_compiler()
             if_context_compiler.grouped_lines = if_else_clause.get_if().get_lines()
             if_context_compiler.compile_lines() 
             if_inner_len = if_context_compiler.__get_assembly_lines_len()
-
+            # create & set label for 'if' block
             if_label, if_label_position = self.label_manager.create_if_label(self.__get_assembly_lines_len() + if_inner_len)
             self.__set_prl_as_label(if_label, if_label_position)
             
             condition_type = if_else_clause.get_if().condition.type
+            # Add jump instruction based on condition type
             self.__add_assembly_line(CompilerStaticMethods.get_inverted_jump_str(condition_type))
-
+            # add 'if' block assembly lines
             self.__add_assembly_line(if_context_compiler.assembly_lines)
+            # Update label position
             self.label_manager.update_label_position(if_label, self.__get_assembly_lines_len())
             del if_context_compiler
+            # add label for 'if' block
             self.__add_assembly_line(f"{if_label}:")
             print("changed regs:", [reg.name for reg in self.register_manager.changed_registers])
             self.register_manager.set_changed_registers_as_unknown()
             return self.__get_assembly_lines_len()
             
+        elif is_contains_else and not is_contains_elif:
+            self.__compile_condition(if_else_clause.get_if().condition)
+            self.register_manager.reset_change_detector()
+            if_context_compiler = self.create_context_compiler()
+            if_context_compiler.grouped_lines = if_else_clause.get_if().get_lines()
+            if_context_compiler.compile_lines() 
+            if_inner_len = if_context_compiler.__get_assembly_lines_len()
+            # create & set label for 'if' block
+            if_label, if_label_position = self.label_manager.create_if_label(self.__get_assembly_lines_len() + if_inner_len)
+            self.__set_prl_as_label(if_label, if_label_position)
+            
+            condition_type = if_else_clause.get_if().condition.type
+            # Add jump instruction based on condition type
+            self.__add_assembly_line(CompilerStaticMethods.get_inverted_jump_str(condition_type))
+            # add 'if' block assembly lines
+            self.__add_assembly_line(if_context_compiler.assembly_lines)
+            # Update label position
+            self.label_manager.update_label_position(if_label, self.__get_assembly_lines_len())
+            del if_context_compiler
+
+            else_context_compiler = self.create_context_compiler()
+            else_context_compiler.grouped_lines = if_else_clause.get_else().get_lines()
+            else_context_compiler.compile_lines()
+            else_inner_len = else_context_compiler.__get_assembly_lines_len()
+
+            else_label, else_label_position = self.label_manager.create_else_label(self.__get_assembly_lines_len())
+            self.__set_prl_as_label(else_label, else_label_position)
+            self.__add_assembly_line("jmp")
+            self.__add_assembly_line(f"{if_label}:")
+
+            self.__add_assembly_line(else_context_compiler.assembly_lines)
+            self.__add_assembly_line(f"{else_label}:")
+            self.register_manager.set_changed_registers_as_unknown()
+            # add label for 'if' block
         else:
             raise NotImplementedError("If-Else chains with 'elif' or 'else' are not implemented yet.")
         pass
@@ -865,14 +904,14 @@ class Compiler:
             
 
 def create_default_compiler() -> Compiler:
-    return Compiler(comment_char='//', variable_start_addr=0x00FD, 
+    return Compiler(comment_char='//', variable_start_addr=0x0000, 
                     variable_end_addr=0x0200, memory_size=65536)
 
 if __name__ == "__main__":
     compiler = create_default_compiler()
 
     
-    compiler.load_lines('files/test3.txt')
+    compiler.load_lines('files/test2.txt')
     compiler.break_commands()
     compiler.clean_lines()
     compiler.group_commands()

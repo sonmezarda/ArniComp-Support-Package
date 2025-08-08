@@ -32,3 +32,8 @@ class LabelManager:
         label_name = f"if_{self.current_if_count}"
         self.add_label(label_name, current_assembly_length)
         return label_name, self.labels[label_name]
+    
+    def create_else_label(self, current_assembly_length: int) -> tuple[str, int]:
+        label_name = f"else_{self.current_if_count}"
+        self.add_label(label_name, current_assembly_length)
+        return label_name, self.labels[label_name]

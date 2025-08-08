@@ -1,14 +1,8 @@
-byte a = 5;
+byte a;
 byte b = 10;
-byte c;
-byte d;
 
-if b > 10
+if b == 10
     a = 6;
-    if b >= 15
-        a=7;
-    endif 
-    c = 1;
+else
+    a = 8;
 endif
-
-d = 5;

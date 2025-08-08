@@ -1,11 +1,1 @@
-byte a = 5;
-byte b = 10;
-byte c;
-byte d;
 
-a = 6;
-a = 7;
-c = 1;
-
-d = 5;
-free a;
