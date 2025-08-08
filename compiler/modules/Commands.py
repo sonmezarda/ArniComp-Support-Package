@@ -51,46 +51,90 @@ class FreeCommand(Command):
         else:
             raise ValueError(f"Invalid free command: {self.line}")
     
+def types_pattern():
+    from VariableManager import VarTypes
+    return r'(?:' + '|'.join(t.name.lower() for t in VarTypes) + r')'
+
 class VarDefCommand(Command):
-    
-    REGEX = rf'^\s*(?P<type>{types_pattern()})\s+(?P<name>{IDENT})\s*=\s*(?P<value>.+?)\s*;?\s*$'
+    # byte[5] a = 10;  (NOT: array init şimdilik desteklemiyoruz)
+    REGEX = rf'''^\s*(?P<type>{types_pattern()})\s*(?:\[(?P<size>\d*)\])?\s+(?P<name>{IDENT})\s*=\s*(?P<value>.+?)\s*;?\s*$'''
     TYPE = CommandTypes.VARDEF
+
     def __init__(self, line:str):
         super().__init__(CommandTypes.VARDEF, line)
         self.var_name:str = ""
         self.var_type:VarTypes = VarTypes.BYTE
         self.var_value:any = None
+        self.array_length:int|None = None
         self.parse_params()
     
     def parse_params(self):
-        match = self.match_regex(self.line)
-        if match:
-            self.var_name = match.group(2)
-            self.var_type = VarTypes[match.group(1).upper()]
-            if self.var_type == VarTypes.BYTE:
-                self.var_value = int(match.group(3))
-            else:
-                raise ValueError(f"Unsupported variable type: {self.var_type}")
-        else:
+        match = re.match(self.REGEX, self.line, re.VERBOSE)
+        if not match:
             raise ValueError(f"Invalid variable definition: {self.line}")
 
+        base_type = match.group('type').upper()
+        size_text = match.group('size')  # None, '' veya '5'
+        name = match.group('name')
+        value = match.group('value')
+
+        if size_text is not None:
+            # VarTypes.BYTE_ARRAY bekliyoruz
+            if not hasattr(VarTypes, 'BYTE_ARRAY'):
+                raise ValueError("VarTypes.BYTE_ARRAY tanımlı değil. Lütfen VarTypes'a ekleyin.")
+            self.var_type = VarTypes.BYTE_ARRAY
+            self.array_length = int(size_text) if size_text != '' else None
+        else:
+            self.var_type = VarTypes[base_type]
+
+        self.var_name = name
+
+        # Şimdilik sadece scalar byte init destekleyelim
+        if self.var_type == VarTypes.BYTE:
+            # basit int init
+            try:
+                self.var_value = int(value)
+            except ValueError:
+                raise ValueError(f"Unsupported initial value for scalar byte: {value}")
+        elif self.var_type == VarTypes.BYTE_ARRAY:
+            # diziye = ile init henüz yok
+            raise NotImplementedError("Array initialization (e.g., byte[3] a = [...]) henüz desteklenmiyor.")
+        else:
+            raise ValueError(f"Unsupported variable type: {self.var_type}")
+
+
 class VarDefCommandWithoutValue(VarDefCommand):
-    REGEX = rf'^\s*(?P<type>{types_pattern()})\s+(?P<name>{IDENT})\s*;?\s*$'
+    REGEX = rf'''^\s*(?P<type>{types_pattern()})\s*(?:\[(?P<size>\d*)\])?\s+(?P<name>{IDENT})\s*;?\s*$'''
     TYPE = CommandTypes.VARDEFWV
     
     def __init__(self, line:str):
-        super().__init__(line)
+        # VarDefCommand.__init__ çağırmak istemiyoruz (o = value bekliyor)
+        Command.__init__(self, CommandTypes.VARDEFWV, line)
         self.var_name:str = ""
         self.var_type:VarTypes = VarTypes.BYTE
+        self.array_length:int|None = None
         self.parse_params()
     
     def parse_params(self):
-        match = self.match_regex(self.line)
-        if match:
-            self.var_name = match.group(2)
-            self.var_type = VarTypes[match.group(1).upper()]
-        else:
+        match = re.match(self.REGEX, self.line, re.VERBOSE)
+        if not match:
             raise ValueError(f"Invalid variable definition without value: {self.line}")
+
+        base_type = match.group('type').upper()
+        size_text = match.group('size')
+        name = match.group('name')
+
+        if size_text is not None:  # byte[] veya byte[5]
+            if not hasattr(VarTypes, 'BYTE_ARRAY'):
+                raise ValueError("VarTypes.BYTE_ARRAY tanımlı değil. Lütfen VarTypes'a ekleyin.")
+            self.var_type = VarTypes.BYTE_ARRAY
+            self.array_length = int(size_text) if size_text != '' else None
+            if self.array_length is None:
+                raise ValueError("Array length must be specified.")
+        else:
+            self.var_type = VarTypes[base_type]
+
+        self.var_name = name
 
 class AssignCommand(Command):
     REGEX = r'^(\w+)\s*=\s*(.+)'
@@ -113,15 +157,8 @@ class AssignCommand(Command):
 
 if __name__ == "__main__":
     # Example usage
-    command = VarDefCommand("byte myVar = 10;")
-    print(command.REGEX)
-    print(command.var_name)  # Output: myVar
+    command = VarDefCommandWithoutValue("byte[5] a;")
+    print(command.var_name)  # Output: a
     print(command.var_type)  # Output: VarTypes.BYTE
-    print(command.var_value)  # Output: 10
-
-    free_command = FreeCommand("free myVar;")
-    print(free_command.var_name)  # Output: myVar
-
-    assign_command = AssignCommand("myVar = 20")
-    print(assign_command.var_name)  # Output: myVar
-    print(assign_command.new_value)  # Output: 20
+    print(command.array_length)  # Output: 1
+    

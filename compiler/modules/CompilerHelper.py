@@ -80,10 +80,20 @@ class Compiler:
             raise ValueError("Commands must be grouped before compilation.")
         print("Grouped lines to compile: ", self.grouped_lines)
         for command in self.grouped_lines:
-            if type(command) is VarDefCommand:                
-                self.__create_var_with_value(command)
+            if type(command) is VarDefCommand:     
+                if command.var_type == VarTypes.BYTE:
+                    self.__create_var_with_value(command)
+                elif command.var_type == VarTypes.BYTE_ARRAY:
+                    raise NotImplementedError("Array initialization (e.g., byte[3] a = [...]) henüz desteklenmiyor.")
+                else:
+                    raise ValueError(f"Unsupported variable type: {command.var_type}")
             elif type(command) is VarDefCommandWithoutValue:
-                self.__create_var(command)
+                if command.var_type == VarTypes.BYTE: 
+                    self.__create_var(command)
+                elif command.var_type == VarTypes.BYTE_ARRAY:
+                    self.__create_var(command)
+                else:
+                    raise ValueError(f"Unsupported variable type: {command.var_type}")
             elif type(command) is AssignCommand:
                 self.__assign_variable(command)
             elif type(command) is FreeCommand:
@@ -942,7 +952,7 @@ if __name__ == "__main__":
     compiler = create_default_compiler()
 
     
-    compiler.load_lines('files/test.txt')
+    compiler.load_lines('files/test2.txt')
     compiler.break_commands()
     compiler.clean_lines()
     compiler.group_commands()

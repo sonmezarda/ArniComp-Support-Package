@@ -47,9 +47,25 @@ class ByteVariable(Variable):
     def get_size():
         return 1
 
+class ByteArrayVariable(Variable):
+    def __init__(self, name:str, address:int, size:int, value:list[int] = None):
+        super().__init__(size=size, value_type=list, name=name, address=address, value=value)
+        if value is None:
+            self.value = [0] * size
+        if not (0 < size <= 256):
+            raise ValueError("Byte array variable size must be between 1 and 256")
+
+    @staticmethod
+    def get_value_type():
+        return list
+
+    @staticmethod
+    def get_size():
+        return 1
 
 class VarTypes(Enum):
     BYTE = ByteVariable
+    BYTE_ARRAY = ByteArrayVariable
 
 class IntTypes(IntEnum):
     DECIMAL = 0
@@ -74,8 +90,8 @@ class VarManager():
         
         if self.check_variable_exists(var_name):
             raise ValueError(f"Variable '{var_name}' already exists.")
-    
-        proper_address = self.__find_free_address(var_type)
+
+        proper_address = self.__find_free_address(var_type.value.get_size())
         if proper_address is None:
             raise MemoryError(f"Not enough memory to create variable '{var_name}' of type '{var_type.name}'")
 
@@ -84,11 +100,29 @@ class VarManager():
         self.addresses[proper_address] = new_var
 
         return new_var
-    
-    def __find_free_address(self, var_type:VarTypes) -> int|None:
-        for addr in range(self.mem_start_addr, self.mem_end_addr - var_type.value.get_size() + 1):
+
+    def create_array_variable(self, var_name:str, var_type:VarTypes, array_len:int, var_value:list[int]) -> Variable:
+        if not self.__validate_variable_name(var_name):
+            raise ValueError(f"Invalid variable name: {var_name}")
+
+        if self.check_variable_exists(var_name):
+            raise ValueError(f"Variable '{var_name}' already exists.")
+
+        proper_address = self.__find_free_address(array_len*var_type.value.get_size())
+        if proper_address is None:
+            raise MemoryError(f"Not enough memory to create variable '{var_name}' of type '{var_type.name}'")
+
+        new_var = var_type.value(name=var_name, address=proper_address, size=array_len, value=var_value)
+        self.variables[var_name] = new_var
+        for offset in range(array_len):
+            self.addresses[proper_address + offset] = new_var
+
+        return new_var
+
+    def __find_free_address(self, var_size:int) -> int|None:
+        for addr in range(self.mem_start_addr, self.mem_end_addr - var_size + 1):
             is_free = True
-            for offset in range(var_type.value.get_size()):
+            for offset in range(var_size):
                 if (addr + offset) in self.addresses:
                     is_free = False
                     break
