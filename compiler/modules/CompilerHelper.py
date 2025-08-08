@@ -104,16 +104,18 @@ class Compiler:
                     var_value=command.var_value)
         
         if command.var_type == VarTypes.BYTE:
+            # Set MAR first, then RA, then store (keeps optimal instruction order)
             self.__set_mar(new_var)
             self.__set_ra_const(command.var_value)
-            self.__add_assembly_line("strl ra")
+            self.__store_with_current_mar(new_var, self.register_manager.ra)
 
             self.register_manager.marl.set_variable(new_var, RegisterMode.ADDR)
 
         else:
             raise ValueError(f"Unsupported variable type: {command.var_type}")
         
-    
+        return self.__get_assembly_lines_len()
+
     def __create_var(self, command:VarDefCommandWithoutValue)-> int:
         new_var:Variable = self.var_manager.create_variable(var_name=command.var_name, var_type=command.var_type, var_value=0)
         self.__get_assembly_lines_len()
@@ -225,12 +227,47 @@ class Compiler:
 
         return self.__get_assembly_lines_len()
 
+    def __store_with_current_mar(self, var: Variable, src: Register) -> int:
+        """Store using current MAR (does not modify MAR registers)."""
+        if var.address <= MAX_LOW_ADDRESS:
+            self.__add_assembly_line(f"strl {src.name}")
+        else:
+            self.__add_assembly_line(f"strh {src.name}")
+        return self.__get_assembly_lines_len()
+
+    # New helpers: MAR-aware load/store
+    def __store_to_var(self, var: Variable, src: Register) -> int:
+        """Store src register to memory at var, using strl/strh depending on address width."""
+        self.__set_mar(var)
+        if var.address <= MAX_LOW_ADDRESS:
+            self.__add_assembly_line(f"strl {src.name}")
+        else:
+            self.__add_assembly_line(f"strh {src.name}")
+        return self.__get_assembly_lines_len()
+
+    def __load_var_to_reg(self, var: Variable, dst: Register) -> int:
+        """Load memory at var to dst register, using ldrl/ldrh depending on address width."""
+        self.__set_mar(var)
+        if var.address <= MAX_LOW_ADDRESS:
+            self.__add_assembly_line(f"ldrl {dst.name}")
+        else:
+            self.__add_assembly_line(f"ldrh {dst.name}")
+        dst.set_variable(var, RegisterMode.VALUE)
+        return self.__get_assembly_lines_len()
+
     def __mov_marl_to_reg(self, reg:Register) -> int:
         marl = self.register_manager.marl
     
-        if marl.mode == RegisterMode.ADDR:
-            self.__add_assembly_line(f"ldrl {reg.name}")
-            reg.set_variable(marl.variable, RegisterMode.VALUE)
+        if marl.mode in [RegisterMode.ADDR, RegisterMode.ADDR_LOW]:
+            # Decide by the bound variable's address span
+            bound_var = marl.variable
+            if bound_var is None:
+                raise ValueError("MARL has no bound variable to load from.")
+            if bound_var.address <= MAX_LOW_ADDRESS:
+                self.__add_assembly_line(f"ldrl {reg.name}")
+            else:
+                self.__add_assembly_line(f"ldrh {reg.name}")
+            reg.set_variable(bound_var, RegisterMode.VALUE)
         else:
             raise ValueError("MARL must be set to an address before moving to a register.")
         return self.__get_assembly_lines_len()
@@ -258,26 +295,24 @@ class Compiler:
         if left_var.value_type != right_var.value_type:
             raise ValueError(f"Cannot move variable of type {right_var.value_type} to {left_var.value_type}")
 
-
         right_var_reg = self.register_manager.check_for_variable(right_var.name)
 
         if right_var_reg is not None:
-            self.__set_marl(left_var)
-            self.__add_assembly_line(f"strl {right_var_reg.name}")
-            self.__get_assembly_lines_len()
+            # Store directly from existing register into left var
+            self.__store_to_var(left_var, right_var_reg)
+            return self.__get_assembly_lines_len()
         
+        # If MAR is already pointing to right_var, load it
         print(right_var, marl.variable)
-        if marl.variable.name == right_var.name and marl.mode == RegisterMode.ADDR:
-            self.__add_assembly_line(f"ldrl rd")
-            self.register_manager.rd.set_variable(right_var, RegisterMode.VALUE)
-            self.__set_marl(left_var)
-            self.__add_assembly_line("strl rd")
-            self.__get_assembly_lines_len()
+        if marl.variable is not None and marl.variable.name == right_var.name and marl.mode in [RegisterMode.ADDR, RegisterMode.ADDR_LOW]:
+            self.__load_var_to_reg(right_var, self.register_manager.rd)
+            self.__store_to_var(left_var, self.register_manager.rd)
+            return self.__get_assembly_lines_len()
 
+        # Otherwise, load right var to RD then store to left
         self.__set_reg_variable(self.register_manager.rd, right_var)
-        self.__set_marl(left_var)
-        self.__add_assembly_line("strl rd")
-        self.__get_assembly_lines_len()
+        self.__store_to_var(left_var, self.register_manager.rd)
+        return self.__get_assembly_lines_len()
 
     def __set_reg_const(self, reg:Register, value:int) -> list[str]:
         reg_with_const = self.register_manager.check_for_const(value)
@@ -304,10 +339,8 @@ class Compiler:
             reg.set_variable(variable, RegisterMode.VALUE)
             return self.__get_assembly_lines_len()
         
-        self.__set_marl(variable)
-        self.__add_assembly_line(f"ldrl {reg.name}")
-        reg.set_variable(variable, RegisterMode.VALUE)
-
+        # Use MAR-aware load
+        self.__load_var_to_reg(variable, reg)
         return self.__get_assembly_lines_len()
     
     def __assign_variable(self, command:AssignCommand) -> list[str]:
@@ -327,18 +360,21 @@ class Compiler:
                 reg_with_const = self.register_manager.check_for_const(int(command.new_value))
                 if reg_with_const is not None:
                     if reg_with_const.name == ra.name:
-                        self.__add_assembly_line(f"mov {rd.name}, {reg_with_const.name}")
-                        rd.set_variable(var, RegisterMode.VALUE)
-                        self.__set_marl(var)
-                        self.__add_assembly_line("strl rd")
+                        # Preserve RA before setting MAR, then store via RD
+                        self.__add_assembly_line(f"mov {rd.name}, {ra.name}")
+                        rd.set_mode(RegisterMode.CONST, int(command.new_value))
+                        self.__set_mar(var)
+                        self.__store_with_current_mar(var, rd)
                         return self.__get_assembly_lines_len()
-                    self.__set_marl(var)
-                    self.__add_assembly_line(f"strl {reg_with_const.name}")
+                    # Use the cached const register directly
+                    self.__set_mar(var)
+                    self.__store_with_current_mar(var, reg_with_const)
                     return self.__get_assembly_lines_len()
 
-                self.__set_marl(var)
+                # No cached const: set MAR first, then RA, then store
+                self.__set_mar(var)
                 self.__set_ra_const(int(command.new_value))
-                self.__add_assembly_line("strl ra")
+                self.__store_with_current_mar(var, ra)
 
                 return self.__get_assembly_lines_len()
             
@@ -656,8 +692,8 @@ class Compiler:
             
 
 def create_default_compiler() -> Compiler:
-    return Compiler(comment_char='//', variable_start_addr=0x0000, 
-                    variable_end_addr=0x0100, memory_size=65536)
+    return Compiler(comment_char='//', variable_start_addr=0x0100, 
+                    variable_end_addr=0x0200, memory_size=65536)
 
 if __name__ == "__main__":
     compiler = create_default_compiler()
