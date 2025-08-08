@@ -42,8 +42,6 @@ class ByteVariable(Variable):
         return 1
 
 
-
-
 class VarTypes(Enum):
     BYTE = ByteVariable
 
@@ -59,7 +57,6 @@ class VarManager():
         self.mem_end_addr = mem_end_addr
         self.variables = {}
         self.addresses = {}
-        self.current_address = mem_start_addr
         self.mem_var_size = self.mem_start_addr - self.mem_end_addr
     
     def create_variable(self, var_name:str, var_type:VarTypes, var_value)-> Variable:
@@ -72,19 +69,26 @@ class VarManager():
         if self.check_variable_exists(var_name):
             raise ValueError(f"Variable '{var_name}' already exists.")
     
-            raise TypeError(f"Value must be of type {var_type.value.__name__}")
-        
-        is_enough_space =  self.__check_memory_space(var_type)
-        if not is_enough_space:
-            raise MemoryError("Not enough memory space for the variable.")
+        proper_address = self.__find_free_address(var_type)
+        if proper_address is None:
+            raise MemoryError(f"Not enough memory to create variable '{var_name}' of type '{var_type.name}'")
 
-        new_var = var_type.value(name=var_name, address=self.current_address, value=var_value)
+        new_var = var_type.value(name=var_name, address=proper_address, value=var_value)
         self.variables[var_name] = new_var
-        self.addresses[self.current_address] = new_var
-        self.current_address += var_type.value.get_size()
+        self.addresses[proper_address] = new_var
 
         return new_var
     
+    def __find_free_address(self, var_type:VarTypes) -> int|None:
+        for addr in range(self.mem_start_addr, self.mem_end_addr - var_type.value.get_size() + 1):
+            is_free = True
+            for offset in range(var_type.value.get_size()):
+                if (addr + offset) in self.addresses:
+                    is_free = False
+                    break
+            if is_free:
+                return addr
+
     def get_variable_from_address(self, address:int) -> Variable|None:
         if address < self.mem_start_addr or address > self.mem_end_addr:
             raise ValueError(f"Address {address} is out of bounds.")
@@ -112,11 +116,16 @@ class VarManager():
             var = self.get_variable_from_address(addr)
             print(f"{addr:04X}: {val_str.format(var.value if var else 0)}")
 
-    def __check_memory_space(self, var_type:VarTypes) -> bool:
-        if self.current_address + var_type.value.get_size() > self.mem_end_addr:
-            return False
-        return True
     
+    def free_variable(self, var_name:str) -> None:
+        if var_name not in self.variables:
+            raise ValueError(f"Variable '{var_name}' does not exist.")
+        
+        var:Variable = self.variables[var_name]
+        del self.variables[var_name]
+        del self.addresses[var.address]
+        
+
     def check_variable_exists(self, var_name:str) -> bool:
         return var_name in self.variables
     

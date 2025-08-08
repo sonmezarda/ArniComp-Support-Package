@@ -84,6 +84,8 @@ class Compiler:
                 self.__create_var(command)
             elif type(command) is AssignCommand:
                 self.__assign_variable(command)
+            elif type(command) is FreeCommand:
+                self.__free_variable(command)
             elif type(command) is Command and command.command_type == CommandTypes.IF:
                 self.__handle_if_else(command)
             elif type(command) is IfElseClause:
@@ -114,7 +116,17 @@ class Compiler:
         new_var:Variable = self.var_manager.create_variable(var_name=command.var_name, var_type=command.var_type, var_value=0)
         self.__get_assembly_lines_len()
     
-
+    def __free_variable(self, command:FreeCommand) -> int:
+        if not self.var_manager.check_variable_exists(command.var_name):
+            raise ValueError(f"Variable '{command.var_name}' is not defined.")
+        
+        var:Variable = self.var_manager.get_variable(command.var_name)
+        if var is None:
+            raise ValueError(f"Variable '{command.var_name}' is not defined.")
+        
+        self.var_manager.free_variable(var.name)
+        
+        return self.__get_assembly_lines_len()
     def __get_assembly_lines_len(self) -> int:
         if not self.assembly_lines:
             return 0
@@ -481,6 +493,10 @@ class Compiler:
                 print(f"'{line}' matches AssignCommand regex")
                 grouped_lines.append(AssignCommand(line))
                 lindex += 1
+            elif FreeCommand.match_regex(line):
+                print(f"'{line}' matches FreeCommand regex")
+                grouped_lines.append(FreeCommand(line))
+                lindex += 1
             elif line.startswith('if '):
                 print(f"'{line}' starts an if clause")
                 nested_count = 0
@@ -573,7 +589,7 @@ if __name__ == "__main__":
     compiler = create_default_compiler()
 
     
-    compiler.load_lines('files/test2.txt')
+    compiler.load_lines('files/test3.txt')
     compiler.break_commands()
     compiler.clean_lines()
     compiler.group_commands()
