@@ -647,7 +647,7 @@ class Compiler:
             else_context_compiler.compile_lines()
             else_inner_len = else_context_compiler.__get_assembly_lines_len()
 
-            else_label, else_label_position = self.label_manager.create_else_label(self.__get_assembly_lines_len())
+            else_label, else_label_position = self.label_manager.create_else_label(self.__get_assembly_lines_len() + else_inner_len)
             self.__set_prl_as_label(else_label, else_label_position)
             self.__add_assembly_line("jmp")
             self.__add_assembly_line(f"{if_label}:")

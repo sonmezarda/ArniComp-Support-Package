@@ -1,8 +1,14 @@
 byte a;
-byte b = 10;
+byte c;
+byte b = 15;
 
 if b == 10
-    a = 6;
+    a = 1;
 else
-    a = 8;
+    if b == 15
+        a = 2;
+    else
+        a = 3;
+    endif
+    c = 5;
 endif
