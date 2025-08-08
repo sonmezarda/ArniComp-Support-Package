@@ -5,7 +5,7 @@ from VariableManager import VarTypes, Variable, ByteVariable, VarManager
 from StackManager import StackManager
 from LabelManager import LabelManager
 from RegisterManager import RegisterManager, RegisterMode, Register, TempVarMode
-from ConditionHelper import IfElseClause, ConditionTypes
+from ConditionHelper import IfElseClause, Condition
 import CompilerStaticMethods as CompilerStaticMethods
 import re
 
@@ -182,12 +182,14 @@ class Compiler:
         low_addr = var.get_low_address()
         is_addr_fit_low = var.address == var.get_low_address()
 
-        # If already variable is set in MARL
+        # If MARL already contains the exact same variable
         if marl.variable == var and marl.mode in [RegisterMode.ADDR, RegisterMode.ADDR_LOW]:
             return self.__get_assembly_lines_len()
         
-        # If MARL already contains the lower address of the variable
-        if marl.variable != None and marl.variable.get_low_address() == var.get_low_address():
+        # Check if another variable in MARL has the same address (rare case)
+        if (marl.variable != None and 
+            marl.variable != var and 
+            marl.variable.get_low_address() == var.get_low_address()):
             if is_addr_fit_low:
                 marl.set_variable(var, RegisterMode.ADDR)
             else:
@@ -282,13 +284,19 @@ class Compiler:
                 cost = 4  # ldi + mov rd,ra + ldi + add ra + mov target,acc
                 strategies.append(('add_two_ldi', base1, base2, cost))
         
-        # Strategy 3: 127*2 - SUBI (current approach for high values)
-        if target >= 128:
+        # Strategy 3: 127*2 - SUBI (for values close to 254)
+        if target >= 128 and target <= 254:
             remainder = 254 - target
-            subi_steps = (remainder + 6) // 7
-            if remainder <= 7 * 7:  # Max 7 SUBI instructions
-                cost = 4 + subi_steps  # ldi + mov rd,ra + add rd + N*subi + mov target,acc
-                strategies.append(('subi_from_254', 127, remainder, cost))
+            if remainder >= 0:  # Only valid for values <= 254
+                subi_steps = (remainder + 6) // 7
+                if remainder <= 7 * 7:  # Max 7 SUBI instructions
+                    cost = 4 + subi_steps  # ldi + mov rd,ra + add rd + N*subi + mov target,acc
+                    strategies.append(('subi_from_254', 127, remainder, cost))
+        
+        # Strategy 4: 255 = 127*2 + 1 (special case for maximum value)
+        if target == 255:
+            cost = 5  # ldi + mov rd,ra + add rd + addi + mov target,acc
+            strategies.append(('add_254_plus_1', 127, 1, cost))
         
         # Choose the strategy with minimum cost
         if not strategies:
@@ -301,7 +309,7 @@ class Compiler:
             current = MAX_LDI
             while remainder > 0:
                 step = min(7, remainder)
-                self.__add_assembly_line(f"addi {step}")
+                self.__add_assembly_line(f"addi #{step}")
                 current += step
                 if remainder > step:  # Don't mov rd,acc on last iteration
                     self.__add_assembly_line("mov rd, acc")
@@ -326,7 +334,7 @@ class Compiler:
             current = base
             while remainder > 0:
                 step = min(7, remainder)
-                self.__add_assembly_line(f"addi {step}")
+                self.__add_assembly_line(f"addi #{step}")
                 current += step
                 if remainder > step:  # Don't mov rd,acc on last iteration
                     self.__add_assembly_line("mov rd, acc")
@@ -345,6 +353,30 @@ class Compiler:
             self.__add_assembly_line(f"mov {target_reg.name}, acc")
             target_reg.set_mode(RegisterMode.CONST, target)
             
+        elif strategy_type == 'add_254_plus_1':
+            # Build 255 = 254 + 1
+            # First create 254 = 127 * 2
+            self.__ldi(MAX_LDI)  # Load 127 into RA
+            ra.set_mode(RegisterMode.CONST, 127)
+            
+            self.__add_assembly_line("mov rd, ra")  # Copy 127 to RD
+            rd.set_mode(RegisterMode.CONST, 127)
+            
+            self.__add_assembly_line("add rd")  # ACC = RD + RA = 127 + 127 = 254
+            acc.set_mode(RegisterMode.CONST, 254)
+            
+            self.__add_assembly_line("mov rd, acc")  # Store 254 in RD
+            rd.set_mode(RegisterMode.CONST, 254)
+            
+            # ADDI semantics: ACC = RD + immediate = 254 + 1 = 255
+            self.__add_assembly_line("addi #1")  
+            acc.set_mode(RegisterMode.CONST, 255)
+            
+            # Move to target if needed
+            if target_reg != acc:
+                self.__add_assembly_line(f"mov {target_reg.name}, acc")
+                target_reg.set_mode(RegisterMode.CONST, 255)
+            
         elif strategy_type == 'subi_from_254':
             _, remainder = param1, param2
             self.__ldi(MAX_LDI)  # 127
@@ -354,7 +386,7 @@ class Compiler:
             current = 254
             while remainder > 0:
                 step = min(7, remainder)
-                self.__add_assembly_line(f"subi {step}")
+                self.__add_assembly_line(f"subi #{step}")
                 current -= step
                 remainder -= step
             
