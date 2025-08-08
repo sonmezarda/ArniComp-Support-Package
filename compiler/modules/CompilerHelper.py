@@ -552,7 +552,7 @@ class Compiler:
                 return self.__get_assembly_lines_len()
             
             # Check if new_value contains an addition expression
-            elif '+' in command.new_value:
+            elif '+' in command.new_value or '-' in command.new_value:
                 normalized_expression = self.__normalize_expression(command.new_value)
                 
                 # Call __evaluate_expression to compute the expression and store it in ACC
@@ -686,31 +686,27 @@ class Compiler:
         # Remove all spaces and then add proper spacing around operators
         expression = expression.replace(' ', '')
         expression = expression.replace('+', ' + ')
+        expression = expression.replace('-', ' - ')
         return expression
     
     def __evaluate_expression(self, expression: str) -> int:
         """
-        Evaluate a + b + c ... style expressions where each term is either:
-        - a decimal constant (e.g., '5')
-        - a defined variable name
-        The final result is left in ACC.
-        Uses RD as the running accumulator and moves ACC -> RD after each add,
-        so next additions can use RD as the left operand.
+        Evaluate a + b - c ... style expressions.
+        Each term can be:
+        - decimal constant
+        - defined variable name
+        Final result is left in ACC.
+        RD holds the running sum/difference for chaining.
         """
         # 1) Normalize and tokenize
-        expr = self.__normalize_expression(expression)  # "a + 5 + b" -> "a + 5 + b"
+        expr = self.__normalize_expression(expression)  # "a + 5 - b" -> "a + 5 - b"
         if not expr:
             raise ValueError("Empty expression.")
 
-        tokens = [t for t in expr.split(' ') if t]   # ["a", "+", "5", "+", "b"]
+        tokens = [t for t in expr.split(' ') if t]
 
-        # Very simple grammar check: term (+ term)*
-        if len(tokens) == 0:
-            raise ValueError(f"Invalid expression: '{expression}'")
-
-        # Helper to decide if token is plus or term
-        def is_plus(tok: str) -> bool:
-            return tok == '+'
+        def is_op(tok: str) -> bool:
+            return tok in ('+', '-')
 
         def is_int(tok: str) -> bool:
             try:
@@ -719,21 +715,19 @@ class Compiler:
             except ValueError:
                 return False
 
-        # 2) Parse first term into RD
+        # 2) İlk terimi RD'ye yükle
         rd = self.register_manager.rd
         ra = self.register_manager.ra
         acc = self.register_manager.acc
 
         idx = 0
         first = tokens[idx]
-        if is_plus(first):
-            raise ValueError(f"Expression cannot start with '+': '{expression}'")
+        if is_op(first):
+            raise ValueError(f"Expression cannot start with operator: '{expression}'")
 
         if is_int(first):
-            # RD <- const
             self.__set_reg_const(rd, int(first))
         else:
-            # RD <- var
             if not self.var_manager.check_variable_exists(first):
                 raise ValueError(f"Unknown variable in expression: '{first}'")
             var0 = self.var_manager.get_variable(first)
@@ -741,47 +735,44 @@ class Compiler:
 
         idx += 1
 
-        # 3) Consume (+ term)* and keep running sum:
-        # After each addition:
-        #   - ACC <- RD + term
-        #   - RD  <- ACC   (to chain further additions)
+        # 3) (+/- term)* döngüsü
         while idx < len(tokens):
-            # Expect '+'
-            if not is_plus(tokens[idx]):
-                raise ValueError(f"Expected '+', got '{tokens[idx]}' in '{expression}'")
+            op = tokens[idx]
+            if not is_op(op):
+                raise ValueError(f"Expected '+' or '-', got '{op}' in '{expression}'")
             idx += 1
             if idx >= len(tokens):
-                raise ValueError(f"Trailing '+' without term in '{expression}'")
+                raise ValueError(f"Trailing operator '{op}' without term in '{expression}'")
 
             term = tokens[idx]
 
             if is_int(term):
-                # RA <- const, ACC <- RD + RA, RD <- ACC
                 self.__set_reg_const(ra, int(term))
-                self.__add_reg(ra)                 # "add ra"  => ACC = RD + RA
+                if op == '+':
+                    self.__add_reg(ra)     # ACC = RD + RA
+                else:
+                    self.__add_assembly_line(f"sub {ra.name}")  # ACC = RD - RA
                 self.__add_assembly_line("mov rd, acc")
-                rd.set_mode(self.register_manager.acc.mode, getattr(self.register_manager.acc, "value", None))
+                self.register_manager.rd.set_unknown_mode()
             else:
-                # variable term
                 if not self.var_manager.check_variable_exists(term):
                     raise ValueError(f"Unknown variable in expression: '{term}'")
                 v = self.var_manager.get_variable(term)
-                self.__set_marl(v)                 # set MAR for v
-                self.__add_ml()                    # "add ml"  => ACC = RD + [MAR]
+                self.__set_marl(v)
+                if op == '+':
+                    self.__add_ml()        # ACC = RD + [MAR]
+                else:
+                    self.__add_assembly_line("sub ml")  # ACC = RD - [MAR]
                 self.__add_assembly_line("mov rd, acc")
-                rd.set_variable(v, RegisterMode.VALUE)  # rd now holds the running sum (value)
+                self.register_manager.rd.set_unknown_mode()
 
             idx += 1
 
-        # 4) If there was only one term, ACC doesn't yet have it; move RD -> ACC
-        #    Otherwise ACC already has the last sum.
-        if len(tokens) == 1:
-            self.__add_assembly_line("mov acc, rd")
-
-        # Mark ACC as holding this expression (for later checks/optimizations)
+        # 5) ACC'nin ifade tuttuğunu işaretle
         self.register_manager.acc.set_temp_var_mode(expr)
 
         return self.__get_assembly_lines_len()
+
 
     
     def __add(self, left:str, right:str) -> list[str]:
