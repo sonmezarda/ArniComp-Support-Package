@@ -194,36 +194,35 @@ class Compiler:
         self.__get_assembly_lines_len()
 
     def __set_reg_const(self, reg:Register, value:int) -> list[str]:
-        pre_assembly_lines = []
         reg_with_const = self.register_manager.check_for_const(value)
 
         if reg_with_const is not None:
             self.__add_assembly_line(f"mov {reg.name}, {reg_with_const.name}")
             reg.set_mode(RegisterMode.CONST, value)
-            self.__get_assembly_lines_len()
+            return self.__get_assembly_lines_len()
 
         self.__set_ra_const(value)
         self.__add_assembly_line(f"mov {reg.name}, ra")
         reg.set_mode(RegisterMode.CONST, value)
 
-        self.__get_assembly_lines_len()
+        return self.__get_assembly_lines_len()
     
-    def __set_reg_variable(self, reg:Register, variable:Variable) -> list[str]:
+    def __set_reg_variable(self, reg:Register, variable:Variable) ->int:
         pre_assembly_lines = []
         reg_with_var:Register = self.register_manager.check_for_variable(variable)
         
         if reg_with_var is not None:
             if reg_with_var.name == reg.name:
-                self.__get_assembly_lines_len()
+                return self.__get_assembly_lines_len()
             self.__add_assembly_line(f"mov {reg.name}, {reg_with_var.name}")
             reg.set_variable(variable, RegisterMode.VALUE)
-            self.__get_assembly_lines_len()
+            return self.__get_assembly_lines_len()
         
-        (self.__set_marl(variable))
+        self.__set_marl(variable)
         self.__add_assembly_line(f"ldrl {reg.name}")
         reg.set_variable(variable, RegisterMode.VALUE)
 
-        self.__get_assembly_lines_len()
+        return self.__get_assembly_lines_len()
     
     def __assign_variable(self, command:AssignCommand) -> list[str]:
         pre_assembly_lines = []
@@ -246,16 +245,16 @@ class Compiler:
                         rd.set_variable(var, RegisterMode.VALUE)
                         self.__set_marl(var)
                         self.__add_assembly_line("strl rd")
-                        self.__get_assembly_lines_len()
+                        return self.__get_assembly_lines_len()
                     self.__set_marl(var)
                     self.__add_assembly_line(f"strl {reg_with_const.name}")
-                    self.__get_assembly_lines_len()
-                
+                    return self.__get_assembly_lines_len()
+
                 self.__set_marl(var)
                 self.__set_ra_const(int(command.new_value))
                 self.__add_assembly_line("strl ra")
-                
-                self.__get_assembly_lines_len()
+
+                return self.__get_assembly_lines_len()
             
             # Check if new_value contains an addition expression
             elif '+' in command.new_value:
@@ -279,14 +278,14 @@ class Compiler:
             elif self.var_manager.check_variable_exists(command.new_value):
                 var_to_assign:Variable = self.var_manager.get_variable(command.new_value)
                 (self.__mov_var_to_var(var, var_to_assign))
-                self.__get_assembly_lines_len()
+                return self.__get_assembly_lines_len()
             else:
                 raise NotImplementedError("Assignment from non-constant or non-variable is not implemented yet.")
 
         else:
             raise ValueError(f"Unsupported variable type for assignment: {var.var_type}")
         
-        self.__get_assembly_lines_len()
+        return self.__get_assembly_lines_len()
     
 
     def __handle_if_else(self, command:Command) -> int:
@@ -301,7 +300,7 @@ class Compiler:
         is_contains_elif = if_else_clause.is_contains_elif()
 
         if (not is_contains_else) and (not is_contains_elif):
-            self._compile_condition(if_else_clause.get_if().condition)
+            self.__compile_condition(if_else_clause.get_if().condition)
             
             self.register_manager.reset_change_detector()
             if_context_compiler = self.create_context_compiler()
@@ -339,7 +338,7 @@ class Compiler:
         self.register_manager.prl.set_label_mode(label_name)
         self.register_manager.ra.set_unknown_mode()
 
-        self.__get_assembly_lines_len()
+        return self.__get_assembly_lines_len()
 
     def __normalize_expression(self, expression: str) -> str:
         """Normalize expression by removing extra spaces and ensuring consistent formatting"""
@@ -417,7 +416,7 @@ class Compiler:
         normalized_expression = self.__normalize_expression(expression)
         return self.__evaluate_expression(normalized_expression)
 
-    def __add_var_const(self, left_var:Variable, right_value:int) -> list[str]:
+    def __add_var_const(self, left_var:Variable, right_value:int) -> int:
         pre_assembly_lines = []
         rd = self.register_manager.rd
         marl = self.register_manager.marl
@@ -428,22 +427,21 @@ class Compiler:
         expression = f"{left_var.name} + {right_value}"
         self.register_manager.acc.set_temp_var_mode(expression)
 
-        self.__get_assembly_lines_len()
+        return self.__get_assembly_lines_len()
 
-    def __add_reg(self, register:Register) -> list[str]:
+    def __add_reg(self, register:Register) -> int:
         pre_assembly_lines = []
         rd = self.register_manager.rd
         self.__add_assembly_line(f"add {register.name}")
+
+        return self.__get_assembly_lines_len()
+    
+    def __add_ml(self) -> int:
         
-        self.__get_assembly_lines_len()
-    
-    def __add_ml(self) -> list[str]:
-        preassembly_lines = []
-        preassembly_lines.append("add ml")
-        return preassembly_lines
-    
-    def _compile_condition(self, condition: Condition) -> list[str]:
-        pre_assembly_lines = []
+        self.assembly_lines.append("add ml")
+        return self.__get_assembly_lines_len()
+
+    def __compile_condition(self, condition: Condition) -> int:
         rd = self.register_manager.rd
         if condition.type is None:
             raise ValueError("Condition type is not set. Call __set_type() first.")
@@ -460,7 +458,7 @@ class Compiler:
             self.__add_assembly_line("sub ml")
 
             
-        self.__get_assembly_lines_len()
+        return self.__get_assembly_lines_len()
     
     @staticmethod
     def __group_line_commands(lines:list[str]) -> list[Command]:
@@ -581,7 +579,6 @@ if __name__ == "__main__":
     compiler.group_commands()
     print("Grouped Commands:" + str(compiler.grouped_lines))
     compiler.compile_lines()
-    #l = compiler._compile_condition(Condition("dene2 == 5"))
     
     for i in compiler.assembly_lines:
         print(i)
