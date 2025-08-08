@@ -86,10 +86,11 @@ class Compiler:
                 self.__assign_variable(command)
             elif type(command) is Command and command.command_type == CommandTypes.IF:
                 self.__handle_if_else(command)
-            #elif type(command) is IfElseClause:
-            #    self.__handle_if_else(Command(CommandTypes.IF, command))
+            elif type(command) is IfElseClause:
+                # Nested if-else clause'ları da işle
+                self.__handle_if_else(Command(CommandTypes.IF, command))
             else:
-                raise ValueError(f"Unsupported command type: {command.command_type}")
+                raise ValueError(f"Unsupported command type: {type(command)} - {command}")
         return self.assembly_lines
 
     def __create_var_with_value(self, command:VarDefCommand) -> int:
@@ -501,7 +502,7 @@ class Compiler:
                 print(f"Grouped if-else lines: {grouped_if_else}")
                 if_clause = IfElseClause.parse_from_lines(grouped_if_else)
                 print(if_clause)
-                if_clause.apply_to_all_lines(Compiler.__group_line_commands)
+                if_clause.apply_to_all_lines(lambda lines: Compiler.__group_line_commands(lines) if isinstance(lines, list) else Compiler.__group_line_commands([lines]))
                 print(f"Processed if-else clause: {if_clause}")
                 grouped_lines.append(Command(CommandTypes.IF, if_clause))
 
@@ -578,7 +579,6 @@ if __name__ == "__main__":
     compiler.break_commands()
     compiler.clean_lines()
     compiler.group_commands()
-    print(compiler.label_manager.labels)
     print("Grouped Commands:" + str(compiler.grouped_lines))
     compiler.compile_lines()
     #l = compiler._compile_condition(Condition("dene2 == 5"))
