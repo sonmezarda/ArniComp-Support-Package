@@ -553,12 +553,10 @@ class Compiler:
             
             # Check if new_value contains an addition expression
             elif '+' in command.new_value:
-                raise NotImplementedError("Addition expressions are not implemented yet.")
                 normalized_expression = self.__normalize_expression(command.new_value)
                 
                 # Call __evaluate_expression to compute the expression and store it in ACC
                 eval_lines = self.__evaluate_expression(normalized_expression)
-                (eval_lines)
                 
                 # Check if ACC contains the correct expression
                 if (acc.mode == RegisterMode.TEMPVAR and 
@@ -690,68 +688,101 @@ class Compiler:
         expression = expression.replace('+', ' + ')
         return expression
     
-    def __evaluate_expression(self, expression: str) -> list[str]:
-        """Evaluate an expression and store the result in ACC register"""
-        raise NotImplementedError("Expression evaluation is not implemented yet.")
-        pre_assembly_lines = []
-        
-        # to postfix for braces, +, - , * and / operations
-        stack = []
-        postfix = []
-        # Supported operators and their precedence
-        precedence = {'+': 1, '-': 1}
-        operators = set(precedence.keys())
-        tokens = re.findall(r'\w+|\d+|[+\-()]', expression)
+    def __evaluate_expression(self, expression: str) -> int:
+        """
+        Evaluate a + b + c ... style expressions where each term is either:
+        - a decimal constant (e.g., '5')
+        - a defined variable name
+        The final result is left in ACC.
+        Uses RD as the running accumulator and moves ACC -> RD after each add,
+        so next additions can use RD as the left operand.
+        """
+        # 1) Normalize and tokenize
+        expr = self.__normalize_expression(expression)  # "a + 5 + b" -> "a + 5 + b"
+        if not expr:
+            raise ValueError("Empty expression.")
 
-        # Shunting Yard Algorithm: infix to postfix
-        for token in tokens:
-            if token.isdigit() or self.var_manager.check_variable_exists(token):
-                postfix.append(token)
-            elif token in operators:
-                while (stack and stack[-1] in operators and
-                    precedence[stack[-1]] >= precedence[token]):
-                    postfix.append(stack.pop())
-                stack.append(token)
-            elif token == '(':
-                stack.append(token)
-            elif token == ')':
-                while stack and stack[-1] != '(':
-                    postfix.append(stack.pop())
-                stack.pop()
+        tokens = [t for t in expr.split(' ') if t]   # ["a", "+", "5", "+", "b"]
 
-        while stack:
-            postfix.append(stack.pop())
+        # Very simple grammar check: term (+ term)*
+        if len(tokens) == 0:
+            raise ValueError(f"Invalid expression: '{expression}'")
 
-        # Evaluate postfix and generate assembly
-        eval_stack = []
-        for token in postfix:
-            if token.isdigit() or self.var_manager.check_variable_exists(token):
-                eval_stack.append(token)
-            elif token in operators:
-                right = eval_stack.pop()
-                left = eval_stack.pop()
-            # Load left operand into RD
-            if left.isdigit():
-                (self.__set_reg_const(self.register_manager.rd, int(left)))
+        # Helper to decide if token is plus or term
+        def is_plus(tok: str) -> bool:
+            return tok == '+'
+
+        def is_int(tok: str) -> bool:
+            try:
+                int(tok)
+                return True
+            except ValueError:
+                return False
+
+        # 2) Parse first term into RD
+        rd = self.register_manager.rd
+        ra = self.register_manager.ra
+        acc = self.register_manager.acc
+
+        idx = 0
+        first = tokens[idx]
+        if is_plus(first):
+            raise ValueError(f"Expression cannot start with '+': '{expression}'")
+
+        if is_int(first):
+            # RD <- const
+            self.__set_reg_const(rd, int(first))
+        else:
+            # RD <- var
+            if not self.var_manager.check_variable_exists(first):
+                raise ValueError(f"Unknown variable in expression: '{first}'")
+            var0 = self.var_manager.get_variable(first)
+            self.__set_reg_variable(rd, var0)
+
+        idx += 1
+
+        # 3) Consume (+ term)* and keep running sum:
+        # After each addition:
+        #   - ACC <- RD + term
+        #   - RD  <- ACC   (to chain further additions)
+        while idx < len(tokens):
+            # Expect '+'
+            if not is_plus(tokens[idx]):
+                raise ValueError(f"Expected '+', got '{tokens[idx]}' in '{expression}'")
+            idx += 1
+            if idx >= len(tokens):
+                raise ValueError(f"Trailing '+' without term in '{expression}'")
+
+            term = tokens[idx]
+
+            if is_int(term):
+                # RA <- const, ACC <- RD + RA, RD <- ACC
+                self.__set_reg_const(ra, int(term))
+                self.__add_reg(ra)                 # "add ra"  => ACC = RD + RA
+                self.__add_assembly_line("mov rd, acc")
+                rd.set_mode(self.register_manager.acc.mode, getattr(self.register_manager.acc, "value", None))
             else:
-                var_left = self.var_manager.get_variable(left)
-                (self.__set_marl(var_left))
-                self.__add_assembly_line("ldl rd")
-            # Add/Sub right operand to RD and store result in ACC
-            if right.isdigit():
-                (self.__set_ra_const(int(right)))
-            else:
-                var_right = self.var_manager.get_variable(right)
-                (self.__set_marl(var_right))
-                self.__add_assembly_line("ldl ra")
-            if token == '+':
-                self.__add_assembly_line("add ra")
-            elif token == '-':
-                self.__add_assembly_line("sub ra")
-            # After operation, result is in ACC, push a dummy for stack logic
-            eval_stack.append("acc")
-        
-        self.__get_assembly_lines_len()    
+                # variable term
+                if not self.var_manager.check_variable_exists(term):
+                    raise ValueError(f"Unknown variable in expression: '{term}'")
+                v = self.var_manager.get_variable(term)
+                self.__set_marl(v)                 # set MAR for v
+                self.__add_ml()                    # "add ml"  => ACC = RD + [MAR]
+                self.__add_assembly_line("mov rd, acc")
+                rd.set_variable(v, RegisterMode.VALUE)  # rd now holds the running sum (value)
+
+            idx += 1
+
+        # 4) If there was only one term, ACC doesn't yet have it; move RD -> ACC
+        #    Otherwise ACC already has the last sum.
+        if len(tokens) == 1:
+            self.__add_assembly_line("mov acc, rd")
+
+        # Mark ACC as holding this expression (for later checks/optimizations)
+        self.register_manager.acc.set_temp_var_mode(expr)
+
+        return self.__get_assembly_lines_len()
+
     
     def __add(self, left:str, right:str) -> list[str]:
         """Legacy method for simple two-term addition - now uses __evaluate_expression"""
@@ -920,7 +951,7 @@ if __name__ == "__main__":
     compiler = create_default_compiler()
 
     
-    compiler.load_lines('files/test2.txt')
+    compiler.load_lines('files/test.txt')
     compiler.break_commands()
     compiler.clean_lines()
     compiler.group_commands()
