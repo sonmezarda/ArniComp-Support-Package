@@ -3,7 +3,7 @@ byte b = 10;
 byte c;
 byte d;
 
-a = 6;
+a = 5;
 a = 7;
 c = 1;
 

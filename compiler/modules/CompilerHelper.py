@@ -613,6 +613,7 @@ class Compiler:
             self.__add_assembly_line(CompilerStaticMethods.get_inverted_jump_str(condition_type))
             # add 'if' block assembly lines
             self.__add_assembly_line(if_context_compiler.assembly_lines)
+            self.register_manager.set_changed_registers_as_unknown()
             # Update label position
             self.label_manager.update_label_position(if_label, self.__get_assembly_lines_len())
             del if_context_compiler
@@ -624,6 +625,10 @@ class Compiler:
             
         elif is_contains_else and not is_contains_elif:
             self.__compile_condition(if_else_clause.get_if().condition)
+
+            self.register_manager.ra.set_unknown_mode()
+            self.register_manager.prl.set_unknown_mode()
+
             self.register_manager.reset_change_detector()
             if_context_compiler = self.create_context_compiler()
             if_context_compiler.grouped_lines = if_else_clause.get_if().get_lines()
@@ -638,10 +643,13 @@ class Compiler:
             self.__add_assembly_line(CompilerStaticMethods.get_inverted_jump_str(condition_type))
             # add 'if' block assembly lines
             self.__add_assembly_line(if_context_compiler.assembly_lines)
+            self.register_manager.set_changed_registers_as_unknown()
             # Update label position
             self.label_manager.update_label_position(if_label, self.__get_assembly_lines_len())
             del if_context_compiler
-
+            
+            self.register_manager.ra.set_unknown_mode()
+            self.register_manager.prl.set_unknown_mode()
             else_context_compiler = self.create_context_compiler()
             else_context_compiler.grouped_lines = if_else_clause.get_else().get_lines()
             else_context_compiler.compile_lines()
@@ -649,6 +657,7 @@ class Compiler:
 
             else_label, else_label_position = self.label_manager.create_else_label(self.__get_assembly_lines_len() + else_inner_len)
             self.__set_prl_as_label(else_label, else_label_position)
+
             self.__add_assembly_line("jmp")
             self.__add_assembly_line(f"{if_label}:")
 
@@ -755,9 +764,9 @@ class Compiler:
         rd = self.register_manager.rd
         marl = self.register_manager.marl
 
-        (self.__set_reg_const(rd, right_value))
-        (self.__set_marl(left_var))
-        (self.__add_ml())
+        self.__set_reg_const(rd, right_value)
+        self.__set_marl(left_var)
+        self.__add_ml()
         expression = f"{left_var.name} + {right_value}"
         self.register_manager.acc.set_temp_var_mode(expression)
 

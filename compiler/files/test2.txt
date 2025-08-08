@@ -1,14 +1,4 @@
 byte a;
+byte b = 20;
 byte c;
-byte b = 15;
 
-if b == 10
-    a = 1;
-else
-    if b == 15
-        a = 2;
-    else
-        a = 3;
-    endif
-    c = 5;
-endif
