@@ -186,7 +186,11 @@ class Compiler:
             ra.set_mode(RegisterMode.CONST, low)
         else:
             self.__build_const_in_reg(low, marl)
-        # tag MARL
+        # invalidate stale var binding and tag MARL
+        try:
+            marl.set_unknown_mode()
+        except Exception:
+            pass
         try:
             marl.tag = AbsAddrTag(address)
         except Exception:
@@ -200,6 +204,10 @@ class Compiler:
                 ra.set_mode(RegisterMode.CONST, high)
             else:
                 self.__build_const_in_reg(high, marh)
+            try:
+                marh.set_unknown_mode()
+            except Exception:
+                pass
             try:
                 marh.tag = AbsAddrTag(address)
             except Exception:
@@ -567,7 +575,8 @@ class Compiler:
             return self.__get_assembly_lines_len()
 
         self.__set_ra_const(value)
-        self.__add_assembly_line(f"mov {reg.name}, ra")
+        if reg.name != 'ra':
+            self.__add_assembly_line(f"mov {reg.name}, ra")
         reg.set_mode(RegisterMode.CONST, value)
 
         return self.__get_assembly_lines_len()
@@ -605,30 +614,88 @@ class Compiler:
             idx_expr = command.index_expr
             if idx_expr is None:
                 raise ValueError("Array index missing.")
-            if not idx_expr.isdigit():
-                raise NotImplementedError("Non-constant array index not supported yet.")
-            idx = int(idx_expr)
-            elem_size = VarTypes.BYTE_ARRAY.value.get_size()
-            address = var.address + idx * elem_size
+            # If index is constant: fast absolute addressing path
+            if idx_expr.isdigit():
+                idx = int(idx_expr)
+                elem_size = VarTypes.BYTE_ARRAY.value.get_size()
+                address = var.address + idx * elem_size
 
-            # RHS: constant only (for now)
-            rhs = command.new_value
+                rhs = command.new_value
+                if rhs.isdigit():
+                    value = int(rhs)
+                    ra = self.register_manager.ra
+                    reg_with_const = self.register_manager.check_for_const(value)
+                    if reg_with_const is not None and reg_with_const.name != 'ra':
+                        self.__set_mar_abs(address)
+                        self.__store_with_current_mar_abs(address, reg_with_const)
+                        return self.__get_assembly_lines_len()
+                    self.__set_mar_abs(address)
+                    self.__set_ra_const(value)
+                    self.__store_with_current_mar_abs(address, ra)
+                    return self.__get_assembly_lines_len()
+                else:
+                    # RHS is variable: load into RD then store
+                    rhs_name = rhs.strip()
+                    if not self.var_manager.check_variable_exists(rhs_name):
+                        raise NotImplementedError("Array assignment RHS must be const or existing byte variable.")
+                    rhs_var = self.var_manager.get_variable(rhs_name)
+                    self.__set_mar_abs(address)
+                    self.__set_reg_variable(self.register_manager.rd, rhs_var)
+                    self.__store_with_current_mar_abs(address, self.register_manager.rd)
+                    return self.__get_assembly_lines_len()
+
+            # Dynamic index path (low-page arrays without overflow): idx is a byte variable
+            idx_name = idx_expr.strip()
+            if not self.var_manager.check_variable_exists(idx_name):
+                raise NotImplementedError("Array index must be a constant or an existing byte variable.")
+            idx_var = self.var_manager.get_variable(idx_name)
+
+            # Only support arrays fully within low page [0x00:0xFF] for now
+            base_low = var.get_low_address()
+            base_high = var.get_high_address()
+            arr_span_ok = (base_high == 0) and (base_low + var.size - 1 <= 0xFF)
+            if not arr_span_ok:
+                raise NotImplementedError("Dynamic index supported only for arrays fully in low page without overflow.")
+
+            rd = self.register_manager.rd
+            ra = self.register_manager.ra
+
+            # RD <- index value (loads from memory; MARL may be changed inside)
+            self.__set_reg_variable(rd, idx_var)
+            # RA <- base_low constant
+            self.__set_ra_const(base_low)
+            # ACC <- RD + RA ; MARL <- ACC
+            self.__add_reg(ra)
+            self.__add_assembly_line("mov marl, acc")
+            # Invalidate MARL cache since it's now a computed address, not bound to any variable
+            try:
+                self.register_manager.marl.set_unknown_mode()
+            except Exception:
+                pass
+
+            # RHS
+            rhs = command.new_value.strip()
             if rhs.isdigit():
                 value = int(rhs)
-                ra = self.register_manager.ra
-                reg_with_const = self.register_manager.check_for_const(value)
-                if reg_with_const is not None and reg_with_const.name != 'ra':
-                    # set MAR abs then store
-                    self.__set_mar_abs(address)
-                    self.__store_with_current_mar_abs(address, reg_with_const)
-                    return self.__get_assembly_lines_len()
-                # load const into RA then store
-                self.__set_mar_abs(address)
                 self.__set_ra_const(value)
-                self.__store_with_current_mar_abs(address, ra)
+                self.__add_assembly_line("strl ra")
                 return self.__get_assembly_lines_len()
             else:
-                raise NotImplementedError("Array assignment only supports constant RHS for now.")
+                if not self.var_manager.check_variable_exists(rhs):
+                    raise NotImplementedError("Array assignment RHS must be const or existing byte variable.")
+                # Save computed low address in RD, load RHS to RA (will disturb MAR), then restore MARL, then STRL RA
+                self.__add_assembly_line("mov rd, acc")
+                self.register_manager.rd.set_mode(RegisterMode.CONST, None)  # mark unknown content typewise
+                rhs_var = self.var_manager.get_variable(rhs)
+                self.__set_reg_variable(ra, rhs_var)
+                self.__add_assembly_line("mov marl, rd")
+                # Invalidate MARL cache after restoring from RD (dynamic address)
+                try:
+                    self.register_manager.marl.set_unknown_mode()
+                except Exception:
+                    pass
+                self.__add_assembly_line("strl ra")
+                return self.__get_assembly_lines_len()
 
         if type(var) == VarTypes.BYTE.value:  
             ra = self.register_manager.ra
@@ -668,9 +735,13 @@ class Compiler:
                 # Check if ACC contains the correct expression
                 if (acc.mode == RegisterMode.TEMPVAR and 
                     acc.get_expression() == normalized_expression):
-                    # Store ACC to the variable
-                    self.__add_assembly_line("strl acc")
-                    self.__get_assembly_lines_len()
+                    # Store ACC to the variable: set MAR explicitly, then STRL/STRH
+                    self.__set_mar(var)
+                    if var.address <= MAX_LOW_ADDRESS:
+                        self.__add_assembly_line("strl acc")
+                    else:
+                        self.__add_assembly_line("strh acc")
+                    return self.__get_assembly_lines_len()
                 else:
                     raise RuntimeError(f"ACC does not contain expected expression: {normalized_expression}")
             

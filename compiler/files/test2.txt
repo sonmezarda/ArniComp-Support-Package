@@ -1,7 +1,8 @@
-byte[5] arr;
+byte i = 0;
+byte[3] arr;
 
-arr[0] = 1;
-
-arr[2] = 2;
-
-arr[4] = 3;  
+arr[i] = 9;
+i = i+1;
+arr[i] = 8;
+i=i+1;
+arr[i] = 7;
