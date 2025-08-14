@@ -213,6 +213,30 @@ class ElseStatement(Statement):
     def __init__(self):
         super().__init__()
 
+class WhileClause(GroupObject):
+    def __init__(self, condition: str):
+        self.condition: Condition = Condition(condition)
+        self.lines: list[str | GroupObject] = []
+
+    def add_line(self, line: str | GroupObject) -> None:
+        self.lines.append(line)
+
+    def get_lines(self) -> list[str | GroupObject]:
+        return self.lines
+
+    def apply_to_all_lines(self, func: callable) -> None:
+        processed: list = []
+        for line in self.lines:
+            if isinstance(line, IfElseClause) or isinstance(line, WhileClause):
+                line.apply_to_all_lines(func)
+                processed.append(line)
+            elif isinstance(line, str):
+                cmds = func([line])
+                processed.extend(cmds)
+            else:
+                processed.append(line)
+        self.lines = processed
+
 class ConditionTypes(StrEnum):
     EQUAL = "=="
     NOT_EQUAL = "!="

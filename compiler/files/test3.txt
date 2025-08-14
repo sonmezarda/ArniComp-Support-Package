@@ -1,1 +1,12 @@
 
+byte i; 
+byte[5] arr; 
+i = 0; 
+while i < 5; 
+    if i == 3:
+        arr[i] = 2;
+    else 
+        arr[i] = 3;
+    endif
+    i = i+1;
+endwhile

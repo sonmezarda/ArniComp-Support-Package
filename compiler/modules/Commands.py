@@ -1,6 +1,6 @@
 from enum import StrEnum, auto
 from VariableManager import VarTypes, Variable, ByteVariable, VarManager
-from ConditionHelper import IfElseClause, GroupObject, Condition
+from ConditionHelper import IfElseClause, GroupObject, Condition, WhileClause
 import re
 
 IDENT = r'[A-Za-z_][A-Za-z0-9_]*'
@@ -11,6 +11,7 @@ class CommandTypes(StrEnum):
     VARDEF = auto()
     VARDEFWV = auto()
     IF = auto()
+    WHILE = auto()
     FREE = auto()
 
 def types_pattern():
@@ -169,6 +170,21 @@ class AssignCommand(Command):
             self.is_array = False
             return
         raise ValueError(f"Invalid assignment command: {self.line}")
+
+class WhileCommand(Command):
+    REGEX = r'^while\s+(.+)$'
+    TYPE = CommandTypes.WHILE
+
+    def __init__(self, line: str):
+        super().__init__(CommandTypes.WHILE, line)
+        self.condition_str: str = ''
+        self.parse_params()
+
+    def parse_params(self):
+        m = re.match(self.REGEX, self.line)
+        if not m:
+            raise ValueError(f"Invalid while command: {self.line}")
+        self.condition_str = m.group(1).strip()
 
 
 if __name__ == "__main__":

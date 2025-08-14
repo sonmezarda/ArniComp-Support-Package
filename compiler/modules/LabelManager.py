@@ -3,6 +3,7 @@ class LabelManager:
         self.labels = {}
         self.current_if_count = 0
         self.current_else_count = 0
+        self.current_while_count = 0
         self.labelcount = 0
 
     def add_label(self, name: str, current_assembly_length: int):
@@ -15,10 +16,11 @@ class LabelManager:
     def is_label_defined(self, name: str) -> bool:
         print(f"Checking if label '{name}' is defined: {'Yes' if name in self.labels else 'No'}")
         return name in self.labels.keys()
-    
+
     def remove_label(self, name: str):
         if name in self.labels:
             del self.labels[name]
+
     def update_label_position(self, name: str, current_assembly_length: int):
         if name in self.labels:
             self.labels[name] = current_assembly_length - self.labelcount
@@ -33,9 +35,20 @@ class LabelManager:
         label_name = f"if_{self.current_if_count}"
         self.add_label(label_name, current_assembly_length)
         return label_name, self.labels[label_name]
-    
+
     def create_else_label(self, current_assembly_length: int) -> tuple[str, int]:
         self.current_else_count += 1
         label_name = f"else_{self.current_else_count}"
+        self.add_label(label_name, current_assembly_length)
+        return label_name, self.labels[label_name]
+
+    def create_while_start_label(self, current_assembly_length: int) -> tuple[str, int]:
+        self.current_while_count += 1
+        label_name = f"while_start_{self.current_while_count}"
+        self.add_label(label_name, current_assembly_length)
+        return label_name, self.labels[label_name]
+
+    def create_while_end_label(self, current_assembly_length: int) -> tuple[str, int]:
+        label_name = f"while_end_{self.current_while_count}"
         self.add_label(label_name, current_assembly_length)
         return label_name, self.labels[label_name]

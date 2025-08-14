@@ -5,7 +5,7 @@ from VariableManager import VarTypes, Variable, ByteVariable, VarManager
 from StackManager import StackManager
 from LabelManager import LabelManager
 from RegisterManager import RegisterManager, RegisterMode, Register, TempVarMode
-from ConditionHelper import IfElseClause, Condition
+from ConditionHelper import IfElseClause, Condition, WhileClause
 import CompilerStaticMethods as CompilerStaticMethods
 import re
 
@@ -101,6 +101,8 @@ class Compiler:
                 self.__free_variable(command)
             elif type(command) is Command and command.command_type == CommandTypes.IF:
                 self.__handle_if_else(command)
+            elif type(command) is Command and command.command_type == CommandTypes.WHILE:
+                self.__handle_while(command)
             elif type(command) is IfElseClause:
                 # Nested if-else clause'ları da işle
                 self.__handle_if_else(Command(CommandTypes.IF, command))
@@ -905,6 +907,42 @@ class Compiler:
             raise NotImplementedError("If-Else chains with 'elif' or 'else' are not implemented yet.")
         pass
 
+    def __handle_while(self, command: Command) -> int:
+        if not isinstance(command.line, WhileClause):
+            raise ValueError("Command line must be a WhileClause instance.")
+        while_clause: WhileClause = command.line
+
+        # Create labels for loop start and exit using LabelManager helpers
+        start_label_name, _ = self.label_manager.create_while_start_label(self.__get_assembly_lines_len())
+        self.__add_assembly_line(f"{start_label_name}:")
+
+        # Evaluate condition and jump to end if false
+        self.__compile_condition(while_clause.condition)
+
+        # Compile body in a context to measure length
+        body_comp = self.create_context_compiler()
+        body_comp.grouped_lines = while_clause.get_lines()
+        body_comp.compile_lines()
+        body_len = body_comp.__get_assembly_lines_len()
+
+        # Create end label and set PRL to it for conditional jump
+        end_label, _ = self.label_manager.create_while_end_label(self.__get_assembly_lines_len() + body_len + 3)
+        self.__set_prl_as_label(end_label, self.label_manager.get_label(end_label))
+        self.__add_assembly_line(CompilerStaticMethods.get_inverted_jump_str(while_clause.condition.type))
+
+        # Emit body
+        self.__add_assembly_line(body_comp.assembly_lines)
+        self.register_manager.set_changed_registers_as_unknown()
+
+        # Jump back to start
+        self.__set_prl_as_label(start_label_name, self.label_manager.get_label(start_label_name))
+        self.__add_assembly_line("jmp")
+
+        # Place end label at current position
+        self.label_manager.update_label_position(end_label, self.__get_assembly_lines_len())
+        self.__add_assembly_line(f"{end_label}:")
+        return self.__get_assembly_lines_len()
+
     def __set_prl_as_label(self, label_name:str, label_position:int) -> int:
         if label_position + 2 > 0b1111111:
             raise NotImplementedError("Label position over 7 bits is not supported yet.")
@@ -1111,6 +1149,46 @@ class Compiler:
                 print(f"Processed if-else clause: {if_clause}")
                 grouped_lines.append(Command(CommandTypes.IF, if_clause))
 
+            elif line.startswith('while '):
+                print(f"'{line}' starts a while clause")
+                # Collect until matching 'endwhile'
+                nested = 0
+                group = []
+                header = line
+                group.append(header)
+                lindex += 1
+                while lindex < len(lines):
+                    cur = lines[lindex]
+                    if cur.startswith('while '):
+                        nested += 1
+                    elif cur.startswith('endwhile'):
+                        if nested == 0:
+                            break
+                        nested -= 1
+                    group.append(cur)
+                    lindex += 1
+                if lindex >= len(lines) or not lines[lindex].startswith('endwhile'):
+                    raise ValueError("Missing 'endwhile' for while loop")
+                # Parse into WhileClause
+                cond = header[len('while '):].strip()
+                wc = WhileClause(cond)
+                # Body is group[1:]
+                body = group[1:]
+                for body_line in body:
+                    if body_line.startswith('if '):
+                        nested_grouped = IfElseClause.group_nested_if_else([*body])
+                        if_clause = IfElseClause.parse_from_lines(nested_grouped)
+                        if_clause.apply_to_all_lines(lambda ls: Compiler.__group_line_commands(ls) if isinstance(ls, list) else Compiler.__group_line_commands([ls]))
+                        wc.add_line(if_clause)
+                        break
+                    else:
+                        wc.add_line(body_line)
+                # Convert body strings into Command objects
+                wc.apply_to_all_lines(lambda ls: Compiler.__group_line_commands(ls) if isinstance(ls, list) else Compiler.__group_line_commands([ls]))
+                grouped_lines.append(Command(CommandTypes.WHILE, wc))
+                # Skip the 'endwhile'
+                lindex += 1
+
             elif line.startswith('endif'):
                 print(f"'{line}' is an endif, skipping")
                 lindex += 1
@@ -1180,7 +1258,7 @@ if __name__ == "__main__":
     compiler = create_default_compiler()
 
     
-    compiler.load_lines('files/test2.txt')
+    compiler.load_lines('files/test3.txt')
     compiler.break_commands()
     compiler.clean_lines()
     compiler.group_commands()
