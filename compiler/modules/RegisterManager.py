@@ -2,6 +2,12 @@ from __future__ import annotations
 from enum import IntEnum
 
 from VariableManager import Variable
+from typing import Optional
+try:
+    from RegTags import BaseTag, AbsAddrTag
+except Exception:
+    BaseTag = None  # type: ignore
+    AbsAddrTag = None  # type: ignore
 
 def is_number(self, value:str) -> bool:
         try:
@@ -27,13 +33,15 @@ class TempVarMode(IntEnum):
     VAR_CONST_SUB=3
     
 class Register:
-    def __init__(self, name:str, Variable:Variable=None, mode:RegisterMode = RegisterMode.VALUE, value:int = None, manager:RegisterManager=None):
+    def __init__(self, name:str, Variable:Variable=None, mode:RegisterMode = RegisterMode.VALUE, value:int = None, manager:'RegisterManager'=None):
         self.name = name
         self.variable = Variable
         self.mode = mode
         self.value = None
         self.special_expression = None
-        self.manager:RegisterManager = manager
+        self.manager = manager
+        # Address/identity tag for caching (symbolic/absolute)
+        self.tag = None
     
     def set_mode(self, mode:RegisterMode, value:int = None):
         self.mode = mode
@@ -42,6 +50,9 @@ class Register:
             if value is None:
                 raise ValueError("Value must be provided in CONST mode")
             self.value = value
+            # CONST is not an address; clear tag
+            if hasattr(self, 'tag'):
+                self.tag = None
         else:
             if value is not None:
                 raise ValueError("Value cannot be set in VALUE or ADDR mode")
@@ -53,6 +64,8 @@ class Register:
         self.variable = None
         self.value = None
         self.special_expression = None
+        if hasattr(self, 'tag'):
+            self.tag = None
         self.manager.add_changed_register(self)
         
     def set_label_mode(self, label_name:str):
@@ -63,6 +76,8 @@ class Register:
         self.value = label_name
         self.variable = None
         self.special_expression = None
+        if hasattr(self, 'tag'):
+            self.tag = None
         self.manager.add_changed_register(self)
 
     def set_temp_var_mode(self,  expression:str):
@@ -73,6 +88,8 @@ class Register:
         self.special_expression = expression
         self.variable= None
         self.value = None
+        if hasattr(self, 'tag'):
+            self.tag = None
         self.manager.add_changed_register(self)
         
     def get_expression(self) -> str:
@@ -90,6 +107,16 @@ class Register:
             self.mode = RegisterMode.CONST
         self.variable = variable
         self.mode = mode     
+        # If this register becomes an address holder, tag it with absolute address
+        if variable is not None and mode in [RegisterMode.ADDR, RegisterMode.ADDR_LOW, RegisterMode.ADDR_HIGH]:
+            try:
+                if AbsAddrTag is not None:
+                    self.tag = AbsAddrTag(variable.address)
+            except Exception:
+                pass
+        else:
+            if hasattr(self, 'tag'):
+                self.tag = None
         self.manager.add_changed_register(self)
   
     

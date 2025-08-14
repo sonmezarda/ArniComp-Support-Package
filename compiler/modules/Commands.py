@@ -137,22 +137,38 @@ class VarDefCommandWithoutValue(VarDefCommand):
         self.var_name = name
 
 class AssignCommand(Command):
-    REGEX = r'^(\w+)\s*=\s*(.+)'
+    # Supports: a = 5;  arr[1] = 5;  (pointer forms reserved for future)
+    # Keep a broad REGEX so group_commands can detect as assignment
+    REGEX = rf'^\s*(?:{IDENT})(?:\s*\[[^\]]+\])?\s*=\s*.+'
+    REGEX_VAR = rf'^\s*(?P<name>{IDENT})\s*=\s*(?P<rhs>.+)'
+    REGEX_ARRAY = rf'^\s*(?P<name>{IDENT})\s*\[\s*(?P<index>[^\]]+)\s*\]\s*=\s*(?P<rhs>.+)'
     TYPE = CommandTypes.ASSIGN
     
     def __init__(self, line:str):
         super().__init__(CommandTypes.ASSIGN, line)
         self.var_name:str = ""
         self.new_value:any = None
+        # extras
+        self.is_array: bool = False
+        self.index_expr: str | None = None
+        self.is_deref: bool = False  # reserved for future: *ptr = ...
         self.parse_params()
     
     def parse_params(self):
-        match = self.match_regex(self.line)
-        if match:
-            self.var_name = match.group(1)
-            self.new_value = match.group(2)
-        else:
-            raise ValueError(f"Invalid assignment command: {self.line}")
+        m_arr = re.match(self.REGEX_ARRAY, self.line)
+        if m_arr:
+            self.var_name = m_arr.group('name')
+            self.index_expr = m_arr.group('index').strip()
+            self.new_value = m_arr.group('rhs').strip()
+            self.is_array = True
+            return
+        m_var = re.match(self.REGEX_VAR, self.line)
+        if m_var:
+            self.var_name = m_var.group('name').strip()
+            self.new_value = m_var.group('rhs').strip()
+            self.is_array = False
+            return
+        raise ValueError(f"Invalid assignment command: {self.line}")
 
 
 if __name__ == "__main__":

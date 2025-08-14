@@ -1,1 +1,7 @@
-byte[5] a;
+byte[5] arr;
+
+arr[0] = 1;
+
+arr[2] = 2;
+
+arr[4] = 3;  

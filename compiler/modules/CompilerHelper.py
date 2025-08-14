@@ -10,6 +10,7 @@ import CompilerStaticMethods as CompilerStaticMethods
 import re
 
 from Commands import *
+from RegTags import AbsAddrTag, SymbolBaseTag, ElementTag
 
 MAX_LDI = 0b1111111  # Maximum value for LDI instruction (7 bits)
 MAX_LOW_ADDRESS = 0b11111111  # Maximum low address for LDI instruction (8 bits)
@@ -127,8 +128,13 @@ class Compiler:
         return self.__get_assembly_lines_len()
 
     def __create_var(self, command:VarDefCommandWithoutValue)-> int:
-        new_var:Variable = self.var_manager.create_variable(var_name=command.var_name, var_type=command.var_type, var_value=0)
-        self.__get_assembly_lines_len()
+        if command.var_type == VarTypes.BYTE_ARRAY:
+            if command.array_length is None:
+                raise ValueError("Array length must be specified for BYTE_ARRAY.")
+            new_var:Variable = self.var_manager.create_array_variable(var_name=command.var_name, var_type=command.var_type, array_len=command.array_length, var_value=[0]*command.array_length)
+        else:
+            new_var:Variable = self.var_manager.create_variable(var_name=command.var_name, var_type=command.var_type, var_value=0)
+        return self.__get_assembly_lines_len()
     
     def __free_variable(self, command:FreeCommand) -> int:
         if not self.var_manager.check_variable_exists(command.var_name):
@@ -152,6 +158,52 @@ class Compiler:
         else:
             self.__set_marl(var)
             self.__set_marh(var)
+        return self.__get_assembly_lines_len()
+
+    def __set_mar_abs(self, address: int) -> int:
+        """Set MAR to an absolute address (low/optional high). Keeps register cache tags."""
+        # small fast path: if MARL already holds this addr low
+        marl = self.register_manager.marl
+        marh = self.register_manager.marh
+        ra = self.register_manager.ra
+        low = address & 0xFF
+        high = (address >> 8) & 0xFF
+
+        # Reuse if possible
+        if marl.mode in [RegisterMode.ADDR, RegisterMode.ADDR_LOW] and marl.tag is not None and isinstance(marl.tag, AbsAddrTag):
+            if (marl.tag.addr & 0xFF) == low:
+                # ensure MARH matches when needed
+                if address > MAX_LOW_ADDRESS:
+                    if marh.mode == RegisterMode.ADDR_HIGH and marh.tag and isinstance(marh.tag, AbsAddrTag) and ((marh.tag.addr >> 8) & 0xFF) == high:
+                        return self.__get_assembly_lines_len()
+                else:
+                    return self.__get_assembly_lines_len()
+
+        # set MARL
+        if low <= MAX_LDI:
+            self.__add_assembly_line(f"ldi #{low}")
+            self.__add_assembly_line("mov marl, ra")
+            ra.set_mode(RegisterMode.CONST, low)
+        else:
+            self.__build_const_in_reg(low, marl)
+        # tag MARL
+        try:
+            marl.tag = AbsAddrTag(address)
+        except Exception:
+            pass
+
+        # set MARH if needed
+        if address > MAX_LOW_ADDRESS:
+            if high <= MAX_LDI:
+                self.__add_assembly_line(f"ldi #{high}")
+                self.__add_assembly_line("mov marh, ra")
+                ra.set_mode(RegisterMode.CONST, high)
+            else:
+                self.__build_const_in_reg(high, marh)
+            try:
+                marh.tag = AbsAddrTag(address)
+            except Exception:
+                pass
         return self.__get_assembly_lines_len()
     
     def __set_marh(self, var:Variable) -> int:
@@ -418,6 +470,13 @@ class Compiler:
             self.__add_assembly_line(f"strh {src.name}")
         return self.__get_assembly_lines_len()
 
+    def __store_with_current_mar_abs(self, address:int, src:Register) -> int:
+        if address <= MAX_LOW_ADDRESS:
+            self.__add_assembly_line(f"strl {src.name}")
+        else:
+            self.__add_assembly_line(f"strh {src.name}")
+        return self.__get_assembly_lines_len()
+
     # New helpers: MAR-aware load/store
     def __store_to_var(self, var: Variable, src: Register) -> int:
         """Store src register to memory at var, using strl/strh depending on address width."""
@@ -460,7 +519,8 @@ class Compiler:
         reg_with_const = self.register_manager.check_for_const(value)
 
         if reg_with_const is not None:
-            self.__add_assembly_line(f"mov ra, {reg_with_const.name}")
+            if reg_with_const.name != ra.name:
+                self.__add_assembly_line(f"mov ra, {reg_with_const.name}")
             ra.set_mode(RegisterMode.CONST, value)
             return self.__get_assembly_lines_len()
 
@@ -501,7 +561,8 @@ class Compiler:
         reg_with_const = self.register_manager.check_for_const(value)
 
         if reg_with_const is not None:
-            self.__add_assembly_line(f"mov {reg.name}, {reg_with_const.name}")
+            if reg_with_const.name != reg.name:
+                self.__add_assembly_line(f"mov {reg.name}, {reg_with_const.name}")
             reg.set_mode(RegisterMode.CONST, value)
             return self.__get_assembly_lines_len()
 
@@ -533,6 +594,42 @@ class Compiler:
         if var is None:
             raise ValueError(f"Cannot assign to undefined variable: {command.var_name}")
         
+        # Handle array element assignment: arr[idx] = value;
+        if command.is_array:
+            if not isinstance(var, Variable):
+                raise ValueError("Invalid variable for array assignment")
+            if type(var) != VarTypes.BYTE_ARRAY.value:
+                raise ValueError(f"Variable '{var.name}' is not an array.")
+
+            # Only constant index supported for now
+            idx_expr = command.index_expr
+            if idx_expr is None:
+                raise ValueError("Array index missing.")
+            if not idx_expr.isdigit():
+                raise NotImplementedError("Non-constant array index not supported yet.")
+            idx = int(idx_expr)
+            elem_size = VarTypes.BYTE_ARRAY.value.get_size()
+            address = var.address + idx * elem_size
+
+            # RHS: constant only (for now)
+            rhs = command.new_value
+            if rhs.isdigit():
+                value = int(rhs)
+                ra = self.register_manager.ra
+                reg_with_const = self.register_manager.check_for_const(value)
+                if reg_with_const is not None and reg_with_const.name != 'ra':
+                    # set MAR abs then store
+                    self.__set_mar_abs(address)
+                    self.__store_with_current_mar_abs(address, reg_with_const)
+                    return self.__get_assembly_lines_len()
+                # load const into RA then store
+                self.__set_mar_abs(address)
+                self.__set_ra_const(value)
+                self.__store_with_current_mar_abs(address, ra)
+                return self.__get_assembly_lines_len()
+            else:
+                raise NotImplementedError("Array assignment only supports constant RHS for now.")
+
         if type(var) == VarTypes.BYTE.value:  
             ra = self.register_manager.ra
             rd = self.register_manager.rd
