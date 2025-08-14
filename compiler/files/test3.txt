@@ -1,12 +1,11 @@
-
 byte i; 
 byte[5] arr; 
 i = 0; 
 while i < 5; 
     if i == 3:
-        arr[i] = 2;
+        arr[i] = 6;
     else 
-        arr[i] = 3;
+        arr[i] = 4;
     endif
     i = i+1;
 endwhile

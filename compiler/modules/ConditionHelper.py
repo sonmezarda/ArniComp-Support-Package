@@ -135,7 +135,7 @@ class IfElseClause(GroupObject):
                         nested = [header]
                         nested.extend(parse_block(iter_lines))
                         result.append(nested)
-                    elif line.startswith("elif ") or line == "else":
+                    elif line.startswith("elif ") or line == "else" or line == "else:":
                         result.append(line)
                     elif line == "endif":
                         return result
@@ -167,15 +167,19 @@ class IfElseClause(GroupObject):
 
                 if stripped.startswith("if "):
                     condition = stripped[3:].strip()
+                    if condition.endswith(":"):
+                        condition = condition[:-1].strip()
                     if clause.is_contains_if():
                         raise ValueError(f"Multiple top-level 'if' clauses detected! Already have: {clause.get_if().condition}, tried to add: {condition}")
                     current_branch = clause.add_if(condition)
 
                 elif stripped.startswith("elif "):
                     condition = stripped[5:].strip()
+                    if condition.endswith(":"):
+                        condition = condition[:-1].strip()
                     current_branch = clause.add_elif(condition)
 
-                elif stripped == "else":
+                elif stripped == "else" or stripped == "else:":
                     current_branch = clause.add_else()
 
                 else:

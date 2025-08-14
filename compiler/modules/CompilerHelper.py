@@ -1090,15 +1090,21 @@ class Compiler:
         left, right = condition.parts
         if not self.var_manager.check_variable_exists(left):
             raise ValueError(f"Left part of condition '{left}' is not a defined variable.")
-        
         left_var = self.var_manager.get_variable(left)
-        if self.is_number(right):
-            right_value = int(right)
-            self.__set_reg_const(rd, right_value)
-            self.__set_marl(left_var)
-            self.__add_assembly_line("sub ml")
 
-            
+        # Load RIGHT into RD
+        if self.is_number(right):
+            self.__set_reg_const(rd, int(right))
+        else:
+            if not self.var_manager.check_variable_exists(right):
+                raise ValueError(f"Right part of condition '{right}' is not a defined variable.")
+            right_var = self.var_manager.get_variable(right)
+            self.__set_reg_variable(rd, right_var)
+
+        # Compare RD (A) with ML (B) where ML is LEFT
+        self.__set_marl(left_var)
+        self.__add_assembly_line("sub ml")
+
         return self.__get_assembly_lines_len()
     
     @staticmethod
@@ -1172,19 +1178,10 @@ class Compiler:
                 # Parse into WhileClause
                 cond = header[len('while '):].strip()
                 wc = WhileClause(cond)
-                # Body is group[1:]
+                # Body is group[1:]; convert entire body into Commands, preserving nested if/else
                 body = group[1:]
-                for body_line in body:
-                    if body_line.startswith('if '):
-                        nested_grouped = IfElseClause.group_nested_if_else([*body])
-                        if_clause = IfElseClause.parse_from_lines(nested_grouped)
-                        if_clause.apply_to_all_lines(lambda ls: Compiler.__group_line_commands(ls) if isinstance(ls, list) else Compiler.__group_line_commands([ls]))
-                        wc.add_line(if_clause)
-                        break
-                    else:
-                        wc.add_line(body_line)
-                # Convert body strings into Command objects
-                wc.apply_to_all_lines(lambda ls: Compiler.__group_line_commands(ls) if isinstance(ls, list) else Compiler.__group_line_commands([ls]))
+                body_cmds = Compiler.__group_line_commands(body)
+                wc.lines = body_cmds
                 grouped_lines.append(Command(CommandTypes.WHILE, wc))
                 # Skip the 'endwhile'
                 lindex += 1
