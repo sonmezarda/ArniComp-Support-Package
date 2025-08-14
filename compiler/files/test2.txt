@@ -1,8 +1,6 @@
-byte i = 0;
 byte[3] arr;
 
-arr[i] = 9;
-i = i+1;
-arr[i] = 8;
-i=i+1;
-arr[i] = 7;
+arr[1] = 1;
+
+byte b;
+b = arr[1];

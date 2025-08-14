@@ -1,6 +1,41 @@
-elif - else
-while
-stack
-    directly pop push
-array
-function
+ArniComp Yol Haritası / Checklist
+
+[Tamamlananlar]
+- Dizi elemanı atama: sabit indeks (arr[1] = v) ve dinamik indeks (arr[i] = v) low-page, taşma yok.
+- İfade atamaları: ACC ile hesapla ve MAR doğru ayarlanarak değişkene yaz.
+- MAR tutarlılığı: dinamik adres yazımlarından sonra cache invalidation eklendi.
+
+[Eksikler / Yapılacaklar]
+Dil/Sözdizimi ve Akış Kontrolü
+- elif/else desteğini tamamla (IfElseClause tam derleme yolu).
+- while/döngüler (break/continue opsiyonel).
+- Fonksiyon çağrıları ve geri dönüş (call/ret), basit çağrı sözleşmesi.
+- Stack API: push/pop direkt kullanımı; yerel değişken çerçevesi.
+- Karşılaştırma/mantıksal operatörlerin tam kümesi: ==, !=, <, <=, >, >=.
+- Sabit katlama ve küçük optimizasyonlar (ör. i = i + 1 desenleri).
+- Dizi başlatma sözdizimi: byte[3] a = [1,2,3].
+
+Dizi ve Pointer Özellikleri
+- Dizi okuma: x = arr[i] ve x = arr[CONST] (yükleme yolu).
+- Dinamik indeks için high-page taşıma: base_low + idx sonrası carry ile MARH güncelle.
+- Low-page sınır denetimi (opsiyonel güvenlik).
+- Pointer türü (byte*): &b, *p, p = 0x0010, *p = val; *(base + off) ifade tabanlı adresleme.
+
+Kayıt/Adres Önbelleği
+- RegTags genişletme: SymbolBaseTag/ElementTag kullanımına geçiş (adres kimliği için).
+- MAR yazımlarında tutarlılık testleri (mov marl, acc sonrası invalidation doğrulama).
+- Daha agresif ancak güvenli tekrar-kullanım (etiket eşitliğine göre).
+
+Kod Jenerasyonu ve Optimizasyon
+- Yükleme yardımcıları: __load_var_to_reg için arr[i] yolu.
+- Mikro optimizasyonlar: LDI dağıtımı, ADDI/SUBI maliyet modeli doğrulama.
+- OUT/IN talimatları için yüksek seviye sözdizimi (opsiyonel).
+
+Testler
+- Birim testleri: arr[i] okuma/yazma, i = i + 1 ardışık, karışık senaryolar.
+- High-page dizi senaryoları ve carry doğrulama.
+- Geriye dönük testler: mevcut örnekler + redundant move testi.
+
+Dokümantasyon ve Entegrasyon
+- arnicomp_details.txt güncel tut; örnekler ve README kullanım bölümü.
+- emulator_ui ile uçtan uca dizi/pointer demo (opsiyonel).

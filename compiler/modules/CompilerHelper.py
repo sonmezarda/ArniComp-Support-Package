@@ -485,6 +485,19 @@ class Compiler:
             self.__add_assembly_line(f"strh {src.name}")
         return self.__get_assembly_lines_len()
 
+    def __load_with_current_mar_abs(self, address:int, dst:Register) -> int:
+        """Load from absolute address already in MAR into dst register (chooses ldrl/ldrh)."""
+        if address <= MAX_LOW_ADDRESS:
+            self.__add_assembly_line(f"ldrl {dst.name}")
+        else:
+            self.__add_assembly_line(f"ldrh {dst.name}")
+        # Content doesn't map to a named variable; mark dst unknown to avoid stale bindings
+        try:
+            dst.set_unknown_mode()
+        except Exception:
+            pass
+        return self.__get_assembly_lines_len()
+
     # New helpers: MAR-aware load/store
     def __store_to_var(self, var: Variable, src: Register) -> int:
         """Store src register to memory at var, using strl/strh depending on address width."""
@@ -701,6 +714,53 @@ class Compiler:
             ra = self.register_manager.ra
             rd = self.register_manager.rd
             acc = self.register_manager.acc
+            # Array element read on RHS: b = arr[idx]
+            m = re.match(r'^([A-Za-z_][A-Za-z0-9_]*)\[(.+)\]$', command.new_value.strip())
+            if m:
+                arr_name, idx_expr = m.group(1), m.group(2).strip()
+                if not self.var_manager.check_variable_exists(arr_name):
+                    raise ValueError(f"Array '{arr_name}' is not defined.")
+                arr_var = self.var_manager.get_variable(arr_name)
+                if type(arr_var) != VarTypes.BYTE_ARRAY.value:
+                    raise ValueError(f"'{arr_name}' bir dizi değil.")
+
+                # Constant index: absolute address load
+                if idx_expr.isdigit():
+                    idx = int(idx_expr)
+                    elem_size = VarTypes.BYTE_ARRAY.value.get_size()
+                    address = arr_var.address + idx * elem_size
+                    self.__set_mar_abs(address)
+                    self.__load_with_current_mar_abs(address, rd)
+                    self.__store_to_var(var, rd)
+                    return self.__get_assembly_lines_len()
+
+                # Dynamic index: low-page arrays without overflow
+                if not self.var_manager.check_variable_exists(idx_expr):
+                    raise NotImplementedError("Dizi indeks değişkeni bulunamadı (sabit ya da tanımlı byte olmalı).")
+                idx_var = self.var_manager.get_variable(idx_expr)
+                base_low = arr_var.get_low_address()
+                base_high = arr_var.get_high_address()
+                arr_span_ok = (base_high == 0) and (base_low + arr_var.size - 1 <= 0xFF)
+                if not arr_span_ok:
+                    raise NotImplementedError("Dinamik indeks okuma şimdilik sadece low-page ve taşma yokken destekleniyor.")
+
+                # RD <- idx; RA <- base_low; ACC <- RD + RA; MARL <- ACC; invalidate cache
+                self.__set_reg_variable(rd, idx_var)
+                self.__set_ra_const(base_low)
+                self.__add_reg(ra)
+                self.__add_assembly_line("mov marl, acc")
+                try:
+                    self.register_manager.marl.set_unknown_mode()
+                except Exception:
+                    pass
+                # Load element and store to var
+                self.__add_assembly_line("ldrl rd")
+                try:
+                    self.register_manager.rd.set_unknown_mode()
+                except Exception:
+                    pass
+                self.__store_to_var(var, rd)
+                return self.__get_assembly_lines_len()
             
             # Check if new_value is a simple digit
             if command.new_value.isdigit():
