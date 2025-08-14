@@ -16,35 +16,37 @@ MAX_LDI = 0b1111111  # Maximum value for LDI instruction (7 bits)
 MAX_LOW_ADDRESS = 0b11111111  # Maximum low address for LDI instruction (8 bits)
 
 class Compiler:
-    def __init__(self, comment_char:str, variable_start_addr:int = 0x0000, 
-                 variable_end_addr:int = 0x0100, 
-                 stack_start_addr:int=0x0100, 
-                 stack_size:int = 256,
-                 memory_size:int = 65536):
-        
+    def __init__(self, comment_char: str, variable_start_addr: int = 0x0000,
+                 variable_end_addr: int = 0x0100,
+                 stack_start_addr: int = 0x0100,
+                 stack_size: int = 256,
+                 memory_size: int = 65536):
         self.comment_char = comment_char
         self.variable_start_addr = variable_start_addr
         self.variable_end_addr = variable_end_addr
         self.stack_start_addr = stack_start_addr
         self.stack_size = stack_size
         self.memory_size = memory_size
-        self.assembly_lines:list[str] = []
+        self.assembly_lines = []
 
         if stack_size != 256:
             raise ValueError("Stack size must be 256 bytes.")
-        
-        self.comment_char = comment_char
+
         self.var_manager = VarManager(variable_start_addr, variable_end_addr, memory_size)
         self.register_manager = RegisterManager()
         self.stack_manager = StackManager(stack_start_addr, memory_size)
         self.label_manager = LabelManager()
-        self.lines:list[str] = []
+        self.lines = []
+        # Simple object-like macro defines: {name: replacement}
+        self.defines = {}
 
     def load_lines(self, filename:str) -> None:
         with open(filename, 'r') as file:
             self.lines = file.readlines()
     
     def break_commands(self) -> None:
+        # Run preprocessor to handle #def before tokenizing
+        self.__preprocess_lines()
         self.lines = [line.split(';')[0].strip() for line in self.lines if line.strip() and not line.startswith(self.comment_char)]
 
     def clean_lines(self) -> None:
@@ -1210,16 +1212,61 @@ class Compiler:
         new_compiler.stack_manager = self.stack_manager
         new_compiler.label_manager = self.label_manager
         new_compiler.assembly_lines = []
+        new_compiler.defines = self.defines.copy()
         return new_compiler
     
-    def directly_compile_lines(self, lines:list[str]) -> list[str]:
+    def directly_compile_lines(self, lines: list[str]) -> list[str]:
         """Directly compile a list of lines without grouping or pre-processing."""
         self.lines = lines
         self.break_commands()
         self.clean_lines()
         self.group_commands()
         self.compile_lines()
-        return self.pre_assembly_lines
+        return self.assembly_lines
+
+    def __preprocess_lines(self) -> None:
+        """Process #def directives and apply object-like macro replacements to self.lines."""
+        if not self.lines:
+            return
+        raw_lines = self.lines
+        defs: dict[str, str] = {}
+        kept: list[str] = []
+        def_re = re.compile(r'^\s*#def\s+([A-Za-z_][A-Za-z0-9_]*)\s+(.+?)\s*$')
+        for ln in raw_lines:
+            s = ln.strip()
+            if not s or s.startswith(self.comment_char):
+                kept.append(ln)
+                continue
+            m = def_re.match(ln)
+            if m:
+                name = m.group(1)
+                repl = m.group(2)
+                defs[name] = repl
+            else:
+                kept.append(ln)
+        if defs:
+            self.defines.update(defs)
+        if not self.defines:
+            self.lines = kept
+            return
+        # Build per-name regexes for whole-identifier replacement
+        patterns = {name: re.compile(rf'(?<![A-Za-z0-9_]){re.escape(name)}(?![A-Za-z0-9_])') for name in self.defines}
+        def apply_defs(s: str) -> str:
+            out = s
+            # Limit nested expansion to avoid infinite loops
+            for _ in range(5):
+                changed = False
+                for name, pat in patterns.items():
+                    new_out = pat.sub(self.defines[name], out)
+                    if new_out != out:
+                        changed = True
+                        out = new_out
+                if not changed:
+                    break
+            return out
+        self.lines = [apply_defs(ln) for ln in kept]
+
+    
 
     def __add_assembly_line(self, lines:str|list[str]) -> int:
 

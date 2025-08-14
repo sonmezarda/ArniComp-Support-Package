@@ -1,7 +1,9 @@
+#def arr_len 5
+
 byte i; 
-byte[5] arr; 
+byte[arr_len] arr; 
 i = 0; 
-while i < 5; 
+while i < arr_len; 
     if i == 3:
         arr[i] = 6;
     else 
