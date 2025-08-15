@@ -27,7 +27,7 @@
 			"patterns": [
 				{
 					"name": "keyword.control.arnicomp",
-					"match": "\\b(if|elif|else|endif|while|endwhile|break|continue)\\b"
+					"match": "\\b(if|elif|else|endif|while|endwhile|dasm|endasm|break|continue)\\b"
 				}
 			]
 		},
