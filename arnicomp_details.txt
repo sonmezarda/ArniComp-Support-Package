@@ -1,0 +1,124 @@
+ArniComp CPU Architecture and Instruction Set Reference
+
+Version: 1.0 (2025-08-14)
+
+1. Overview
+- Data path: 8-bit.
+- Address bus: 16-bit (split over MARH:MARL). Two memory addressing modes:
+  - Low mode (ML): address = 0x00:marl, STRL/LDRL operate here.
+  - High mode (MH): address = marh:marl, STRH/LDRH operate here.
+- Harvard-like separation : program_memory (EEPROM) and data_memory (RAM), each 64 KiB.
+- Registers (all 8-bit): RA, RD, ACC, MARL, MARH, PRL, PRH.
+- Program counter (PC) is (PRH<<8)|PRL in emulator; JMP-family use PRH:PRL.
+- Comparator/flags: hardware comparator compares ALU inputs (A vs B) on ADD/SUB/ADDI/SUBI setup paths and updates flags: EQ, LT, GT (unsigned semantics in emulator).
+
+2. Register roles
+- RA: general purpose; also used by LDI destination, and OUT uses RA as output address bus.
+- RD: ALU left input latch. ALU computes using RD as one operand.
+- ACC: ALU result register.
+- MARL/MARH: memory address registers; together form 16-bit address when in high mode.
+- PRL/PRH: program counter low/high; jumps read combined value.
+
+3. Memory access semantics
+- Two modes controlled implicitly by instruction form:
+  - LDRL/STRL: memory_mode_high = False; address = MARL (0x00:marl).
+  - LDRH/STRH: memory_mode_high = True; address = (MARH<<8)|MARL.
+- Writing to ML/MH via MOV behaves as memory write:
+  - MOV ML, src  => write src to data_memory at address=MARL (low mode).
+  - MOV MH, src  => write src at address=(MARH<<8)|MARL (high mode).
+- Reading ML/MH via MOV behaves as memory read:
+  - MOV dest, ML => read from low mode to dest.
+  - MOV dest, MH => read from high mode to dest.
+
+4. Instruction encoding (from config/config.json)
+- 8-bit instruction word. If bit7 (IM7) == 1 => LDI immediate, lower 7 bits is immediate to RA.
+- Otherwise, split: opcode = bits[6:3] (4 bits), argcode = bits[2:0] (3 bits).
+- MOV is a two-register instruction: opcode encodes source register (in_reg), argcode encodes destination register (out_reg). Other instructions use constant opcode and various argcode types.
+
+5. Supported instructions (mnemonics)
+- LDI #imm7        ; RA <- imm7 (0..127)
+- MOV dst, src     ; move src register or ML/MH read to dst; MOV ML/MH, src writes memory
+- LDRL dst         ; dst <- [0x00:marl]
+- LDRH dst         ; dst <- [marh:marl]
+- STRL src         ; [0x00:marl] <- src
+- STRH src         ; [marh:marl] <- src
+- ADD src          ; ACC <- RD + src; flags from RD vs src
+- SUB src          ; ACC <- ACC - src; flags from RD vs src (comparator compares RD vs src)
+- ADDI #imm3       ; ACC <- RD + imm3 (0..7); flags from RD vs imm3
+- SUBI #imm3       ; ACC <- RD - imm3 (0..7); flags from RD vs imm3
+- JMP              ; PC <- PRH:PRL
+- JEQ/JNE/JLT/JGT/JLE/JGE ; conditional jumps based on flags, PC <- PRH:PRL if condition true
+- OUT src          ; output data <- src; output address bus driven by RA
+- IN dst           ; dst <- input (currently 0 in emulator placeholder)
+
+6. ALU and flag model
+- ALU ops available: ADD, SUB, ADDI, SUBI.
+- ADD/SUB read one operand from RD and the other from a register or immediate.
+- Result goes to ACC only; to use as a normal register, explicitly MOV ACC to a target.
+- Flags (EQ, LT, GT) updated via a hardware comparator comparing (RD vs source/immediate) on relevant ops.
+  - Emulator uses unsigned comparisons: EQ=(a==b), LT=(a>b), GT=(a<b) with a=RD, b=source.
+
+7. Addressing patterns in codegen (compiler conventions)
+- Constants: prefer LDI #imm7 into RA if <= 127; otherwise build value via sequences using ADD/ADDI/SUBI as implemented.
+- Setting MAR:
+  - For low addresses (addr <= 0xFF): LDI #low; MOV MARL, RA.
+  - For high addresses: set MARL first, then set MARH similarly. Compiler uses "low-first, then high".
+- Load/store using MAR:
+  - If address fits low range: use STRL/LDRL, else STRH/LDRH.
+- Register cache & tags:
+  - Each register tracks mode (VALUE/ADDR/CONST/...) plus a lightweight address tag (AbsAddrTag) when it holds an address. This enables skipping redundant MAR updates and MOVs.
+
+8. Typical idioms
+- Write constant to variable at address A (low range):
+  - LDI #A_low; MOV MARL, RA; LDI #val; STRL RA
+- Write constant to address A (full 16-bit):
+  - LDI #A_low; MOV MARL, RA; LDI #A_high; MOV MARH, RA; LDI #val; STRH RA
+- Read var at current MAR (low or high mode decided by address range used):
+  - LDRL dst  or  LDRH dst
+- Copy varX to varY (low range example):
+  - Set MAR to varX; LDRL RD; Set MAR to varY; STRL RD
+
+9. Arrays and pointers (compiler design hints)
+- Byte array: base at Var.address, element size = 1. Element i address = base + i.
+- Compiler currently supports arr[const] = const fast path by computing absolute address and doing STRL/STRH with minimal MAR writes.
+- Planned pointer type (PTR16): store low/high bytes of a 16-bit address in two consecutive bytes; dereference sequence:
+  - Load pointer low/high into RA and MOV to MARL/MARH accordingly, then STRL/STRH/LD*.
+- Expression-based addressing (arr[i]): build MAR from base + i (scale=1), using ADD/ADDI path or direct MOV ML/MH when available.
+
+10. Encoder/decoder mapping (from config)
+- opcode_types.in_reg map (source register encoding in opcode high nibble): RA=1000, RD=1001, ML=1010, MH=1011, PRL=1100, PRH=1101, MARL=1110, P=1111, MARH=0001.
+- argcode_types.out_reg map (destination register encoding in low 3 bits): RA=000, RD=001, ML=010, MH=011, PCL=100, PCH=101, ACC=110, P=111.
+- Conditional jumps share opcode 0010 with different argcode constants.
+
+11. Assembler syntax cheatsheet
+- Immediate: `#N` (LDI, ADDI, SUBI). LDI only supports 7-bit (0..127).
+- Memory low/high: `ldrl reg`, `ldrh reg`, `strl reg`, `strh reg`.
+- MOV two-operand: `mov dest, src`; supports registers and ML/MH aliases for memory access.
+- Arithmetic: `add reg`, `sub reg`, `addi #n`, `subi #n`.
+- Branching: `jmp`, `jeq`, `jne`, `jlt`, `jgt`, `jle`, `jge`.
+- Labels and constants are configured in config.json (comment ';', label ':').
+
+12. Subtleties and caveats
+- LDI writes only RA.
+- ADD uses RD + source, SUB uses ACC - source; ensure RD/ACC prepared accordingly.
+- When writing ML/MH via MOV, emulator switches memory mode to low/high respectively.
+- OUT uses RA as output address; set RA before OUT.
+- Jumps read PRH:PRL directly; ensure PRL/PRH loaded before jump.
+
+13. Example sequences
+- Sum bytes at A and B into ACC, store to C (low-range addresses):
+  - LDI #A; MOV MARL, RA; LDRL RD
+  - LDI #B; MOV MARL, RA; ADD ML     ; ACC <- RD + ML
+  - LDI #C; MOV MARL, RA; STRL ACC
+- Copy array[2] to array[4] (byte array base at BASE):
+  - LDI #BASE+2; MOV MARL, RA; LDRL RD
+  - LDI #BASE+4; MOV MARL, RA; STRL RD
+
+14. Emulator behaviour references
+- See `emulator/cpu.py` for flag updates, MOV side effects to ML/MH, memory mode switching, and instruction decoding details.
+- See `config/config.json` for exact opcode/argcode layouts.
+
+15. Compiler policies (current state)
+- Uses a register cache with tags to avoid redundant address/const setups.
+- Builds constants >127 via optimal sequences (LDI+ADDI, two-LDI add, or 254-sub strategy).
+- Array element store fast path implemented: constant index and RHS. Future: dynamic index and pointer support.

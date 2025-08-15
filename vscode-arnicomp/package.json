@@ -1,0 +1,26 @@
+{
+	"name": "arnicomp-language",
+	"displayName": "ArniComp Language Support",
+	"description": "Syntax highlighting for the ArniComp high-level language",
+	"version": "0.0.1",
+	"publisher": "local",
+	"engines": { "vscode": "^1.80.0" },
+	"categories": ["Programming Languages"],
+	"contributes": {
+		"languages": [
+			{
+				"id": "arnicomp",
+				"aliases": ["ArniComp", "arnicomp"],
+				"extensions": [".arn"],
+				"configuration": "./language-configuration.json"
+			}
+		],
+		"grammars": [
+			{
+				"language": "arnicomp",
+				"scopeName": "source.arnicomp",
+				"path": "./syntaxes/arnicomp.tmLanguage.json"
+			}
+		]
+	}
+}

@@ -1,0 +1,68 @@
+{
+	"scopeName": "source.arnicomp",
+	"patterns": [
+		{ "include": "#comments" },
+		{ "include": "#preprocessor" },
+		{ "include": "#keywords" },
+		{ "include": "#types" },
+		{ "include": "#numbers" },
+		{ "include": "#operators" },
+		{ "include": "#identifiers" }
+	],
+	"repository": {
+		"comments": {
+			"patterns": [
+				{ "name": "comment.line.double-slash.arnicomp", "match": "//.*$" }
+			]
+		},
+		"preprocessor": {
+			"patterns": [
+				{
+					"name": "meta.preprocessor.define.arnicomp",
+					"match": "^\\s*#def\\s+[A-Za-z_][A-Za-z0-9_]*\\b"
+				}
+			]
+		},
+		"keywords": {
+			"patterns": [
+				{
+					"name": "keyword.control.arnicomp",
+					"match": "\\b(if|elif|else|endif|while|endwhile|break|continue)\\b"
+				}
+			]
+		},
+		"types": {
+			"patterns": [
+				{
+					"name": "storage.type.arnicomp",
+					"match": "\\bbyte\\b(?:\\s*\\[\\s*\\d+\\s*\\])?"
+				}
+			]
+		},
+		"numbers": {
+			"patterns": [
+				{ "name": "constant.numeric.hex.arnicomp", "match": "\\b0x[0-9A-Fa-f]+\\b" },
+				{ "name": "constant.numeric.decimal.arnicomp", "match": "\\b\\d+\\b" }
+			]
+		},
+		"operators": {
+			"patterns": [
+				{ "name": "keyword.operator.assignment.arnicomp", "match": "=" },
+				{ "name": "keyword.operator.arithmetic.arnicomp", "match": "\\+|-" },
+				{ "name": "punctuation.section.brackets.arnicomp", "match": "\\[|\\]" },
+				{ "name": "punctuation.terminator.statement.arnicomp", "match": ";" },
+				{ "name": "punctuation.separator.arnicomp", "match": "," },
+				{ "name": "punctuation.section.group.arnicomp", "match": "\\(|\\)" },
+				{ "name": "punctuation.section.block.arnicomp", "match": "\\{|\\}" }
+			]
+		},
+		"identifiers": {
+			"patterns": [
+				{
+					"name": "variable.other.arnicomp",
+					"match": "\\b[A-Za-z_][A-Za-z0-9_]*\\b"
+				}
+			]
+		}
+	}
+}
