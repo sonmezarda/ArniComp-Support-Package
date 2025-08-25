@@ -5,7 +5,7 @@ from VariableManager import VarTypes, Variable, ByteVariable, VarManager
 from StackManager import StackManager
 from LabelManager import LabelManager
 from RegisterManager import RegisterManager, RegisterMode, Register, TempVarMode
-from ConditionHelper import IfElseClause, Condition, WhileClause
+from ConditionHelper import IfElseClause, Condition, WhileClause, DirectAssemblyClause
 import CompilerStaticMethods as CompilerStaticMethods
 import re
 
@@ -105,12 +105,20 @@ class Compiler:
                 self.__handle_if_else(command)
             elif type(command) is Command and command.command_type == CommandTypes.WHILE:
                 self.__handle_while(command)
+            elif type(command) is DirectAssemblyCommand:
+                self.__handle_direct_assembly(command)
             elif type(command) is IfElseClause:
                 # Nested if-else clause'ları da işle
                 self.__handle_if_else(Command(CommandTypes.IF, command))
             else:
                 raise ValueError(f"Unsupported command type: {type(command)} - {command}")
         return self.assembly_lines
+
+    def __handle_direct_assembly(self, command:DirectAssemblyCommand):
+        for line in command.assembly_lines:
+            self.__add_assembly_line(line)
+        print(f"[X] !! Direct assembly line command register change detection not added yet!!")
+        return self.__get_assembly_lines_len()
 
     def __create_var_with_value(self, command:VarDefCommand) -> int:
         new_var = self.var_manager.create_variable(
@@ -1134,6 +1142,18 @@ class Compiler:
                 print(f"'{line}' matches FreeCommand regex")
                 grouped_lines.append(FreeCommand(line))
                 lindex += 1
+            elif line.startswith('dasm'):
+                print(f"{line} starts a direct assembly block")
+                group = []
+                while lindex < len(lines):
+                    lindex += 1
+                    if lines[lindex].startswith('endasm'):
+                        break
+                    group.append(lines[lindex])
+                    
+                lindex += 1
+                grouped_lines.append(DirectAssemblyCommand(DirectAssemblyClause.parse_from_lines(group)))
+            
             elif line.startswith('if '):
                 print(f"'{line}' starts an if clause")
                 nested_count = 0
@@ -1225,13 +1245,13 @@ class Compiler:
         return self.assembly_lines
 
     def __preprocess_lines(self) -> None:
-        """Process #def directives and apply object-like macro replacements to self.lines."""
+        """Process #define directives and apply object-like macro replacements to self.lines."""
         if not self.lines:
             return
         raw_lines = self.lines
         defs: dict[str, str] = {}
         kept: list[str] = []
-        def_re = re.compile(r'^\s*#def\s+([A-Za-z_][A-Za-z0-9_]*)\s+(.+?)\s*$')
+        def_re = re.compile(r'^\s*#define\s+([A-Za-z_][A-Za-z0-9_]*)\s+(.+?)\s*$')
         for ln in raw_lines:
             s = ln.strip()
             if not s or s.startswith(self.comment_char):
@@ -1302,7 +1322,7 @@ if __name__ == "__main__":
     compiler = create_default_compiler()
 
     
-    compiler.load_lines('files/test3.txt')
+    compiler.load_lines('files/test3.arn')
     compiler.break_commands()
     compiler.clean_lines()
     compiler.group_commands()

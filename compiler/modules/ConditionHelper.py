@@ -241,6 +241,23 @@ class WhileClause(GroupObject):
                 processed.append(line)
         self.lines = processed
 
+class DirectAssemblyClause(GroupObject):
+    def __init__(self):
+        self.lines: list[str] = []
+
+    def add_line(self, line: str) -> None:
+        self.lines.append(line)
+
+    def get_lines(self) -> list[str]:
+        return self.lines
+    
+    @staticmethod
+    def parse_from_lines(lines: list[str]) -> DirectAssemblyClause:
+        clause = DirectAssemblyClause()
+        for line in lines:
+            clause.add_line(line)
+        return clause
+
 class ConditionTypes(StrEnum):
     EQUAL = "=="
     NOT_EQUAL = "!="

@@ -1,9 +1,10 @@
 from enum import StrEnum, auto
 from VariableManager import VarTypes, Variable, ByteVariable, VarManager
-from ConditionHelper import IfElseClause, GroupObject, Condition, WhileClause
+from ConditionHelper import IfElseClause, GroupObject, Condition, WhileClause, DirectAssemblyClause
 import re
 
-IDENT = r'[A-Za-z_][A-Za-z0-9_]*'
+VARIABLE_IDENT = r'[A-Za-z_][A-Za-z0-9_]*'
+NUMBER_LITERAL = r'(0x|0b|)[A-Za-z0-9_]*'
 
 class CommandTypes(StrEnum):
     ASSIGN = auto()
@@ -13,6 +14,8 @@ class CommandTypes(StrEnum):
     IF = auto()
     WHILE = auto()
     FREE = auto()
+    DIRECT_ASSEMBLY = auto()
+    STORE_DIRECT_ADDRESS = auto()
 
 def types_pattern():
     # VarTypes isimlerini lower-case birleştiriyoruz
@@ -56,9 +59,22 @@ def types_pattern():
     from VariableManager import VarTypes
     return r'(?:' + '|'.join(t.name.lower() for t in VarTypes) + r')'
 
+
+class DirectAssemblyCommand(Command):
+    TYPE = CommandTypes.DIRECT_ASSEMBLY
+    def __init__(self, dasm_clause:DirectAssemblyClause):
+        super().__init__(CommandTypes.DIRECT_ASSEMBLY, dasm_clause)
+        self.assembly_lines: list[str] = dasm_clause.lines
+        self.parse_params()
+    
+    def parse_params(self):
+        pass
+
+
+
 class VarDefCommand(Command):
     # byte[5] a = 10;  (NOT: array init şimdilik desteklemiyoruz)
-    REGEX = rf'''^\s*(?P<type>{types_pattern()})\s*(?:\[(?P<size>\d*)\])?\s+(?P<name>{IDENT})\s*=\s*(?P<value>.+?)\s*;?\s*$'''
+    REGEX = rf'''^\s*(?P<type>{types_pattern()})\s*(?:\[(?P<size>\d*)\])?\s+(?P<name>{VARIABLE_IDENT})\s*=\s*(?P<value>.+?)\s*;?\s*$'''
     TYPE = CommandTypes.VARDEF
 
     def __init__(self, line:str):
@@ -105,7 +121,7 @@ class VarDefCommand(Command):
 
 
 class VarDefCommandWithoutValue(VarDefCommand):
-    REGEX = rf'''^\s*(?P<type>{types_pattern()})\s*(?:\[(?P<size>\d*)\])?\s+(?P<name>{IDENT})\s*;?\s*$'''
+    REGEX = rf'''^\s*(?P<type>{types_pattern()})\s*(?:\[(?P<size>\d*)\])?\s+(?P<name>{VARIABLE_IDENT})\s*;?\s*$'''
     TYPE = CommandTypes.VARDEFWV
     
     def __init__(self, line:str):
@@ -140,9 +156,10 @@ class VarDefCommandWithoutValue(VarDefCommand):
 class AssignCommand(Command):
     # Supports: a = 5;  arr[1] = 5;  (pointer forms reserved for future)
     # Keep a broad REGEX so group_commands can detect as assignment
-    REGEX = rf'^\s*(?:{IDENT})(?:\s*\[[^\]]+\])?\s*=\s*.+'
-    REGEX_VAR = rf'^\s*(?P<name>{IDENT})\s*=\s*(?P<rhs>.+)'
-    REGEX_ARRAY = rf'^\s*(?P<name>{IDENT})\s*\[\s*(?P<index>[^\]]+)\s*\]\s*=\s*(?P<rhs>.+)'
+    REGEX = rf'^\s*(?:{VARIABLE_IDENT})(?:\s*\[[^\]]+\])?\s*=\s*.+'
+    REGEX_VAR = rf'^\s*(?P<name>{VARIABLE_IDENT})\s*=\s*(?P<rhs>.+)'
+    REGEX_ARRAY = rf'^\s*(?P<name>{VARIABLE_IDENT})\s*\[\s*(?P<index>[^\]]+)\s*\]\s*=\s*(?P<rhs>.+)'
+    
     TYPE = CommandTypes.ASSIGN
     
     def __init__(self, line:str):
@@ -163,13 +180,33 @@ class AssignCommand(Command):
             self.new_value = m_arr.group('rhs').strip()
             self.is_array = True
             return
+        
         m_var = re.match(self.REGEX_VAR, self.line)
         if m_var:
             self.var_name = m_var.group('name').strip()
             self.new_value = m_var.group('rhs').strip()
             self.is_array = False
             return
+        
         raise ValueError(f"Invalid assignment command: {self.line}")
+
+class StoreToDirectAddressCommand(Command):
+    REGEX = rf'^\s*\*\s*(?P<addr>{NUMBER_LITERAL})\s*=\s*(?P<rhs>.+)'
+    TYPE = CommandTypes.STORE_DIRECT_ADDRESS
+
+    def __init__(self, line: str):
+        super().__init__(CommandTypes.STORE_DIRECT_ADDRESS, line)
+        self.addr: str = ''
+        self.new_value: any = None
+        self.parse_params()
+
+    def parse_params(self):
+        m = re.match(self.REGEX, self.line)
+        if not m:
+            raise ValueError(f"Invalid store direct address command: {self.line}")
+        self.addr = m.group('addr').strip()
+        self.new_value = m.group('rhs').strip()
+
 
 class WhileCommand(Command):
     REGEX = r'^while\s+(.+)$'
@@ -189,8 +226,7 @@ class WhileCommand(Command):
 
 if __name__ == "__main__":
     # Example usage
-    command = VarDefCommandWithoutValue("byte[5] a;")
-    print(command.var_name)  # Output: a
-    print(command.var_type)  # Output: VarTypes.BYTE
-    print(command.array_length)  # Output: 1
-    
+    command = StoreToDirectAddressCommand("*0 = 5;")
+    print(command.REGEX)
+    print(command.addr)
+    print(command.new_value)
