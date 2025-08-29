@@ -1,9 +1,12 @@
 from __future__ import annotations
 
-from enum import StrEnum
+from MyEnums import ConditionTypes, WhileTypes
+import CompilerStaticMethods as CSM
 
 class GroupObject:
     pass
+
+
 
 class IfElseClause(GroupObject):
     def __init__(self):
@@ -217,10 +220,30 @@ class ElseStatement(Statement):
     def __init__(self):
         super().__init__()
 
+
 class WhileClause(GroupObject):
     def __init__(self, condition: str):
-        self.condition: Condition = Condition(condition)
+        self.set_condition(condition)
         self.lines: list[str | GroupObject] = []
+
+    def set_condition(self,cond:str):
+        if check_any_condition(cond) == False:
+            decimal_cond = CSM.convert_to_decimal(cond)
+            if decimal_cond is None:
+                cond = cond + "> 0"
+                self.type = WhileTypes.CONDITIONAL
+                self.condition = Condition(cond)
+                return
+            else:
+                self.condition = None
+                self.type = WhileTypes.BYPASS if decimal_cond == 0 else WhileTypes.INFINITE
+                return
+        self.condition = Condition(cond)
+        self.type = WhileTypes.CONDITIONAL
+        return
+    
+    def get_type(self):
+        return self.type
 
     def add_line(self, line: str | GroupObject) -> None:
         self.lines.append(line)
@@ -258,14 +281,13 @@ class DirectAssemblyClause(GroupObject):
             clause.add_line(line)
         return clause
 
-class ConditionTypes(StrEnum):
-    EQUAL = "=="
-    NOT_EQUAL = "!="
-    GREATER_EQUAL = ">="
-    LESS_EQUAL = "<="
-    GREATER_THAN = ">"
-    LESS_THAN = "<"
-    
+
+
+def check_any_condition(expression:str) -> bool:
+    for cond_type in ConditionTypes:
+        if cond_type.value in expression:
+            return True
+    return False
 
 class Condition:
     def __init__(self, condition_str: str):

@@ -1,4 +1,4 @@
-from ConditionHelper import ConditionTypes
+from MyEnums import ConditionTypes
 
 def get_inverted_jump_str(condition:ConditionTypes) -> str:
     """

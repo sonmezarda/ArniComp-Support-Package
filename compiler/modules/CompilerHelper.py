@@ -5,7 +5,7 @@ from VariableManager import VarTypes, Variable, ByteVariable, VarManager
 from StackManager import StackManager
 from LabelManager import LabelManager
 from RegisterManager import RegisterManager, RegisterMode, Register, TempVarMode
-from ConditionHelper import IfElseClause, Condition, WhileClause, DirectAssemblyClause
+from ConditionHelper import IfElseClause, Condition, WhileClause, DirectAssemblyClause,  WhileTypes
 import CompilerStaticMethods as CompilerStaticMethods
 import re
 
@@ -1096,9 +1096,9 @@ class Compiler:
             raise ValueError(f"Left part of condition '{left}' is not a defined variable.")
         left_var = self.var_manager.get_variable(left)
 
-        # Load RIGHT into RD
+        # Load RIGHT into RD (strict: don't rely on cached-const in RA, it may be clobbered in loop body)
         if self.is_number(right):
-            self.__set_reg_const(rd, int(right))
+            self.__set_reg_const_strict(rd, int(right) & 0xFF)
         else:
             if not self.var_manager.check_variable_exists(right):
                 raise ValueError(f"Right part of condition '{right}' is not a defined variable.")
@@ -1110,6 +1110,13 @@ class Compiler:
         self.__add_assembly_line("sub ml")
 
         return self.__get_assembly_lines_len()
+
+    def __set_reg_const_strict(self, reg: Register, value: int) -> int:
+        """Build the 8-bit constant directly into 'reg' without reusing another cached const register.
+        This prevents sequences like 'mov rd, ra' when RA was modified earlier at runtime.
+        """
+        value &= 0xFF
+        return self.__build_const_in_reg(value, reg)
     
     @staticmethod
     def __group_line_commands(lines:list[str]) -> list[Command]:
@@ -1197,6 +1204,7 @@ class Compiler:
                     raise ValueError("Missing 'endwhile' for while loop")
                 # Parse into WhileClause
                 cond = header[len('while '):].strip()
+                print(f"While condition: '{cond}'")
                 wc = WhileClause(cond)
                 # Body is group[1:]; convert entire body into Commands, preserving nested if/else
                 body = group[1:]
