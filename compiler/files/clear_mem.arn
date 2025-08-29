@@ -1,0 +1,20 @@
+#define MEM_SIZE 254
+byte i = 0;
+
+byte[MEM_SIZE] mem;
+
+
+
+while i<MEM_SIZE
+    mem[i] = i;
+    i = i + 1;
+endwhile
+
+i=0;
+while i < MEM_SIZE;
+    mem[i] = 0;
+    i = i + 1;
+endwhile
+
+i = 0;
+

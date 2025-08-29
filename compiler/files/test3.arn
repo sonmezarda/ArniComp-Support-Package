@@ -5,7 +5,6 @@ byte i;
 byte[arr_len] arr; 
 i = 0; 
 
-
 while i < arr_len; 
     if i == 3:
         arr[i] = 6;

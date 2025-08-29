@@ -123,27 +123,8 @@ class Compiler:
         return self.__get_assembly_lines_len()
 
     def __store_to_direct_address(self, command:StoreToDirectAddressCommand)->int:
-        mem_addr = command.addr
-        value_str:str = command.new_value
-        # error if value_str is not a valid integer
-
-        value = CompilerStaticMethods.convert_to_decimal(value_str)
-        if value is None:
-            raise NotImplementedError(f"Variable assignment from non-integer value is not implemented: {value_str}")
-
-
-        self.__set_mar_abs(mem_addr)
-        self.__build_const_in_ra(value=value)
-        self.__store_with_current_mar_abs(mem_addr, self.register_manager.ra)
-        
-        var_in_mem = self.var_manager.get_variable_from_address(mem_addr)
-        if var_in_mem is not None:
-            reg_with_var = self.register_manager.check_for_variable(var_in_mem)
-            if reg_with_var is not None:
-                if reg_with_var.mode == RegisterMode.VALUE:
-                    reg_with_var.set_unknown_mode()
-
-        return self.__get_assembly_lines_len()
+        # Unified: *ABS = RHS
+        return self.__assign_store_to_abs(command.addr, command.new_value)
 
     def __create_var_with_value(self, command:VarDefCommand) -> int:
         new_var = self.var_manager.create_variable(
@@ -162,6 +143,171 @@ class Compiler:
         else:
             raise ValueError(f"Unsupported variable type: {command.var_type}")
         
+        return self.__get_assembly_lines_len()
+
+    # ================= Unified assignment helpers =================
+    def __rhs_needs_memory(self, expr: str) -> bool:
+        """Return True if evaluating expr requires memory loads (variables/array)."""
+        s = expr.strip()
+        # Pure literal?
+        try:
+            if CompilerStaticMethods.convert_to_decimal(s) is not None:
+                return False
+        except Exception:
+            pass
+        # Array read like a[i]
+        if re.search(r"[A-Za-z_][A-Za-z0-9_]*\s*\[", s):
+            return True
+        # Tokenize by +/-
+        norm = self.__normalize_expression(s)
+        tokens = [t for t in norm.split(' ') if t and t not in ['+','-']]
+        for t in tokens:
+            # numeric literal?
+            try:
+                if CompilerStaticMethods.convert_to_decimal(t) is not None:
+                    continue
+            except Exception:
+                pass
+            # variable name?
+            if self.var_manager.check_variable_exists(t):
+                return True
+        return False
+
+    def __compute_rhs(self, expr: str) -> Register:
+        """Compute RHS expression and return the register holding the result (RA/ACC/RD)."""
+        s = expr.strip()
+        # Array read: name[idx]
+        m = re.match(r'^([A-Za-z_][A-Za-z0-9_]*)\[(.+)\]$', s)
+        if m:
+            arr_name, idx_expr = m.group(1), m.group(2).strip()
+            if not self.var_manager.check_variable_exists(arr_name):
+                raise ValueError(f"Array '{arr_name}' is not defined.")
+            arr_var = self.var_manager.get_variable(arr_name)
+            if type(arr_var) != VarTypes.BYTE_ARRAY.value:
+                raise ValueError(f"'{arr_name}' bir dizi değil.")
+            # Set MAR to element, load into RD
+            self.__set_mar_array_elem(arr_var, idx_expr)
+            if arr_var.address <= MAX_LOW_ADDRESS and (arr_var.get_high_address() == 0):
+                self.__add_assembly_line("ldrl rd")
+            else:
+                self.__add_assembly_line("ldrh rd")
+            try:
+                self.register_manager.rd.set_unknown_mode()
+            except Exception:
+                pass
+            return self.register_manager.rd
+
+        # Has operators? use existing expression evaluator into ACC
+        if ('+' in s) or ('-' in s):
+            norm = self.__normalize_expression(s)
+            self.__evaluate_expression(norm)  # leaves result in ACC
+            return self.register_manager.acc
+
+        # Pure literal
+        try:
+            val = CompilerStaticMethods.convert_to_decimal(s)
+            if val is not None:
+                self.__set_ra_const(val)
+                return self.register_manager.ra
+        except Exception:
+            pass
+
+        # Single variable
+        if self.var_manager.check_variable_exists(s):
+            v = self.var_manager.get_variable(s)
+            self.__set_reg_variable(self.register_manager.rd, v)
+            return self.register_manager.rd
+
+        raise ValueError(f"Unsupported RHS expression: {expr}")
+
+    def __set_mar_array_elem(self, arr_var: Variable, index_expr: str) -> int:
+        """Point MAR to arr[index]. Supports constant index and low-page dynamic index."""
+        idx_s = index_expr.strip()
+        # Constant index
+        try:
+            idx = CompilerStaticMethods.convert_to_decimal(idx_s)
+            if idx is not None:
+                address = arr_var.address + int(idx)
+                return self.__set_mar_abs(address)
+        except Exception:
+            pass
+        # Dynamic low-page index
+        if not self.var_manager.check_variable_exists(idx_s):
+            raise NotImplementedError("Array index must be a constant or an existing byte variable.")
+        idx_var = self.var_manager.get_variable(idx_s)
+        base_low = arr_var.get_low_address()
+        base_high = arr_var.get_high_address()
+        # Low-page, no overflow assumption
+        if not ((base_high == 0) and (base_low + arr_var.size - 1 <= 0xFF)):
+            raise NotImplementedError("Dynamic array index supported only in low page without overflow.")
+        # RD <- idx
+        self.__set_reg_variable(self.register_manager.rd, idx_var)
+        # RA <- base_low
+        self.__set_ra_const(base_low)
+        # ACC <- RD + RA ; MARL <- ACC
+        self.__add_reg(self.register_manager.ra)
+        self.__add_assembly_line("mov marl, acc")
+        try:
+            self.register_manager.marl.set_unknown_mode()
+        except Exception:
+            pass
+        return self.__get_assembly_lines_len()
+
+    def __assign_store_to_abs(self, address: int, rhs_expr: str) -> int:
+        """Unified direct absolute store with smart MAR ordering."""
+        needs_mem = self.__rhs_needs_memory(rhs_expr)
+        src_reg: Register
+        if needs_mem:
+            # compute first, then set MAR
+            src_reg = self.__compute_rhs(rhs_expr)
+            self.__set_mar_abs(address)
+        else:
+            # set MAR first, then compute
+            self.__set_mar_abs(address)
+            src_reg = self.__compute_rhs(rhs_expr)
+        # store
+        if address <= MAX_LOW_ADDRESS:
+            self.__add_assembly_line(f"strl {src_reg.name}")
+        else:
+            self.__add_assembly_line(f"strh {src_reg.name}")
+        # Invalidate any cached register bound to the stored var (if tracked)
+        var_in_mem = self.var_manager.get_variable_from_address(address)
+        if var_in_mem is not None:
+            reg_with_var = self.register_manager.check_for_variable(var_in_mem)
+            if reg_with_var is not None and reg_with_var.mode == RegisterMode.VALUE:
+                reg_with_var.set_unknown_mode()
+        return self.__get_assembly_lines_len()
+
+    def __compile_assign_var(self, var: Variable, rhs_expr: str) -> int:
+        """var = expr; Choose MAR ordering smartly based on RHS memory needs."""
+        needs_mem = self.__rhs_needs_memory(rhs_expr)
+        src_reg: Register
+        if needs_mem:
+            src_reg = self.__compute_rhs(rhs_expr)
+            self.__set_mar(var)
+        else:
+            self.__set_mar(var)
+            src_reg = self.__compute_rhs(rhs_expr)
+        # store (var is byte for now)
+        if var.address <= MAX_LOW_ADDRESS:
+            self.__add_assembly_line(f"strl {src_reg.name}")
+        else:
+            self.__add_assembly_line(f"strh {src_reg.name}")
+        return self.__get_assembly_lines_len()
+
+    def __compile_assign_array(self, arr_var: Variable, index_expr: str, rhs_expr: str) -> int:
+        """arr[idx] = expr; Set MAR to element, compute RHS with smart ordering, then store."""
+        # Decide ordering: if RHS needs memory, compute first; else set target first
+        needs_mem = self.__rhs_needs_memory(rhs_expr)
+        src_reg: Register
+        if needs_mem:
+            src_reg = self.__compute_rhs(rhs_expr)
+            self.__set_mar_array_elem(arr_var, index_expr)
+        else:
+            self.__set_mar_array_elem(arr_var, index_expr)
+            src_reg = self.__compute_rhs(rhs_expr)
+        # store (assume low-page arrays unless index made MARH set already)
+        self.__add_assembly_line(f"strl {src_reg.name}")
         return self.__get_assembly_lines_len()
 
     def __create_var(self, command:VarDefCommandWithoutValue)-> int:
@@ -657,213 +803,22 @@ class Compiler:
         return self.__get_assembly_lines_len()
     
     def __assign_variable(self, command:AssignCommand) -> list[str]:
-        pre_assembly_lines = []
-        var:Variable = self.var_manager.get_variable(command.var_name)
-        
+        var = self.var_manager.get_variable(command.var_name)
         if var is None:
             raise ValueError(f"Cannot assign to undefined variable: {command.var_name}")
-        
-        # Handle array element assignment: arr[idx] = value;
+
         if command.is_array:
-            if not isinstance(var, Variable):
-                raise ValueError("Invalid variable for array assignment")
             if type(var) != VarTypes.BYTE_ARRAY.value:
                 raise ValueError(f"Variable '{var.name}' is not an array.")
-
-            # Only constant index supported for now
-            idx_expr = command.index_expr
-            if idx_expr is None:
+            if command.index_expr is None:
                 raise ValueError("Array index missing.")
-            # If index is constant: fast absolute addressing path
-            if idx_expr.isdigit():
-                idx = int(idx_expr)
-                elem_size = VarTypes.BYTE_ARRAY.value.get_size()
-                address = var.address + idx * elem_size
+            return self.__compile_assign_array(var, command.index_expr, command.new_value)
 
-                rhs = command.new_value
-                if rhs.isdigit():
-                    value = int(rhs)
-                    ra = self.register_manager.ra
-                    reg_with_const = self.register_manager.check_for_const(value)
-                    if reg_with_const is not None and reg_with_const.name != 'ra':
-                        self.__set_mar_abs(address)
-                        self.__store_with_current_mar_abs(address, reg_with_const)
-                        return self.__get_assembly_lines_len()
-                    self.__set_mar_abs(address)
-                    self.__set_ra_const(value)
-                    self.__store_with_current_mar_abs(address, ra)
-                    return self.__get_assembly_lines_len()
-                else:
-                    # RHS is variable: load into RD then store
-                    rhs_name = rhs.strip()
-                    if not self.var_manager.check_variable_exists(rhs_name):
-                        raise NotImplementedError("Array assignment RHS must be const or existing byte variable.")
-                    rhs_var = self.var_manager.get_variable(rhs_name)
-                    self.__set_mar_abs(address)
-                    self.__set_reg_variable(self.register_manager.rd, rhs_var)
-                    self.__store_with_current_mar_abs(address, self.register_manager.rd)
-                    return self.__get_assembly_lines_len()
+        # Simple byte var
+        if type(var) == VarTypes.BYTE.value:
+            return self.__compile_assign_var(var, command.new_value)
 
-            # Dynamic index path (low-page arrays without overflow): idx is a byte variable
-            idx_name = idx_expr.strip()
-            if not self.var_manager.check_variable_exists(idx_name):
-                raise NotImplementedError("Array index must be a constant or an existing byte variable.")
-            idx_var = self.var_manager.get_variable(idx_name)
-
-            # Only support arrays fully within low page [0x00:0xFF] for now
-            base_low = var.get_low_address()
-            base_high = var.get_high_address()
-            arr_span_ok = (base_high == 0) and (base_low + var.size - 1 <= 0xFF)
-            if not arr_span_ok:
-                raise NotImplementedError("Dynamic index supported only for arrays fully in low page without overflow.")
-
-            rd = self.register_manager.rd
-            ra = self.register_manager.ra
-
-            # RD <- index value (loads from memory; MARL may be changed inside)
-            self.__set_reg_variable(rd, idx_var)
-            # RA <- base_low constant
-            self.__set_ra_const(base_low)
-            # ACC <- RD + RA ; MARL <- ACC
-            self.__add_reg(ra)
-            self.__add_assembly_line("mov marl, acc")
-            # Invalidate MARL cache since it's now a computed address, not bound to any variable
-            try:
-                self.register_manager.marl.set_unknown_mode()
-            except Exception:
-                pass
-
-            # RHS
-            rhs = command.new_value.strip()
-            if rhs.isdigit():
-                value = int(rhs)
-                self.__set_ra_const(value)
-                self.__add_assembly_line("strl ra")
-                return self.__get_assembly_lines_len()
-            else:
-                if not self.var_manager.check_variable_exists(rhs):
-                    raise NotImplementedError("Array assignment RHS must be const or existing byte variable.")
-                # Save computed low address in RD, load RHS to RA (will disturb MAR), then restore MARL, then STRL RA
-                self.__add_assembly_line("mov rd, acc")
-                self.register_manager.rd.set_mode(RegisterMode.CONST, None)  # mark unknown content typewise
-                rhs_var = self.var_manager.get_variable(rhs)
-                self.__set_reg_variable(ra, rhs_var)
-                self.__add_assembly_line("mov marl, rd")
-                # Invalidate MARL cache after restoring from RD (dynamic address)
-                try:
-                    self.register_manager.marl.set_unknown_mode()
-                except Exception:
-                    pass
-                self.__add_assembly_line("strl ra")
-                return self.__get_assembly_lines_len()
-
-        if type(var) == VarTypes.BYTE.value:  
-            ra = self.register_manager.ra
-            rd = self.register_manager.rd
-            acc = self.register_manager.acc
-            # Array element read on RHS: b = arr[idx]
-            m = re.match(r'^([A-Za-z_][A-Za-z0-9_]*)\[(.+)\]$', command.new_value.strip())
-            if m:
-                arr_name, idx_expr = m.group(1), m.group(2).strip()
-                if not self.var_manager.check_variable_exists(arr_name):
-                    raise ValueError(f"Array '{arr_name}' is not defined.")
-                arr_var = self.var_manager.get_variable(arr_name)
-                if type(arr_var) != VarTypes.BYTE_ARRAY.value:
-                    raise ValueError(f"'{arr_name}' bir dizi değil.")
-
-                # Constant index: absolute address load
-                if idx_expr.isdigit():
-                    idx = int(idx_expr)
-                    elem_size = VarTypes.BYTE_ARRAY.value.get_size()
-                    address = arr_var.address + idx * elem_size
-                    self.__set_mar_abs(address)
-                    self.__load_with_current_mar_abs(address, rd)
-                    self.__store_to_var(var, rd)
-                    return self.__get_assembly_lines_len()
-
-                # Dynamic index: low-page arrays without overflow
-                if not self.var_manager.check_variable_exists(idx_expr):
-                    raise NotImplementedError("Dizi indeks değişkeni bulunamadı (sabit ya da tanımlı byte olmalı).")
-                idx_var = self.var_manager.get_variable(idx_expr)
-                base_low = arr_var.get_low_address()
-                base_high = arr_var.get_high_address()
-                arr_span_ok = (base_high == 0) and (base_low + arr_var.size - 1 <= 0xFF)
-                if not arr_span_ok:
-                    raise NotImplementedError("Dinamik indeks okuma şimdilik sadece low-page ve taşma yokken destekleniyor.")
-
-                # RD <- idx; RA <- base_low; ACC <- RD + RA; MARL <- ACC; invalidate cache
-                self.__set_reg_variable(rd, idx_var)
-                self.__set_ra_const(base_low)
-                self.__add_reg(ra)
-                self.__add_assembly_line("mov marl, acc")
-                try:
-                    self.register_manager.marl.set_unknown_mode()
-                except Exception:
-                    pass
-                # Load element and store to var
-                self.__add_assembly_line("ldrl rd")
-                try:
-                    self.register_manager.rd.set_unknown_mode()
-                except Exception:
-                    pass
-                self.__store_to_var(var, rd)
-                return self.__get_assembly_lines_len()
-            
-            # Check if new_value is a simple digit
-            if command.new_value.isdigit():
-                reg_with_const = self.register_manager.check_for_const(int(command.new_value))
-                if reg_with_const is not None:
-                    if reg_with_const.name == ra.name:
-                        # Preserve RA before setting MAR, then store via RD
-                        self.__add_assembly_line(f"mov {rd.name}, {ra.name}")
-                        rd.set_mode(RegisterMode.CONST, int(command.new_value))
-                        self.__set_mar(var)
-                        self.__store_with_current_mar(var, rd)
-                        return self.__get_assembly_lines_len()
-                    # Use the cached const register directly
-                    self.__set_mar(var)
-                    self.__store_with_current_mar(var, reg_with_const)
-                    return self.__get_assembly_lines_len()
-
-                # No cached const: set MAR first, then RA, then store
-                self.__set_mar(var)
-                self.__set_ra_const(int(command.new_value))
-                self.__store_with_current_mar(var, ra)
-
-                return self.__get_assembly_lines_len()
-            
-            # Check if new_value contains an addition expression
-            elif '+' in command.new_value or '-' in command.new_value:
-                normalized_expression = self.__normalize_expression(command.new_value)
-                
-                # Call __evaluate_expression to compute the expression and store it in ACC
-                eval_lines = self.__evaluate_expression(normalized_expression)
-                
-                # Check if ACC contains the correct expression
-                if (acc.mode == RegisterMode.TEMPVAR and 
-                    acc.get_expression() == normalized_expression):
-                    # Store ACC to the variable: set MAR explicitly, then STRL/STRH
-                    self.__set_mar(var)
-                    if var.address <= MAX_LOW_ADDRESS:
-                        self.__add_assembly_line("strl acc")
-                    else:
-                        self.__add_assembly_line("strh acc")
-                    return self.__get_assembly_lines_len()
-                else:
-                    raise RuntimeError(f"ACC does not contain expected expression: {normalized_expression}")
-            
-            # Check if new_value is a simple variable
-            elif self.var_manager.check_variable_exists(command.new_value):
-                var_to_assign:Variable = self.var_manager.get_variable(command.new_value)
-                (self.__mov_var_to_var(var, var_to_assign))
-                return self.__get_assembly_lines_len()
-            else:
-                raise NotImplementedError("Assignment from non-constant or non-variable is not implemented yet.")
-
-        else:
-            raise ValueError(f"Unsupported variable type for assignment: {var.var_type}")
-        
-        return self.__get_assembly_lines_len()
+        raise ValueError(f"Unsupported variable type for assignment: {var.var_type}")
     
 
     def __handle_if_else(self, command:Command) -> int:
@@ -1073,8 +1028,10 @@ class Compiler:
                     self.__add_reg(ra)     # ACC = RD + RA
                 else:
                     self.__add_assembly_line(f"sub {ra.name}")  # ACC = RD - RA
-                self.__add_assembly_line("mov rd, acc")
-                self.register_manager.rd.set_unknown_mode()
+                # Move ACC back to RD only if more operations follow
+                if idx + 1 < len(tokens):
+                    self.__add_assembly_line("mov rd, acc")
+                    self.register_manager.rd.set_unknown_mode()
             else:
                 if not self.var_manager.check_variable_exists(term):
                     raise ValueError(f"Unknown variable in expression: '{term}'")
@@ -1084,8 +1041,9 @@ class Compiler:
                     self.__add_ml()        # ACC = RD + [MAR]
                 else:
                     self.__add_assembly_line("sub ml")  # ACC = RD - [MAR]
-                self.__add_assembly_line("mov rd, acc")
-                self.register_manager.rd.set_unknown_mode()
+                if idx + 1 < len(tokens):
+                    self.__add_assembly_line("mov rd, acc")
+                    self.register_manager.rd.set_unknown_mode()
 
             idx += 1
 
@@ -1364,7 +1322,7 @@ if __name__ == "__main__":
     compiler = create_default_compiler()
 
     
-    compiler.load_lines('files/pointer.arn')
+    compiler.load_lines('files/clear_mem.arn')
     compiler.break_commands()
     compiler.clean_lines()
     compiler.group_commands()
