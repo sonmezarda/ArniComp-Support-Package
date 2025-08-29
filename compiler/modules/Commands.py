@@ -1,6 +1,7 @@
 from enum import StrEnum, auto
 from VariableManager import VarTypes, Variable, ByteVariable, VarManager
 from ConditionHelper import IfElseClause, GroupObject, Condition, WhileClause, DirectAssemblyClause
+import CompilerStaticMethods as CSM
 import re
 
 VARIABLE_IDENT = r'[A-Za-z_][A-Za-z0-9_]*'
@@ -191,12 +192,12 @@ class AssignCommand(Command):
         raise ValueError(f"Invalid assignment command: {self.line}")
 
 class StoreToDirectAddressCommand(Command):
-    REGEX = rf'^\s*\*\s*(?P<addr>{NUMBER_LITERAL})\s*=\s*(?P<rhs>.+)'
+    REGEX = r'^\s*\*\s*(?P<addr>(?:0x[0-9A-Fa-f_]+|0b[01_]+|\d+))\s*=\s*(?P<rhs>.+?)\s*;?\s*$'
     TYPE = CommandTypes.STORE_DIRECT_ADDRESS
 
     def __init__(self, line: str):
         super().__init__(CommandTypes.STORE_DIRECT_ADDRESS, line)
-        self.addr: str = ''
+        self.addr: int|None = None
         self.new_value: any = None
         self.parse_params()
 
@@ -204,7 +205,8 @@ class StoreToDirectAddressCommand(Command):
         m = re.match(self.REGEX, self.line)
         if not m:
             raise ValueError(f"Invalid store direct address command: {self.line}")
-        self.addr = m.group('addr').strip()
+        addr_str = m.group('addr').strip()
+        self.addr = CSM.convert_to_decimal(addr_str)
         self.new_value = m.group('rhs').strip()
 
 
@@ -226,7 +228,7 @@ class WhileCommand(Command):
 
 if __name__ == "__main__":
     # Example usage
-    command = StoreToDirectAddressCommand("*0 = 5;")
+    command = StoreToDirectAddressCommand("*0x0012 = 12;")
     print(command.REGEX)
     print(command.addr)
     print(command.new_value)

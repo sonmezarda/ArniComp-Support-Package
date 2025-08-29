@@ -101,6 +101,8 @@ class Compiler:
                 self.__assign_variable(command)
             elif type(command) is FreeCommand:
                 self.__free_variable(command)
+            elif type(command) is StoreToDirectAddressCommand:
+                self.__store_to_direct_address(command)
             elif type(command) is Command and command.command_type == CommandTypes.IF:
                 self.__handle_if_else(command)
             elif type(command) is Command and command.command_type == CommandTypes.WHILE:
@@ -118,6 +120,29 @@ class Compiler:
         for line in command.assembly_lines:
             self.__add_assembly_line(line)
         print(f"[X] !! Direct assembly line command register change detection not added yet!!")
+        return self.__get_assembly_lines_len()
+
+    def __store_to_direct_address(self, command:StoreToDirectAddressCommand)->int:
+        mem_addr = command.addr
+        value_str:str = command.new_value
+        # error if value_str is not a valid integer
+
+        value = CompilerStaticMethods.convert_to_decimal(value_str)
+        if value is None:
+            raise NotImplementedError(f"Variable assignment from non-integer value is not implemented: {value_str}")
+
+
+        self.__set_mar_abs(mem_addr)
+        self.__build_const_in_ra(value=value)
+        self.__store_with_current_mar_abs(mem_addr, self.register_manager.ra)
+        
+        var_in_mem = self.var_manager.get_variable_from_address(mem_addr)
+        if var_in_mem is not None:
+            reg_with_var = self.register_manager.check_for_variable(var_in_mem)
+            if reg_with_var is not None:
+                if reg_with_var.mode == RegisterMode.VALUE:
+                    reg_with_var.set_unknown_mode()
+
         return self.__get_assembly_lines_len()
 
     def __create_var_with_value(self, command:VarDefCommand) -> int:
@@ -181,22 +206,23 @@ class Compiler:
         low = address & 0xFF
         high = (address >> 8) & 0xFF
 
-        # Reuse if possible
-        if marl.mode in [RegisterMode.ADDR, RegisterMode.ADDR_LOW] and marl.tag is not None and isinstance(marl.tag, AbsAddrTag):
+        # Reuse if possible (based on AbsAddrTag, independent of register.mode)
+        if marl.tag is not None and isinstance(marl.tag, AbsAddrTag):
             if (marl.tag.addr & 0xFF) == low:
                 # ensure MARH matches when needed
                 if address > MAX_LOW_ADDRESS:
-                    if marh.mode == RegisterMode.ADDR_HIGH and marh.tag and isinstance(marh.tag, AbsAddrTag) and ((marh.tag.addr >> 8) & 0xFF) == high:
+                    if marh.tag and isinstance(marh.tag, AbsAddrTag) and ((marh.tag.addr >> 8) & 0xFF) == high:
                         return self.__get_assembly_lines_len()
                 else:
                     return self.__get_assembly_lines_len()
 
-        # set MARL
+        # set MARL (prefer direct build when value exceeds LDI range)
         if low <= MAX_LDI:
-            self.__add_assembly_line(f"ldi #{low}")
+            # Cheap path: load via RA then move
+            self.__set_ra_const(low)
             self.__add_assembly_line("mov marl, ra")
-            ra.set_mode(RegisterMode.CONST, low)
         else:
+            # Build directly into MARL (ends with 'mov marl, acc')
             self.__build_const_in_reg(low, marl)
         # invalidate stale var binding and tag MARL
         try:
@@ -211,10 +237,10 @@ class Compiler:
         # set MARH if needed
         if address > MAX_LOW_ADDRESS:
             if high <= MAX_LDI:
-                self.__add_assembly_line(f"ldi #{high}")
+                self.__set_ra_const(high)
                 self.__add_assembly_line("mov marh, ra")
-                ra.set_mode(RegisterMode.CONST, high)
             else:
+                # Build directly into MARH (ends with 'mov marh, acc')
                 self.__build_const_in_reg(high, marh)
             try:
                 marh.set_unknown_mode()
@@ -398,7 +424,9 @@ class Compiler:
                     rd.set_mode(RegisterMode.CONST, current)
                 remainder -= step
             
-            self.__add_assembly_line(f"mov {target_reg.name}, acc")
+            if target_reg != acc:
+                self.__add_assembly_line(f"mov {target_reg.name}, acc")
+            # Even if target is ACC, update its mode info
             target_reg.set_mode(RegisterMode.CONST, current)
             ra.set_unknown_mode()
             return self.__get_assembly_lines_len()
@@ -423,7 +451,8 @@ class Compiler:
                     rd.set_mode(RegisterMode.CONST, current)
                 remainder -= step
             
-            self.__add_assembly_line(f"mov {target_reg.name}, acc")
+            if target_reg != acc:
+                self.__add_assembly_line(f"mov {target_reg.name}, acc")
             target_reg.set_mode(RegisterMode.CONST, current)
             
         elif strategy_type == 'add_two_ldi':
@@ -432,7 +461,8 @@ class Compiler:
             self.__add_assembly_line("mov rd, ra")
             self.__ldi(base2)
             self.__add_assembly_line("add ra")  # acc = rd + ra
-            self.__add_assembly_line(f"mov {target_reg.name}, acc")
+            if target_reg != acc:
+                self.__add_assembly_line(f"mov {target_reg.name}, acc")
             target_reg.set_mode(RegisterMode.CONST, target)
             
         elif strategy_type == 'add_254_plus_1':
@@ -472,15 +502,16 @@ class Compiler:
                 current -= step
                 remainder -= step
             
-            self.__add_assembly_line(f"mov {target_reg.name}, acc")
+            if target_reg != acc:
+                self.__add_assembly_line(f"mov {target_reg.name}, acc")
             target_reg.set_mode(RegisterMode.CONST, current)
         
         ra.set_unknown_mode()  # RA is used for intermediate calculations
         return self.__get_assembly_lines_len()
 
     def __build_const_in_ra(self, value: int) -> int:
-        """Legacy wrapper - builds constant in RA register"""
-        return self.__build_const_in_reg(value, self.register_manager.ra)
+        """Build constant in RA, reusing any cached const register via __set_ra_const."""
+        return self.__set_ra_const(value)
 
     def __store_with_current_mar(self, var: Variable, src: Register) -> int:
         """Store using current MAR (does not modify MAR registers)."""
@@ -557,8 +588,12 @@ class Compiler:
             ra.set_mode(RegisterMode.CONST, value)
             return self.__get_assembly_lines_len()
 
-        self.__ldi(value)
-        ra.set_mode(RegisterMode.CONST, value)
+        # Build RA constant efficiently: use LDI if within range, else compose via __build_const_in_reg
+        if value <= MAX_LDI:
+            self.__ldi(value)
+            ra.set_mode(RegisterMode.CONST, value)
+        else:
+            self.__build_const_in_reg(value, ra)
 
         return self.__get_assembly_lines_len()
 
@@ -1134,6 +1169,10 @@ class Compiler:
                 print(f"'{line}' matches VarDefCommandWithoutValue regex")
                 grouped_lines.append(VarDefCommandWithoutValue(line))
                 lindex += 1
+            elif StoreToDirectAddressCommand.match_regex(line):
+                print(f"'{line}' matches StoreToDirectAddressCommand regex")
+                grouped_lines.append(StoreToDirectAddressCommand(line))
+                lindex += 1
             elif AssignCommand.match_regex(line):
                 print(f"'{line}' matches AssignCommand regex")
                 grouped_lines.append(AssignCommand(line))
@@ -1289,12 +1328,15 @@ class Compiler:
     
 
     def __add_assembly_line(self, lines:str|list[str]) -> int:
-
         if isinstance(lines, list):
             self.assembly_lines.extend(lines)
             return self.assembly_lines.__len__()
         if not isinstance(lines, str):
             raise ValueError("Line must be a string or a list of strings.")
+        # Skip redundant self-moves like 'mov acc, acc'
+        m = re.match(r"^\s*mov\s+([A-Za-z_][A-Za-z0-9_]*)\s*,\s*([A-Za-z_][A-Za-z0-9_]*)\s*$", lines)
+        if m and m.group(1) == m.group(2):
+            return self.assembly_lines.__len__()
 
         self.assembly_lines.append(lines)
         return self.assembly_lines.__len__()
@@ -1322,7 +1364,7 @@ if __name__ == "__main__":
     compiler = create_default_compiler()
 
     
-    compiler.load_lines('files/test3.arn')
+    compiler.load_lines('files/pointer.arn')
     compiler.break_commands()
     compiler.clean_lines()
     compiler.group_commands()

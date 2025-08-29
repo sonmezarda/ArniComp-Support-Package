@@ -18,3 +18,19 @@ def get_inverted_jump_str(condition:ConditionTypes) -> str:
         return "jgt"
     else:
         raise ValueError(f"Unsupported condition type: {condition}")
+
+def convert_to_decimal(int_str:str) -> int | None:
+    """
+    Converts a string representing an integer in various formats (decimal, hex, binary)
+    to its decimal integer value.
+    """
+    int_str = int_str.strip().lower()
+    if int_str.startswith('0x'):
+        return int(int_str, 16)
+    elif int_str.startswith('0b'):
+        return int(int_str, 2)
+    else:
+        try:
+            return int(int_str)
+        except ValueError:
+            return None
