@@ -912,37 +912,56 @@ class Compiler:
         if not isinstance(command.line, WhileClause):
             raise ValueError("Command line must be a WhileClause instance.")
         while_clause: WhileClause = command.line
+        print("Handling while clause:", while_clause.type, while_clause.condition, while_clause.get_lines() )
+        if while_clause.type == WhileTypes.BYPASS:
+            return self.__get_assembly_lines_len()
+        elif while_clause.type == WhileTypes.CONDITIONAL:
+            # Create labels for loop start and exit using LabelManager helpers
+            start_label_name, _ = self.label_manager.create_while_start_label(self.__get_assembly_lines_len())
+            self.__add_assembly_line(f"{start_label_name}:")
 
-        # Create labels for loop start and exit using LabelManager helpers
-        start_label_name, _ = self.label_manager.create_while_start_label(self.__get_assembly_lines_len())
-        self.__add_assembly_line(f"{start_label_name}:")
+            # Evaluate condition and jump to end if false
+            self.__compile_condition(while_clause.condition)
 
-        # Evaluate condition and jump to end if false
-        self.__compile_condition(while_clause.condition)
+            # Compile body in a context to measure length
+            body_comp = self.create_context_compiler()
+            body_comp.grouped_lines = while_clause.get_lines()
+            body_comp.compile_lines()
+            body_len = body_comp.__get_assembly_lines_len()
 
-        # Compile body in a context to measure length
-        body_comp = self.create_context_compiler()
-        body_comp.grouped_lines = while_clause.get_lines()
-        body_comp.compile_lines()
-        body_len = body_comp.__get_assembly_lines_len()
+            # Create end label and set PRL to it for conditional jump
+            end_label, _ = self.label_manager.create_while_end_label(self.__get_assembly_lines_len() + body_len + 3)
+            self.__set_prl_as_label(end_label, self.label_manager.get_label(end_label))
+            self.__add_assembly_line(CompilerStaticMethods.get_inverted_jump_str(while_clause.condition.type))
 
-        # Create end label and set PRL to it for conditional jump
-        end_label, _ = self.label_manager.create_while_end_label(self.__get_assembly_lines_len() + body_len + 3)
-        self.__set_prl_as_label(end_label, self.label_manager.get_label(end_label))
-        self.__add_assembly_line(CompilerStaticMethods.get_inverted_jump_str(while_clause.condition.type))
+            # Emit body
+            self.__add_assembly_line(body_comp.assembly_lines)
+            self.register_manager.set_changed_registers_as_unknown()
 
-        # Emit body
-        self.__add_assembly_line(body_comp.assembly_lines)
-        self.register_manager.set_changed_registers_as_unknown()
+            # Jump back to start
+            self.__set_prl_as_label(start_label_name, self.label_manager.get_label(start_label_name))
+            self.__add_assembly_line("jmp")
 
-        # Jump back to start
-        self.__set_prl_as_label(start_label_name, self.label_manager.get_label(start_label_name))
-        self.__add_assembly_line("jmp")
-
-        # Place end label at current position
-        self.label_manager.update_label_position(end_label, self.__get_assembly_lines_len())
-        self.__add_assembly_line(f"{end_label}:")
-        return self.__get_assembly_lines_len()
+            # Place end label at current position
+            self.label_manager.update_label_position(end_label, self.__get_assembly_lines_len())
+            self.__add_assembly_line(f"{end_label}:")
+            return self.__get_assembly_lines_len()
+        elif while_clause.type == WhileTypes.INFINITE:
+            start_label_name, _ = self.label_manager.create_while_start_label(self.__get_assembly_lines_len())
+            self.__add_assembly_line(f"{start_label_name}:")
+            
+            body_comp = self.create_context_compiler()
+            body_comp.grouped_lines = while_clause.get_lines()
+            body_comp.compile_lines()
+            body_len = body_comp.__get_assembly_lines_len()
+            
+            self.__add_assembly_line(body_comp.assembly_lines)
+            self.__set_prl_as_label(start_label_name, self.label_manager.get_label(start_label_name))
+            self.__add_assembly_line("jmp")
+            #self.register_manager.set_changed_registers_as_unknown()
+            pass
+        else:
+            raise TypeError("Unsupported while clause type.")
 
     def __set_prl_as_label(self, label_name:str, label_position:int) -> int:
         if label_position + 2 > 0b1111111:
@@ -950,7 +969,10 @@ class Compiler:
 
         if not self.label_manager.is_label_defined(label_name):
             raise ValueError(f"Label '{label_name}' does not exist.")
-        
+        prl = self.register_manager.prl
+        if prl.mode == RegisterMode.LABEL :
+            if prl.value == label_name:
+                return self.__get_assembly_lines_len()
         self.__add_assembly_line(f"ldi @{label_name}")
         self.__add_assembly_line("mov prl, ra")
         self.register_manager.prl.set_label_mode(label_name)

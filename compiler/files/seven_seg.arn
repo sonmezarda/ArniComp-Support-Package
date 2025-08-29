@@ -10,8 +10,9 @@
 #define SS_8  0x7F
 #define SS_9  0x6F
 
-byte i = 1;
-while i == 1
+*SS = SS_0;
+
+while 1
     *SS = SS_0;
     *SS = SS_1;
     *SS = SS_2;
