@@ -679,6 +679,28 @@ label {
     padding-bottom: 5px;
 }
 
+/* Devices View */
+.devices-view {
+    font-family: 'Courier New', monospace;
+    background: rgba(0, 0, 0, 0.4);
+    border-radius: 8px;
+    padding: 12px;
+    color: #e0e0e0;
+}
+.device {
+    margin-top: 10px;
+    padding: 10px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 6px;
+}
+.seven-seg {
+    display: inline-block;
+}
+.sevenseg-display svg {
+    display: block;
+}
+
 .memory-controls {
     display: flex;
     gap: 10px;

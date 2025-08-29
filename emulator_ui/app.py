@@ -423,6 +423,17 @@ async def disassemble(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/devices")
+async def get_devices():
+    """Get info for attached devices via the Bus"""
+    try:
+        if hasattr(cpu, 'bus'):
+            return {"success": True, "devices": cpu.bus.devices_info()}
+        else:
+            return {"success": True, "devices": []}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/files")
 async def list_files():
     """List available assembly files"""

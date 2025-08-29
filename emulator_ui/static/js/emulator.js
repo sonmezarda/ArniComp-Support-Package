@@ -623,6 +623,8 @@ ldi #0b11111111
             this.refreshProgramMemory();
             // Sync breakpoint markers from backend
             this.loadBreakpoints();
+            // Update devices view so MMIO changes (e.g., seven-seg) are reflected after step/run
+            this.refreshDevices();
             
         } catch (error) {
             console.error('RefreshAll error:', error);
@@ -661,7 +663,68 @@ ldi #0b11111111
         if (viewName === 'disassembly') {
             console.log('Updating disassembly PC highlight');
             this.updateDisassemblyHighlight();
+        } else if (viewName === 'devices') {
+            this.refreshDevices();
         }
+    }
+
+    async refreshDevices() {
+        try {
+            const result = await this.apiCall('/api/devices');
+            const devices = result.devices || [];
+            this.renderDevices(devices);
+        } catch (e) {
+            console.error('Devices refresh error:', e);
+        }
+    }
+
+    renderDevices(devices) {
+        // Render 7-seg if present
+        const seg = devices.find(d => d.name === 'SevenSegment');
+        const container = document.getElementById('sevenseg-display');
+        if (container) {
+            container.innerHTML = '';
+            container.appendChild(this.buildSevenSegSvg(seg ? seg.segments : null));
+        }
+    }
+
+    buildSevenSegSvg(segments) {
+        // Basic SVG-based 7-seg. segments is a dict of a,b,c,d,e,f,g,dp booleans
+        const on = (name) => segments && segments[name];
+        const svgNS = 'http://www.w3.org/2000/svg';
+        const svg = document.createElementNS(svgNS, 'svg');
+        svg.setAttribute('width', '120');
+        svg.setAttribute('height', '200');
+
+        const mk = (points, lit) => {
+            const p = document.createElementNS(svgNS, 'polygon');
+            p.setAttribute('points', points);
+            p.setAttribute('fill', lit ? '#ff5252' : '#330000');
+            p.setAttribute('stroke', '#660000');
+            p.setAttribute('stroke-width', '2');
+            return p;
+        };
+
+        // Define segments positions (simple stylized)
+        const A = '30,20 90,20 80,30 40,30';
+        const B = '90,20 100,30 100,90 90,100 80,90 80,30';
+        const C = '90,110 100,120 100,180 90,190 80,180 80,120';
+        const D = '30,190 90,190 80,180 40,180';
+        const E = '20,110 30,120 30,180 20,190 10,180 10,120';
+        const F = '20,20 30,30 30,90 20,100 10,90 10,30';
+        const G = '30,100 90,100 80,110 40,110';
+        const DP = '105,195 115,195 115,185 105,185';
+
+        svg.appendChild(mk(A, on('a')));
+        svg.appendChild(mk(B, on('b')));
+        svg.appendChild(mk(C, on('c')));
+        svg.appendChild(mk(D, on('d')));
+        svg.appendChild(mk(E, on('e')));
+        svg.appendChild(mk(F, on('f')));
+        svg.appendChild(mk(G, on('g')));
+        svg.appendChild(mk(DP, on('dp')));
+
+        return svg;
     }
 
     async updateDisassemblyHighlight() {

@@ -1,0 +1,8 @@
+byte zero = 0;
+byte one = 1;
+byte five = 5;
+byte six = 6;
+
+
+byte num;
+num = five + one - one + 20;

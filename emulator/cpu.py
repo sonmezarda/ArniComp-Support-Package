@@ -5,6 +5,8 @@ ArniComp CPU Emulator
 
 import json
 import os
+from .bus import Bus
+from .devices.seven_segment import SevenSegmentDevice
 
 class CPUFlags:
     def __init__(self):
@@ -36,38 +38,44 @@ class CPU:
         self.rd = 0      # ALU input register
         self.acc = 0     # Accumulator
         self.marl = 0    # Memory Address Register Low
-        self.marh = 0    # Memory Address Register High  
+        self.marh = 0    # Memory Address Register High
         self.prl = 0     # Program Counter Low
         self.prh = 0     # Program Counter High
-        
+
         # Separate memory spaces (Harvard Architecture)
         self.program_memory = bytearray(65536)  # EEPROM - Program storage
-        self.data_memory = bytearray(65536)     # RAM - Data storage
-        
+        # Data memory moved under a Bus abstraction (for MMIO devices)
+        self.bus = Bus(ram_size=65536)
+        # Back-compat: mirror underlying RAM for any legacy reads
+        self.data_memory = self.bus.ram
+
         # Flags
         self.flags = CPUFlags()
-        
+
         # Memory mode (True = MH mode, False = ML mode)
         self.memory_mode_high = False
-        
+
         # Program counter
         self.pc = 0
-        
+
         # Execution control
         self.running = False
         self.halted = False
-        
+
         # Debug features
         self.debug_mode = False
         self.step_mode = False
         self.breakpoints = set()
-        
+
         # Load instruction set
         self.load_instruction_set()
-        
+
         # Output bus (for peripherals)
         self.output_data = 0
         self.output_address = 0
+
+        # Devices
+        self._install_default_devices()
         
     def load_instruction_set(self):
         """Load instruction set from config.json"""
@@ -95,7 +103,10 @@ class CPU:
         self.halted = False
         self.output_data = 0
         self.output_address = 0
-        # Don't clear memories - they persist like real hardware
+        # Don't clear program memory - it persists like real hardware
+        # Clear data RAM and reset devices via bus
+        if hasattr(self, 'bus'):
+            self.bus.reset()
     
     def load_program(self, binary_data, start_address=0):
         """Load binary program into PROGRAM memory (EEPROM)"""
@@ -119,32 +130,62 @@ class CPU:
     
     def read_memory(self):
         """Read from DATA memory at current address"""
-        addr = self.get_memory_address()
-        return self.data_memory[addr] if addr < len(self.data_memory) else 0
+        addr = self.get_memory_address() & 0xFFFF
+        return self.bus.read8(addr)
     
     def write_memory(self, value):
         """Write to DATA memory at current address"""
-        addr = self.get_memory_address()
-        if addr < len(self.data_memory):
-            self.data_memory[addr] = value & 0xFF
+        addr = self.get_memory_address() & 0xFFFF
+        self.bus.write8(addr, value & 0xFF)
+
+    # Device setup
+    def _install_default_devices(self):
+        try:
+            # Example MMIO: seven-seg at 0xFF00
+            self.sevenseg = SevenSegmentDevice(id="seg0", base=0xFF00, on_change=None)
+            self.bus.attach(self.sevenseg)
+        except Exception:
+            # Devices are optional; keep CPU usable if device load fails
+            self.sevenseg = None
     
     def get_register_value(self, reg_name):
         """Get register value by name"""
-        reg_map = {
-            'RA': self.ra, 'ra': self.ra,
-            'RD': self.rd, 'rd': self.rd,
-            'ACC': self.acc, 'acc': self.acc,
-            'ML': self.read_memory(), 'ml': self.read_memory(),
-            'MH': self.read_memory(), 'mh': self.read_memory(),
-            'PCL': self.prl, 'pcl': self.prl,
-            'PCH': self.prh, 'pch': self.prh,
-            'MARL': self.marl, 'marl': self.marl,
-            'MARH': self.marh, 'marh': self.marh,
-            'PRL': self.prl, 'prl': self.prl,
-            'PRH': self.prh, 'prh': self.prh,
-            'P': (self.prh << 8) | self.prl, 'p': (self.prh << 8) | self.prl
-        }
-        return reg_map.get(reg_name, 0)
+        name = reg_name.upper()
+        if name == 'RA':
+            return self.ra
+        if name == 'RD':
+            return self.rd
+        if name == 'ACC':
+            return self.acc
+        if name == 'ML':
+            # Force LOW mode read regardless of current mode
+            prev = self.memory_mode_high
+            self.memory_mode_high = False
+            val = self.read_memory()
+            self.memory_mode_high = prev
+            return val
+        if name == 'MH':
+            # Force HIGH mode read regardless of current mode
+            prev = self.memory_mode_high
+            self.memory_mode_high = True
+            val = self.read_memory()
+            self.memory_mode_high = prev
+            return val
+        if name == 'PCL':
+            return self.prl
+        if name == 'PCH':
+            return self.prh
+        if name == 'MARL':
+            return self.marl
+        if name == 'MARH':
+            return self.marh
+        if name == 'PRL':
+            return self.prl
+        if name == 'PRH':
+            return self.prh
+        if name == 'P':
+            return (self.prh << 8) | self.prl
+        return 0
     
     def set_register_value(self, reg_name, value):
         """Set register value by name"""

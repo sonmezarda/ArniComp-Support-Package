@@ -1,0 +1,25 @@
+#define SS    0xFF00
+#define SS_0  0x3F
+#define SS_1  0x06
+#define SS_2  0x5B
+#define SS_3  0x4F
+#define SS_4  0x66
+#define SS_5  0x6D
+#define SS_6  0x7D
+#define SS_7  0x07
+#define SS_8  0x7F
+#define SS_9  0x6F
+
+byte i = 1;
+while i == 1
+    *SS = SS_0;
+    *SS = SS_1;
+    *SS = SS_2;
+    *SS = SS_3;
+    *SS = SS_4;
+    *SS = SS_5;
+    *SS = SS_6;
+    *SS = SS_7;
+    *SS = SS_8;
+    *SS = SS_9;
+endwhile

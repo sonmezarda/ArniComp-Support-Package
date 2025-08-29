@@ -48,6 +48,7 @@
                             <div class="view-tabs">
                                 <button class="view-tab active" data-view="editor">📝 Editor</button>
                                 <button class="view-tab" data-view="disassembly">🔍 Disassembly</button>
+                                <button class="view-tab" data-view="devices">🧩 Devices</button>
                             </div>
                             <button class="new-tab-btn" title="New File">+</button>
                         </div>
@@ -70,6 +71,16 @@
                         </div>
                         <div id="disassembly-view" class="view-content">
                             <div id="disassembly" class="disassembly-view"></div>
+                        </div>
+                        <div id="devices-view" class="view-content">
+                            <div id="devices" class="devices-view">
+                                <h3>Connected Devices</h3>
+                                <div id="device-list"></div>
+                                <div id="sevenseg-panel" class="device seven-seg">
+                                    <h4>7-Segment (seg0)</h4>
+                                    <div class="sevenseg-display" id="sevenseg-display"></div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>

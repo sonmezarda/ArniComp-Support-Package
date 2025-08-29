@@ -271,11 +271,12 @@ class Compiler:
         else:
             self.__add_assembly_line(f"strh {src_reg.name}")
         # Invalidate any cached register bound to the stored var (if tracked)
-        var_in_mem = self.var_manager.get_variable_from_address(address)
-        if var_in_mem is not None:
-            reg_with_var = self.register_manager.check_for_variable(var_in_mem)
-            if reg_with_var is not None and reg_with_var.mode == RegisterMode.VALUE:
-                reg_with_var.set_unknown_mode()
+        if address < self.var_manager.mem_end_addr and address >= self.var_manager.mem_start_addr:
+            var_in_mem = self.var_manager.get_variable_from_address(address)
+            if var_in_mem is not None:
+                reg_with_var = self.register_manager.check_for_variable(var_in_mem)
+                if reg_with_var is not None and reg_with_var.mode == RegisterMode.VALUE:
+                    reg_with_var.set_unknown_mode()
         return self.__get_assembly_lines_len()
 
     def __compile_assign_var(self, var: Variable, rhs_expr: str) -> int:
@@ -1322,7 +1323,7 @@ if __name__ == "__main__":
     compiler = create_default_compiler()
 
     
-    compiler.load_lines('files/clear_mem.arn')
+    compiler.load_lines('files/seven_seg.arn')
     compiler.break_commands()
     compiler.clean_lines()
     compiler.group_commands()
