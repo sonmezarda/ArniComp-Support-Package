@@ -19,7 +19,12 @@
 			"patterns": [
 				{
 					"name": "meta.preprocessor.define.arnicomp",
-					"match": "^\\s*#def\\s+[A-Za-z_][A-Za-z0-9_]*\\b"
+					"match": "^\\s*(#)(def|define)\\b\\s+([A-Za-z_][A-Za-z0-9_]*)",
+					"captures": {
+						"1": { "name": "punctuation.definition.directive.preprocessor.arnicomp" },
+						"2": { "name": "keyword.control.directive.preprocessor.arnicomp" },
+						"3": { "name": "entity.name.constant.preprocessor.arnicomp" }
+					}
 				}
 			]
 		},
@@ -28,6 +33,10 @@
 				{
 					"name": "keyword.control.arnicomp",
 					"match": "\\b(if|elif|else|endif|while|endwhile|dasm|endasm|break|continue)\\b"
+				},
+				{
+					"name": "storage.modifier.const.arnicomp",
+					"match": "\\bconst\\b"
 				}
 			]
 		},
@@ -58,6 +67,14 @@
 		},
 		"identifiers": {
 			"patterns": [
+				{
+					"name": "constant.other.symbol.arnicomp",
+					"match": "\\$[A-Za-z_][A-Za-z0-9_]*"
+				},
+				{
+					"name": "constant.other.arnicomp",
+					"match": "\\b[A-Z_][A-Z0-9_]*\\b"
+				},
 				{
 					"name": "variable.other.arnicomp",
 					"match": "\\b[A-Za-z_][A-Za-z0-9_]*\\b"
