@@ -13,6 +13,7 @@ class ArniCompEmulator {
         
         // Breakpoint system
         this.breakpoints = new Set();
+    this.selectedAddress = null; // disassembly selected line address
         
         // Settings
         this.settings = {
@@ -88,7 +89,7 @@ class ArniCompEmulator {
         document.getElementById('stop-btn').addEventListener('click', () => this.stopExecution());
 
         // Breakpoint controls
-        document.getElementById('toggle-breakpoint-btn').addEventListener('click', () => this.toggleCurrentBreakpoint());
+    document.getElementById('toggle-breakpoint-btn').addEventListener('click', () => this.toggleSelectedOrPromptBreakpoint());
         document.getElementById('clear-breakpoints-btn').addEventListener('click', () => this.clearAllBreakpoints());
 
         // Settings button
@@ -577,8 +578,26 @@ ldi #0b11111111
                     lineElement.classList.add('current-instruction');
                 }
                 
+                // Click selects line; Ctrl+Click toggles breakpoint
+                lineElement.addEventListener('click', async (e) => {
+                    if (e.ctrlKey) {
+                        await this.toggleBreakpointAtAddress(inst.address);
+                    } else {
+                        this.selectDisassemblyAddress(inst.address);
+                    }
+                });
+
+                // Double-click toggles breakpoint
+                lineElement.addEventListener('dblclick', async () => {
+                    await this.toggleBreakpointAtAddress(inst.address);
+                });
+
                 container.appendChild(lineElement);
             });
+
+            // Reapply breakpoint markers and selection/current highlights
+            this.updateDisassemblyBreakpoints();
+            this.updateDisassemblyHighlightWithPC(pcValue);
 
         } catch (error) {
             console.error('Disassembly refresh error:', error);
@@ -602,6 +621,8 @@ ldi #0b11111111
             // Refresh other components
             this.refreshDataMemory();
             this.refreshProgramMemory();
+            // Sync breakpoint markers from backend
+            this.loadBreakpoints();
             
         } catch (error) {
             console.error('RefreshAll error:', error);
@@ -665,12 +686,57 @@ ldi #0b11111111
         // Clear all highlights
         container.querySelectorAll('.disassembly-line').forEach(line => {
             line.classList.remove('current-instruction');
+            line.classList.remove('selected');
         });
         
         // Highlight current PC
         const currentLine = container.querySelector(`[data-address="${pcValue}"]`);
         if (currentLine) {
             currentLine.classList.add('current-instruction');
+        }
+
+        // Highlight selected address if any
+        if (this.selectedAddress !== null) {
+            const selLine = container.querySelector(`[data-address="${this.selectedAddress}"]`);
+            if (selLine) selLine.classList.add('selected');
+        }
+    }
+
+    selectDisassemblyAddress(address) {
+        this.selectedAddress = address;
+        this.updateDisassemblyHighlight();
+    }
+
+    async toggleSelectedOrPromptBreakpoint() {
+        // No prompt: add breakpoint to selected address or current PC
+        if (this.selectedAddress !== null) {
+            await this.setBreakpointAtAddress(this.selectedAddress);
+        } else {
+            try {
+                const result = await this.apiCall('/api/cpu_state');
+                if (result.success) {
+                    const pc = result.cpu.pc;
+                    await this.setBreakpointAtAddress(pc);
+                }
+            } catch (e) {
+                this.showStatus(`Breakpoint error: ${e.message}`, 'error');
+            }
+        }
+    }
+
+    async setBreakpointAtAddress(address) {
+        try {
+            const response = await this.apiCall('/api/breakpoints', 'POST', {
+                address: address,
+                enabled: true
+            });
+            if (response && response.success !== false) {
+                this.breakpoints.add(address);
+                this.updateDisassemblyBreakpoints();
+                this.showStatus(`Breakpoint set at address ${address}`, 'success');
+            }
+        } catch (err) {
+            this.showStatus(`Breakpoint error: ${err.message}`, 'error');
         }
     }
 
@@ -1282,6 +1348,48 @@ ldi #0b11111111
             }
         } catch (error) {
             console.error('Load breakpoints error:', error);
+        }
+    }
+
+    async toggleBreakpointAtAddress(address) {
+        try {
+            const hasBreakpoint = this.breakpoints.has(address);
+            const response = await this.apiCall('/api/breakpoints', 'POST', {
+                address: address,
+                enabled: !hasBreakpoint
+            });
+            if (response && response.success !== false) {
+                if (hasBreakpoint) {
+                    this.breakpoints.delete(address);
+                    this.showStatus(`Breakpoint removed from address ${address}`, 'success');
+                } else {
+                    this.breakpoints.add(address);
+                    this.showStatus(`Breakpoint set at address ${address}`, 'success');
+                }
+                this.updateDisassemblyBreakpoints();
+            }
+        } catch (err) {
+            this.showStatus(`Breakpoint error: ${err.message}`, 'error');
+        }
+    }
+
+    async promptToggleBreakpoint() {
+        try {
+            const input = prompt('Enter address (decimal or 0xHEX):');
+            if (!input) return;
+            let addr = 0;
+            if (input.startsWith('0x') || input.startsWith('0X')) {
+                addr = parseInt(input, 16);
+            } else {
+                addr = parseInt(input, 10);
+            }
+            if (Number.isNaN(addr) || addr < 0) {
+                this.showStatus('Invalid address', 'error');
+                return;
+            }
+            await this.toggleBreakpointAtAddress(addr);
+        } catch (e) {
+            this.showStatus(`Breakpoint prompt error: ${e.message}`, 'error');
         }
     }
 

@@ -265,9 +265,12 @@ async def step_execution(request: StepRequest):
         
         steps_executed = 0
         for i in range(request.count):
-            if cpu.halted or cpu.pc in breakpoints:
+            if cpu.halted:
                 break
-            
+            # If we're starting on a breakpoint, allow stepping one instruction
+            if i > 0 and cpu.pc in breakpoints:
+                break
+
             cpu.step()
             steps_executed += 1
             

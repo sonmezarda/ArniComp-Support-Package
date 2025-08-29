@@ -281,6 +281,13 @@ header h1 {
     border-left: 3px solid #ffc107;
 }
 
+/* Selected disassembly line */
+.disassembly-line.selected {
+    background-color: rgba(33, 150, 243, 0.15);
+    border-left: 3px solid #2196f3;
+    padding-left: 7px;
+}
+
 .disassembly-address {
     color: #64b5f6;
     width: 60px;
