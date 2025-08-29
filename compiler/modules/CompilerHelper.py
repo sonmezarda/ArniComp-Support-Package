@@ -916,14 +916,14 @@ class Compiler:
         if while_clause.type == WhileTypes.BYPASS:
             return self.__get_assembly_lines_len()
         elif while_clause.type == WhileTypes.CONDITIONAL:
-            # Create labels for loop start and exit using LabelManager helpers
+            # Create labels for loop start and exit
             start_label_name, _ = self.label_manager.create_while_start_label(self.__get_assembly_lines_len())
+            # Place loop start label
             self.__add_assembly_line(f"{start_label_name}:")
-
             # Evaluate condition and jump to end if false
             self.__compile_condition(while_clause.condition)
 
-            # Compile body in a context to measure length
+            # Compile body to measure length
             body_comp = self.create_context_compiler()
             body_comp.grouped_lines = while_clause.get_lines()
             body_comp.compile_lines()
@@ -947,9 +947,16 @@ class Compiler:
             self.__add_assembly_line(f"{end_label}:")
             return self.__get_assembly_lines_len()
         elif while_clause.type == WhileTypes.INFINITE:
+            # Preheader: detect MAR invariance across the loop body and hoist MAR setup if safe
+            body_cmds = while_clause.get_lines()
+            invariant_addr = self.__analyze_loop_mar_invariance(body_cmds)
+
             start_label_name, _ = self.label_manager.create_while_start_label(self.__get_assembly_lines_len())
+            if invariant_addr is not None:
+                # Seed MAR to invariant address before entering loop
+                self.__set_mar_abs(invariant_addr)
             self.__add_assembly_line(f"{start_label_name}:")
-            
+
             body_comp = self.create_context_compiler()
             body_comp.grouped_lines = while_clause.get_lines()
             body_comp.compile_lines()
@@ -962,6 +969,120 @@ class Compiler:
             pass
         else:
             raise TypeError("Unsupported while clause type.")
+
+    # ===== Loop analysis helpers =====
+    def __analyze_loop_mar_invariance(self, cmds: list[Command]) -> int | None:
+        """Path-sensitive MAR address invariance analysis over the loop body.
+        Returns a concrete absolute address if for all possible paths through the body,
+        MAR ends at the same address, and at least one command sets it.
+        Otherwise returns None.
+        """
+        ok, init_addr, final_addr = self.__eval_block_mar(None, cmds)
+        if not ok or init_addr is None or final_addr is None:
+            return None
+        return init_addr if init_addr == final_addr else None
+
+    def __eval_block_mar(self, in_addr: int | None, cmds: list[Command]) -> tuple[bool, int | None, int | None]:
+        """Evaluate a sequence of commands. Returns (ok, init_addr, out_addr).
+        - ok False => unknown
+        - init_addr is the first definite MAR address set within the block (or in_addr if none set)
+        - out_addr is the definite MAR address after the block
+        """
+        cur = in_addr
+        init = None
+        for c in cmds:
+            ok, new_cur = self.__apply_cmd_to_mar(cur, c)
+            if not ok:
+                return False, None, None
+            # Record first set address if not yet captured
+            if init is None and new_cur is not None and new_cur != cur:
+                init = new_cur
+            cur = new_cur
+        return True, (init if init is not None else in_addr), cur
+
+    def __apply_cmd_to_mar(self, cur_addr: int | None, cmd: Command) -> tuple[bool, int | None]:
+        """Apply a single command to MAR state.
+        Returns (ok, new_addr) where ok=False indicates unknown.
+        """
+        # Command wrapper handling
+        if isinstance(cmd, Command):
+            # IF/ELIF/ELSE chain
+            if getattr(cmd, 'command_type', None) == CommandTypes.IF and isinstance(cmd.line, IfElseClause):
+                clause: IfElseClause = cmd.line
+                outcomes: set[int | None] = set()
+
+                # Helper to eval a branch lines list
+                def eval_branch(lines_list):
+                    success, _, out = self.__eval_block_mar(cur_addr, lines_list)
+                    if not success:
+                        return False
+                    outcomes.add(out)
+                    return True
+
+                # if branch
+                if clause.get_if() is not None:
+                    if not eval_branch(clause.get_if().get_lines()):
+                        return False, None
+                # elif branches
+                for elif_clause in clause.get_elif():
+                    if not eval_branch(elif_clause.get_lines()):
+                        return False, None
+                # else branch
+                has_else = clause.get_else() is not None
+                if has_else:
+                    if not eval_branch(clause.get_else().get_lines()):
+                        return False, None
+                else:
+                    # No else => path where no branch executes
+                    outcomes.add(cur_addr)
+
+                # All possible outcomes must be same definite address
+                if None in outcomes or len(outcomes) != 1:
+                    return False, None
+                only = next(iter(outcomes))
+                return True, only
+
+            # Nested while or other controls: unknown
+            if getattr(cmd, 'command_type', None) == CommandTypes.WHILE:
+                return False, None
+
+            # Direct assembly via wrapper? treat unknown
+            if getattr(cmd, 'command_type', None) == CommandTypes.DIRECT_ASSEMBLY:
+                return False, None
+            # Do NOT return here; allow concrete subclasses below to be checked
+
+        # Direct absolute store: *ABS = expr
+        if isinstance(cmd, StoreToDirectAddressCommand):
+            try:
+                return True, int(cmd.addr)
+            except Exception:
+                return False, None
+
+        # Assignment: var or array element
+        if isinstance(cmd, AssignCommand):
+            var = self.var_manager.get_variable(cmd.var_name)
+            if cmd.is_array:
+                idx_expr = cmd.index_expr
+                try:
+                    idx = CompilerStaticMethods.convert_to_decimal(idx_expr) if idx_expr is not None else None
+                except Exception:
+                    idx = None
+                if idx is None:
+                    return False, None  # dynamic index -> unknown
+                base = var.address
+                try:
+                    return True, int(base + int(idx))
+                except Exception:
+                    return False, None
+            else:
+                return True, var.address
+
+        # Var defs/frees or direct asm mutate MAR unpredictably in our model
+        if isinstance(cmd, (VarDefCommand, VarDefCommandWithoutValue, FreeCommand, DirectAssemblyCommand)):
+            return False, None
+
+        # Unknown command types: assume no MAR effect
+        return True, cur_addr
 
     def __set_prl_as_label(self, label_name:str, label_position:int) -> int:
         if label_position + 2 > 0b1111111:
