@@ -20,7 +20,7 @@ def convert_to_machine_code_file(in_file:str, out_file:str):
     raw_lines = f.readlines()
     f.close()
 
-    lines_to_write_bin = assembly_helper.convert_to_machine_code(raw_lines)
+    lines_to_write_bin,_,_ = assembly_helper.convert_to_machine_code(raw_lines)
 
     f = open(out_file, 'w')
     f.writelines(lines_to_write_bin)

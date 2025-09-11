@@ -1474,7 +1474,7 @@ if __name__ == "__main__":
     compiler = create_default_compiler()
 
     
-    compiler.load_lines('files/seven_seg.arn')
+    compiler.load_lines('files/outtest.arn')
     compiler.break_commands()
     compiler.clean_lines()
     compiler.group_commands()

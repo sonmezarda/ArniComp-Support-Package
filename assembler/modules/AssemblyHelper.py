@@ -3,7 +3,7 @@ import json
 import os
 
 # Load config
-config_path = "C:\\Users\\arda.sonmez\\Desktop\\projects\\Assembler-Arnicomp\\config\\config.json"
+config_path = "/home/ardac/projects/ArniComp-Support-Package/assembler/config/config.json"
 with open(config_path, 'r') as f:
     config = json.load(f)
 

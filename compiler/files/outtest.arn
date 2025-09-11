@@ -1,0 +1,6 @@
+while 1
+    dasm
+        ldi #5
+        out ra
+    endasm
+endwhile
