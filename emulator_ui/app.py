@@ -20,7 +20,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 
 from emulator.cpu import CPU
-from assembler.modules.AssemblyHelper import AssemblyHelper
+from assemblerV2_python.modules.AssemblyHelper import AssemblyHelper
 
 app = FastAPI(title="ArniComp Emulator", description="8-bit CPU Emulator Web Interface")
 
@@ -62,92 +62,45 @@ class FileContent(BaseModel):
 class SaveFileRequest(BaseModel):
     content: str
 
-def decode_instruction(instruction_byte):
-    """Decode a single instruction byte to human-readable format"""
+def decode_instruction(instruction_byte:int):
     try:
-        # Get binary representation
-        binary = format(instruction_byte, '08b')
-        
-        # Check if it's LDI instruction (IM7 = 1)
-        if binary[0] == '1':
-            # LDI instruction - immediate value
-            value = instruction_byte & 0x7F  # Remove IM7 bit
-            return f"LDI #{value}"
-        
-        # Extract opcode (bits 1-4) and argcode (bits 5-7)
-        opcode = binary[1:5]
-        argcode = binary[5:8]
-        
-        # Opcode to instruction mapping
-        opcode_map = {
-            '0010': 'JMP',
-            '0011': 'ADDI',
-            '0100': 'ADD',
-            '0101': 'SUB',
-            '0110': 'SUBI',
-            '1000': 'MOV RA',
-            '1001': 'MOV RD', 
-            '1010': 'STRL/LDRL',
-            '1011': 'STRH/LDRH',
-            '1100': 'MOV PRL',
-            '1101': 'MOV PRH',
-            '1110': 'MOV MARL',
-            '1111': 'OUT/IN',
-            '0001': 'MOV MARH'
-        }
-        
-        # Argcode to register mapping
-        argcode_map = {
-            '000': 'RA',
-            '001': 'RD',
-            '010': 'ML',
-            '011': 'MH',
-            '100': 'PCL',
-            '101': 'PCH',
-            '110': 'ACC',
-            '111': 'P'
-        }
-        
-        instruction = opcode_map.get(opcode, f'UNK_{opcode}')
-        
-        # Handle specific instructions
-        if opcode == '0010':  # Jump instructions
-            jump_map = {
-                '000': 'JMP',
-                '001': 'JGT',
-                '010': 'JLT',
-                '100': 'JEQ',
-                '101': 'JGE',
-                '110': 'JLE',
-                '111': 'JNE'
-            }
-            return jump_map.get(argcode, f'JMP_{argcode}')
-        elif opcode == '1010':  # STRL/LDRL
-            if argcode in ['010', '011']:
-                return f'LDR{argcode_map.get(argcode, argcode)}'
-            else:
-                return f'STRL {argcode_map.get(argcode, argcode)}'
-        elif opcode == '1011':  # STRH/LDRH
-            if argcode in ['010', '011']:
-                return f'LDR{argcode_map.get(argcode, argcode)}'
-            else:
-                return f'STRH {argcode_map.get(argcode, argcode)}'
-        elif opcode == '1111':  # OUT/IN
-            if argcode == '111':
-                return 'IN'
-            else:
-                return f'OUT {argcode_map.get(argcode, argcode)}'
-        elif opcode in ['0100', '0101']:  # ADD/SUB
-            base_inst = 'ADD' if opcode == '0100' else 'SUB'
-            return f'{base_inst} {argcode_map.get(argcode, argcode)}'
-        elif opcode.startswith('10'):  # MOV instructions
-            src_reg = instruction.split()[-1] if ' ' in instruction else 'UNK'
-            dst_reg = argcode_map.get(argcode, argcode)
-            return f'MOV {src_reg}, {dst_reg}'
-        else:
-            return f'{instruction} {argcode_map.get(argcode, argcode)}'
-            
-    except Exception as e:
+        b = instruction_byte & 0xFF
+        bits = f"{b:08b}"
+        # LDI
+        if b & 0x80:
+            return f"LDI #{b & 0x7F}"
+        if bits in ['00000000','00000010']:
+            return 'NOP'
+        if bits == '00000001':
+            return 'HLT'
+        if bits == '00000011':
+            return 'CRA'
+        if bits.startswith('000001'):
+            return f"SUBI #{b & 0x03}"
+        if bits.startswith('00001'):
+            cond = bits[5:8]
+            jm = {'000':'JMP','001':'JEQ','010':'JGT','011':'JLT','100':'JGE','101':'JLE','110':'JNE','111':'JC'}
+            return jm.get(cond,'J?')
+        if bits.startswith('00011'):
+            return f"ADDI #{b & 0x07}"
+        if bits.startswith('00010'):
+            src = bits[5:8]
+            src_map = {'000':'RA','001':'RD','010':'ACC','011':'CLR','100':'PCL','101':'PCH','110':'ML','111':'MH'}
+            return f"AND {src_map.get(src,'?')}"
+        if bits.startswith('001'):
+            op = bits[3:5]
+            src = bits[5:8]
+            opm = {'00':'ADD','01':'SUB','10':'ADC','11':'SBC'}
+            src_map = {'000':'RA','001':'RD','010':'ACC','011':'CLR','100':'PCL','101':'PCH','110':'ML','111':'MH'}
+            return f"{opm.get(op,'A?')} {src_map.get(src,'?')}"
+        if bits.startswith('01'):
+            dest = bits[2:5]
+            src = bits[5:8]
+            dest_map = {'000':'RA','001':'RD','010':'MARL','011':'MARH','100':'PRL','101':'PRH','110':'ML','111':'MH'}
+            src_map = {'000':'RA','001':'RD','010':'ACC','011':'CLR','100':'PCL','101':'PCH','110':'ML','111':'MH'}
+            return f"MOV {dest_map.get(dest,'?')}, {src_map.get(src,'?')}"
+        return f"UNK {b:02X}"
+    except Exception:
         return f"ERR_{instruction_byte:02X}"
 
 @app.get("/", response_class=HTMLResponse)
@@ -173,17 +126,18 @@ async def get_cpu_state():
                     'prh': cpu.prh
                 },
                 'flags': {
-                    'equal': cpu.flags.equal,
-                    'lt': cpu.flags.lt,
-                    'gt': cpu.flags.gt
+                    'eq': getattr(cpu.flags, 'equal', False),
+                    'lt': getattr(cpu.flags, 'lt', False),
+                    'gt': getattr(cpu.flags, 'gt', False),
+                    'carry': getattr(cpu.flags, 'carry', False)
                 },
                 'memory_mode': 'HIGH' if cpu.memory_mode_high else 'LOW',
                 'data_addr': cpu.get_memory_address(),
                 'halted': cpu.halted,
                 'running': cpu.running,
                 'output': {
-                    'data': cpu.output_data,
-                    'address': cpu.output_address
+                    'data': getattr(cpu, 'output_data', 0),
+                    'address': getattr(cpu, 'output_address', 0)
                 }
             }
         }

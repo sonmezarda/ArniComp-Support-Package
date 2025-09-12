@@ -13,6 +13,7 @@ class CPUFlags:
         self.equal = False  # Equal flag (EQ) - result == 0
         self.lt = False     # Less Than flag (LT) - signed comparison 
         self.gt = False     # Greater Than flag (GT) - signed comparison
+        self.carry = False  # Carry flag (C) - add carry out / sub borrow
     
     def update_flags(self, alu_input_a, alu_input_b):
         """Update flags based on ALU inputs - ArniComp uses hardware comparator"""
@@ -27,9 +28,10 @@ class CPUFlags:
         self.lt = a_unsigned > b_unsigned  # LT flag
         self.equal = a_unsigned == b_unsigned  # EQ flag  
         self.gt = a_unsigned < b_unsigned  # GT flag
+    # carry not set here; handled in arithmetic ops
     
     def __str__(self):
-        return f"EQ:{int(self.equal)} LT:{int(self.lt)} GT:{int(self.gt)}"
+        return f"EQ:{int(self.equal)} LT:{int(self.lt)} GT:{int(self.gt)} C:{int(self.carry)}"
 
 class CPU:
     def __init__(self):
@@ -228,195 +230,177 @@ class CPU:
         return instruction
     
     def decode_instruction(self, instruction):
-        """Decode 8-bit instruction"""
-        im7 = (instruction >> 7) & 1
-        
-        if im7 == 1:
-            # LDI instruction - immediate load to RA
-            value = instruction & 0x7F  # 7-bit immediate value
-            return 'LDI', [value]
-        else:
-            # Normal instruction
-            opcode = (instruction >> 3) & 0xF  # 4-bit opcode
-            argcode = instruction & 0x7        # 3-bit argcode
-            
-            # Find instruction by opcode and argcode
-            # First check constant opcodes (more specific)
-            for inst_name, inst_data in self.instructions.items():
-                if inst_name == 'LDI':
-                    continue
-                
-                if inst_data.get('opcode_type') == 'constant':
-                    expected_opcode = inst_data.get('opcode')
-                    if expected_opcode and int(expected_opcode, 2) == opcode:
-                        # Check argcode
-                        if inst_data.get('argcode_type') == 'constant':
-                            expected_argcode = inst_data.get('argcode')
-                            if expected_argcode and int(expected_argcode, 2) == argcode:
-                                return inst_name, []
-                        elif inst_data.get('argcode_type') == 'out_reg':
-                            # Find register by argcode
-                            for reg_name, reg_code in self.argcode_types['out_reg'].items():
-                                if int(reg_code, 2) == argcode:
-                                    return inst_name, [reg_name.upper()]
-                        elif inst_data.get('argcode_type') == 'number':
-                            return inst_name, [argcode]
-            
-            # Then check register opcodes  
-            for inst_name, inst_data in self.instructions.items():
-                if inst_name == 'LDI':
-                    continue
-                
-                if inst_data.get('opcode_type') == 'in_reg':
-                    for source_reg, reg_code in self.opcode_types['in_reg'].items():
-                        if int(reg_code, 2) == opcode:
-                            if inst_data.get('argcode_type') == 'constant':
-                                expected_argcode = inst_data.get('argcode')
-                                if expected_argcode and int(expected_argcode, 2) == argcode:
-                                    return inst_name, [source_reg.upper()]
-                            elif inst_data.get('argcode_type') == 'out_reg':
-                                # Two register instruction like MOV
-                                for dest_reg, dest_code in self.argcode_types['out_reg'].items():
-                                    if int(dest_code, 2) == argcode:
-                                        return inst_name, [source_reg.upper(), dest_reg.upper()]
-            
-            return 'UNKNOWN', [opcode, argcode]
+        """Decode 8-bit instruction according to new Sept 2025 encoding"""
+        # LDI (bit7=1)
+        if instruction & 0x80:
+            return 'LDI', [instruction & 0x7F]
+
+        bits = f"{instruction:08b}"
+
+        # Fixed single-byte patterns
+        if bits == '00000000' or bits == '00000010':
+            return 'NOP', []
+        if bits == '00000001':
+            return 'HLT', []
+        if bits == '00000011':
+            return 'CRA', []
+
+        # SUBI 000001ii
+        if bits.startswith('000001'):
+            imm = instruction & 0x03
+            return 'SUBI', [imm]
+
+        # Jump 00001ccc
+        if bits.startswith('00001'):
+            cond = bits[5:8]
+            cond_map = {
+                '000': 'JMP', '001': 'JEQ', '010': 'JGT', '011': 'JLT',
+                '100': 'JGE', '101': 'JLE', '110': 'JNE', '111': 'JC'
+            }
+            return cond_map.get(cond, 'UNKNOWN'), []
+
+        # ADDI 00011iii
+        if bits.startswith('00011'):
+            imm = instruction & 0x07
+            return 'ADDI', [imm]
+
+        # AND 00010src
+        if bits.startswith('00010'):
+            src = bits[5:8]
+            return 'AND', [self._decode_src_reg(src)]
+
+        # Arithmetic 001ooosrc
+        if bits.startswith('001'):
+            op = bits[3:5]
+            src = bits[5:8]
+            op_map = {'00': 'ADD', '01': 'SUB', '10': 'ADC', '11': 'SBC'}
+            return op_map.get(op, 'UNKNOWN'), [self._decode_src_reg(src)]
+
+        # MOV 01dddsrc
+        if bits.startswith('01'):
+            dest = bits[2:5]
+            src = bits[5:8]
+            return 'MOV', [self._decode_dest_reg(dest), self._decode_src_reg(src)]
+
+        return 'UNKNOWN', []
+
+    def _decode_dest_reg(self, bits3:str):
+        mapping = {
+            '000': 'RA', '001': 'RD', '010': 'MARL', '011': 'MARH',
+            '100': 'PRL', '101': 'PRH', '110': 'ML', '111': 'MH'
+        }
+        return mapping.get(bits3, 'RA')
+
+    def _decode_src_reg(self, bits3:str):
+        mapping = {
+            '000': 'RA', '001': 'RD', '010': 'ACC', '011': 'CLR',
+            '100': 'PCL', '101': 'PCH', '110': 'ML', '111': 'MH'
+        }
+        return mapping.get(bits3, 'RA')
     
     def execute_instruction(self, inst_name, args):
         """Execute decoded instruction"""
         if self.debug_mode:
             print(f"Executing: {inst_name} {args}")
         
+        if inst_name == 'NOP':
+            return
+        if inst_name == 'HLT':
+            self.halted = True
+            return
+        if inst_name == 'CRA':
+            # CRA only clears RA (original hardware semantic)
+            self.ra = 0
+            return
         if inst_name == 'LDI':
-            # Load immediate to RA
-            self.ra = args[0] & 0xFF
-            
-        elif inst_name == 'MOV':
-            # MOV dest, source (args[0] = dest, args[1] = source)
-            if len(args) >= 2:
-                source_val = self.get_register_value(args[1])
-                self.set_register_value(args[0], source_val)
-                
-                # Special handling for memory mode
-                if args[0].upper() in ['ML', 'MH']:
-                    self.memory_mode_high = (args[0].upper() == 'MH')
-        
-        elif inst_name == 'ADD':
-            # ADD source - adds RD + source, stores in ACC
-            if len(args) >= 1:
-                source_val = self.get_register_value(args[0])
-                # Hardware comparator: RD vs source_val
-                self.flags.update_flags(self.rd, source_val)
-                result = self.rd + source_val  # RD + source
+            self.ra = args[0] & 0x7F
+            return
+        if inst_name == 'MOV' and len(args) == 2:
+            dest, src = args
+            val = 0
+            if src == 'CLR':
+                val = 0
+            else:
+                val = self.get_register_value(src)
+            self.set_register_value(dest, val)
+            if dest in ['ML','MH']:
+                self.memory_mode_high = (dest == 'MH')
+            return
+        if inst_name in ['ADD','SUB','ADC','SBC'] and len(args) == 1:
+            src_val = self.get_register_value(args[0])
+            # Comparator uses RD vs source
+            self.flags.update_flags(self.rd, src_val)
+            if inst_name in ['ADD','ADC']:
+                base = self.rd + src_val
+                if inst_name == 'ADC' and self.flags.carry:
+                    base += 1
+                self.flags.carry = base > 0xFF
+                self.acc = base & 0xFF
+            else:  # SUB / SBC
+                minuend = self.acc if inst_name in ['SUB','SBC'] else self.rd
+                subtrahend = src_val + (1 if (inst_name == 'SBC' and self.flags.carry) else 0)
+                result = (minuend - subtrahend) & 0x1FF
+                # Borrow occurred if minuend < subtrahend
+                borrow = minuend < subtrahend
+                # Convention: carry flag = NOT borrow (so JC means no borrow) OR keep borrow semantics?
+                # We'll set carry=False on borrow for typical 6502-like SBC semantics
+                self.flags.carry = not borrow
                 self.acc = result & 0xFF
-        
-        elif inst_name == 'SUB':
-            # SUB source - subtracts source from ACC
-            if len(args) >= 1:
-                source_val = self.get_register_value(args[0])
-                # Hardware comparator: RD vs source_val
-                self.flags.update_flags(self.rd, source_val)
-                result = self.acc - source_val
-                self.acc = result & 0xFF
-        
-        elif inst_name == 'ADDI':
-            # ADDI immediate - adds RD + immediate, stores in ACC
-            if len(args) >= 1:
-                immediate = args[0]
-                # Hardware comparator: RD vs immediate
-                self.flags.update_flags(self.rd, immediate)
-                result = self.rd + immediate
-                self.acc = result & 0xFF
-        
-        elif inst_name == 'SUBI':
-            # SUBI immediate - subtracts immediate from RD, stores in ACC
-            if len(args) >= 1:
-                immediate = args[0]
-                # Hardware comparator: RD vs immediate
-                self.flags.update_flags(self.rd, immediate)
-                result = self.rd - immediate
-                self.acc = result & 0xFF
-        
-        elif inst_name == 'LDRL':
-            # LDRL dest - load from memory to dest (low mode)
-            if len(args) >= 1:
-                self.memory_mode_high = False
-                value = self.read_memory()
-                self.set_register_value(args[0], value)
-        
-        elif inst_name == 'LDRH':
-            # LDRH dest - load from memory to dest (high mode)
-            if len(args) >= 1:
-                self.memory_mode_high = True
-                value = self.read_memory()
-                self.set_register_value(args[0], value)
-        
-        elif inst_name == 'STRL':
-            # STRL source - store source to memory (low mode)
-            if len(args) >= 1:
-                self.memory_mode_high = False
-                value = self.get_register_value(args[0])
-                self.write_memory(value)
-        
-        elif inst_name == 'STRH':
-            # STRH source - store source to memory (high mode)
-            if len(args) >= 1:
-                self.memory_mode_high = True
-                value = self.get_register_value(args[0])
-                self.write_memory(value)
-        
-        elif inst_name == 'JMP':
-            # Unconditional jump
-            self.pc = (self.prh << 8) | self.prl
-        
-        elif inst_name == 'JEQ':
-            # Jump if equal (Equal flag set)
-            if self.flags.equal:
-                self.pc = (self.prh << 8) | self.prl
-        
-        elif inst_name == 'JNE':
-            # Jump if not equal (Equal flag clear)
-            if not self.flags.equal:
-                self.pc = (self.prh << 8) | self.prl
-        
-        elif inst_name == 'JLT':
-            # Jump if less than (LT flag set)
-            if self.flags.lt:
-                self.pc = (self.prh << 8) | self.prl
-        
-        elif inst_name == 'JGT':
-            # Jump if greater than (GT flag set)
-            if self.flags.gt:
-                self.pc = (self.prh << 8) | self.prl
-        
-        elif inst_name == 'JLE':
-            # Jump if less than or equal (LT or Equal)
-            if self.flags.lt or self.flags.equal:
-                self.pc = (self.prh << 8) | self.prl
-        
-        elif inst_name == 'JGE':
-            # Jump if greater than or equal (GT or Equal)
-            if self.flags.gt or self.flags.equal:
-                self.pc = (self.prh << 8) | self.prl
-        
-        elif inst_name == 'OUT':
-            # Output to peripheral bus
-            if len(args) >= 1:
-                self.output_data = self.get_register_value(args[0])
-                self.output_address = self.ra  # RA drives output address bus
-                if self.debug_mode:
-                    print(f"OUTPUT: Data=0x{self.output_data:02X} Address=0x{self.output_address:02X}")
-        
-        elif inst_name == 'IN':
-            # Input from peripheral (placeholder - returns 0)
-            if len(args) >= 1:
-                # In real hardware, this would read from input bus
-                input_value = 0  # Placeholder
-                self.set_register_value(args[0], input_value)
-        
-        else:
+            return
+        if inst_name == 'AND' and len(args) == 1:
+            src_val = self.get_register_value(args[0])
+            self.acc = self.acc & src_val
+            # Flags from RD vs src (keep comparator policy)
+            self.flags.update_flags(self.rd, src_val)
+            return
+        if inst_name == 'ADDI' and len(args) == 1:
+            imm = args[0] & 0x07
+            self.flags.update_flags(self.rd, imm)
+            total = self.rd + imm
+            self.flags.carry = total > 0xFF
+            self.acc = total & 0xFF
+            return
+        if inst_name == 'SUBI' and len(args) == 1:
+            imm = args[0] & 0x03
+            self.flags.update_flags(self.rd, imm)
+            result = (self.rd - imm) & 0x1FF
+            borrow = self.rd < imm
+            self.flags.carry = not borrow
+            self.acc = result & 0xFF
+            return
+        if inst_name in ['JMP','JEQ','JGT','JLT','JGE','JLE','JNE','JC']:
+            target = (self.prh << 8) | self.prl
+            take = False
+            if inst_name == 'JMP':
+                take = True
+            elif inst_name == 'JEQ':
+                take = self.flags.equal
+            elif inst_name == 'JGT':
+                take = self.flags.gt
+            elif inst_name == 'JLT':
+                take = self.flags.lt
+            elif inst_name == 'JGE':
+                take = self.flags.gt or self.flags.equal
+            elif inst_name == 'JLE':
+                take = self.flags.lt or self.flags.equal
+            elif inst_name == 'JNE':
+                take = not self.flags.equal
+            elif inst_name == 'JC':
+                take = self.flags.carry
+            if take:
+                self.pc = target
+            return
+        if inst_name == 'OUT' and len(args) == 1:
+            self.output_data = self.get_register_value(args[0])
+            self.output_address = self.ra
             if self.debug_mode:
-                print(f"Unknown instruction: {inst_name}")
+                print(f"OUTPUT: Data=0x{self.output_data:02X} Address=0x{self.output_address:02X}")
+            return
+        if inst_name == 'IN' and len(args) == 1:
+            self.set_register_value(args[0], 0)
+            return
+        if self.debug_mode:
+            print(f"Unknown instruction: {inst_name}")
     
     def step(self):
         """Execute one instruction"""
