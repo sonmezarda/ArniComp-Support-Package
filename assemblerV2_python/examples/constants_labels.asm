@@ -1,0 +1,11 @@
+const INIT = #5
+const INC  = #3
+const DEC  = #1
+START:
+LDI $INIT
+ADDI $INC
+SUBI $DEC
+LDI @START
+MOV RD, RA
+ADD RD
+HLT
