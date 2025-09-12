@@ -1,3 +1,9 @@
+deneme:
 Hello World
+; sa
 
-Hellow
+    Hellow;asdasd
+ddeneme2:
+asdas
+
+equ A 5
