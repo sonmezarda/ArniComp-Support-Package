@@ -1,6 +1,7 @@
 from __future__ import annotations
 import json
 import os
+import re
 
 """New instruction set encoding (Sept 2025)
 
@@ -153,38 +154,62 @@ class AssemblyHelper:
     def get_constants(self, lines:list[str]) -> dict[str, int]:
         """
         Extracts constants from a list of assembly lines.
-        
-        Args:
-            lines (list[str]): The list of assembly lines.
-        
-        Returns:
-            dict[str, int]: A dictionary with constant names as keys and their values as integers.
+        Supports:
+         - CONST NAME VALUE
+         - CONST NAME = VALUE
+         - NAME EQU VALUE
+        Matching is case-insensitive for keywords (CONST/EQU).
         """
-        constants = {}
+        constants: dict[str, int] = {}
+        const_kw_up = self.constant_keyword.upper()
         for line in lines:
-            if line.startswith(self.constant_keyword):
-                line = line.replace(self.constant_keyword, '', 1)
-                line = line.strip()
-                parts = line.split('=')
-                if len(parts) == 2:
-                    const_name = parts[0].strip()
-                    const_value = self.to_decimal(parts[1].strip())
-                    constants[const_name] = const_value
+            raw = line.strip()
+            if not raw:
+                continue
+            up = raw.upper()
+
+            # Pattern: CONST NAME [=] VALUE
+            if up.startswith(const_kw_up):
+                rest = raw[len(self.constant_keyword):].strip()
+                if not rest:
+                    continue
+                # Split by '=' if present, else by whitespace
+                if '=' in rest:
+                    name_part, val_part = rest.split('=', 1)
+                else:
+                    parts = rest.split(None, 1)
+                    if len(parts) != 2:
+                        continue
+                    name_part, val_part = parts[0], parts[1]
+                const_name = name_part.strip().upper()
+                const_value = self.to_decimal(val_part.strip())
+                constants[const_name] = const_value
+                continue
+
+            # Pattern: NAME EQU VALUE
+            m = re.match(r"^([A-Za-z_][\w]*)\s+EQU\s+(.+)$", raw, flags=re.IGNORECASE)
+            if m:
+                const_name = m.group(1).strip().upper()
+                val_part = m.group(2).strip()
+                const_value = self.to_decimal(val_part)
+                constants[const_name] = const_value
+                continue
+
         return constants
 
     def remove_constants(self, lines:list[str]) -> list[str]:
         """
-        Removes constants from a list of assembly lines.
-        
-        Args:
-            lines (list[str]): The list of assembly lines.
-        
-        Returns:
-            list[str]: A new list with constants removed.
+        Removes constant-definition lines from a list of assembly lines.
+        Handles both CONST ... and NAME EQU ... forms (case-insensitive).
         """
         cleaned_lines = []
+        const_kw_up = self.constant_keyword.upper()
         for line in lines:
-            if line.startswith(self.constant_keyword):
+            raw = line.strip()
+            up = raw.upper()
+            if up.startswith(const_kw_up):
+                continue
+            if re.match(r"^[A-Za-z_][\w]*\s+EQU\s+.+$", raw, flags=re.IGNORECASE):
                 continue
             cleaned_lines.append(line)
         return cleaned_lines
@@ -242,6 +267,43 @@ class AssemblyHelper:
         operands = []
         if operands_part:
             operands = [op.strip() for op in operands_part.split(',') if op.strip()]
+
+        # Pseudo-instructions for memory low/high latches
+        if mnemonic == 'STRL':
+            # STRL src -> MOV ML, src
+            if len(operands) != 1:
+                raise ValueError(f"STRL syntax: STRL src -> got: {line}")
+            src = operands[0].upper()
+            if src not in SRC_REGS:
+                raise ValueError(f"Unknown source register '{src}' in line: {line}")
+            return '01' + DEST_REGS['ML'] + SRC_REGS[src]
+
+        if mnemonic == 'STRH':
+            # STRH src -> MOV MH, src
+            if len(operands) != 1:
+                raise ValueError(f"STRH syntax: STRH src -> got: {line}")
+            src = operands[0].upper()
+            if src not in SRC_REGS:
+                raise ValueError(f"Unknown source register '{src}' in line: {line}")
+            return '01' + DEST_REGS['MH'] + SRC_REGS[src]
+
+        if mnemonic == 'LDRL':
+            # LDRL dest -> MOV dest, ML
+            if len(operands) != 1:
+                raise ValueError(f"LDRL syntax: LDRL dest -> got: {line}")
+            dest = operands[0].upper()
+            if dest not in DEST_REGS:
+                raise ValueError(f"Unknown destination register '{dest}' in line: {line}")
+            return '01' + DEST_REGS[dest] + SRC_REGS['ML']
+
+        if mnemonic == 'LDRH':
+            # LDRH dest -> MOV dest, MH
+            if len(operands) != 1:
+                raise ValueError(f"LDRH syntax: LDRH dest -> got: {line}")
+            dest = operands[0].upper()
+            if dest not in DEST_REGS:
+                raise ValueError(f"Unknown destination register '{dest}' in line: {line}")
+            return '01' + DEST_REGS[dest] + SRC_REGS['MH']
 
         # LDI #imm7
         if mnemonic == 'LDI':
@@ -331,16 +393,18 @@ class AssemblyHelper:
         return binary_lines
     
     def to_decimal(self, value:str) -> int:
-        if value.startswith(self.number_prefix):
-            value = value[len(self.number_prefix):]
-            if value.startswith("0x"):
-                return int(value[2:], 16)
-            elif value.startswith("0b"):
-                return int(value[2:], 2)
-            else:
-                return int(value)
-        else:
-            return int(value)
+        v = value.strip()
+        # Allow optional immediate prefix (e.g., '#')
+        if v.startswith(self.number_prefix):
+            v = v[len(self.number_prefix):].strip()
+        # Accept hex/bin with or without '#', case-insensitive
+        low = v.lower()
+        if low.startswith("0x"):
+            return int(v, 16)
+        if low.startswith("0b"):
+            return int(v, 2)
+        # Decimal (could be e.g., '10')
+        return int(v, 10)
     
     def disassemble_instruction(self, instruction_byte:int|str):
         if instruction_byte is None:
@@ -399,8 +463,10 @@ class AssemblyHelper:
     
 
     def convert_to_machine_code(self, raw_lines:list[str]):
+        # Normalize to uppercase for mnemonics, registers, and symbol names
         clines = self.upper_lines(raw_lines)
-        clines = self.remove_whitespaces_lines(raw_lines)
+        # Remove whitespace/comments on the normalized lines
+        clines = self.remove_whitespaces_lines(clines)
         print(f"Cleaned lines: {clines}")
         constants = self.get_constants(clines)
         print(f"Constants found: {constants}")

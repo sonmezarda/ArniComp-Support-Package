@@ -3,7 +3,7 @@ import sys, os
 from config import *
 from modules.AssemblyHelper import AssemblyHelper
 from modules.EepromLoader import EepromLoader
-from modules.HexConverter import save_intelHexFile
+from modules.HexConverter import save_intelHexFile, save_intelHexFile_from_pairs
 
 assembly_helper  = AssemblyHelper(comment_char=';', 
                                   label_char=':', 
@@ -57,6 +57,7 @@ def print_help():
     print("  assemble <in.asm> [out.txt]       - Assembly -> machine code (binary string)")
     print("  createbin <in.txt> [out.bin]      - Machine code -> .bin file")
     print("  createihex <in.asm> [out.hex]     - Machine code -> .hex file")
+    print("  createihexpairs <in.txt> [out.hex] [addrBase] [dataBase] - 'adres değer' satırlarını IHEX'e çevirir")
     print("  load <in.bin>                     - EEPROM yüklemesi yapar")
     print("  loadAssembly <in.asm>             - Assembly -> yükleme (geçici dosya üretir)")
     print("  help                              - Bu mesajı gösterir")
@@ -100,6 +101,21 @@ def main():
         lines_to_write_bin,_,_ = assembly_helper.convert_to_machine_code(raw_lines)
         save_intelHexFile(out_file, lines_to_write_bin, 'bin')
         print(f"Intel HEX dosyası üretildi: {out_file}")
+
+    elif command == "createihexpairs":
+        if len(sys.argv) < 3:
+            print("Hata: input dosya adı gerekli.")
+            return
+        in_file = sys.argv[2]
+        out_file = sys.argv[3] if len(sys.argv) >= 4 else os.path.splitext(in_file)[0] + ".hex"
+        addr_base = sys.argv[4] if len(sys.argv) >= 5 else 'bin'
+        data_base = sys.argv[5] if len(sys.argv) >= 6 else 'bin'
+
+        with open(in_file, 'r') as f:
+            lines = f.readlines()
+
+        save_intelHexFile_from_pairs(out_file, lines, addr_base, data_base)
+        print(f"Adres-değer çiftlerinden Intel HEX üretildi: {out_file}")
 
     elif command == "load":
         if len(sys.argv) < 3:
