@@ -63,9 +63,23 @@ class ByteArrayVariable(Variable):
     def get_size():
         return 1
 
+class Uint16Variable(Variable):
+    def __init__(self, name:str, address:int, value:int = 0):
+        super().__init__(size=Uint16Variable.get_size(), value_type=int, name=name, address=address, value=value)
+        if not (0 <= value < 65536):
+            raise ValueError("Uint16 variable value must be between 0 and 65535")
+
+    @staticmethod
+    def get_value_type():
+        return int
+    
+    @staticmethod
+    def get_size():
+        return 2
 class VarTypes(Enum):
     BYTE = ByteVariable
     BYTE_ARRAY = ByteArrayVariable
+    UINT16 = Uint16Variable
 
 class IntTypes(IntEnum):
     DECIMAL = 0
