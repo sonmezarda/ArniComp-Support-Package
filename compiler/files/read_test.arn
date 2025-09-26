@@ -1,0 +1,7 @@
+#define BUTTON_ADDR 0x2000
+
+byte i;
+
+while 1
+    i = *BUTTON_ADDR;
+endwhile

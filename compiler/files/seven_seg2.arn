@@ -1,0 +1,11 @@
+#define SSADDR 0x1000
+
+byte i = 0;
+
+while 1
+    *SSADDR = i
+    i = i + 1
+    if i > 254
+        i = 0
+    endif
+endwhile
