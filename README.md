@@ -4,6 +4,9 @@ This repository is currently under development.
 
 Assembler-Arnicomp is an assembler project designed for a breadboard computer that I have built. The assembler translates assembly code into machine code that runs on the custom hardware. In addition to the assembler, this project will eventually include an emulator and a compiler, both of which are still in progress.
 
+## Digital.exe Simulation Model
+<img width="804" height="830" alt="image" src="https://github.com/user-attachments/assets/b10fd851-3feb-4a6f-80e6-096f6f67534e" />
+
 ## Project Overview
 
 - **Assembler:** ✅ Fully functional. Converts assembly instructions for the Arnicomp breadboard computer into executable machine code.
