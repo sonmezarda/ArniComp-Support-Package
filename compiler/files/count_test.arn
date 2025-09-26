@@ -1,0 +1,23 @@
+#define BUTTON_ADR 0x2000
+#define SS_ADR 0x1000
+#define BUTTON1_MASK 0b00000001
+#define BUTTON2_MASK 0b00000010
+
+byte c = 0;
+byte button;
+byte temp;
+byte flag = 0;
+
+while 1
+    button = *BUTTON_ADR;
+    temp = button & BUTTON1_MASK;
+    if temp == 1
+        if flag == 0
+            c = c + 1;
+            flag = 1;
+        endif
+    else
+        flag = 0;
+    endif
+    *SS_ADR = c;
+endwhile

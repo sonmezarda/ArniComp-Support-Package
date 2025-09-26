@@ -16,6 +16,30 @@
 			"args": [
 				"- << 'PY'\nfrom compiler.modules.CompilerHelper import create_default_compiler\nfrom compiler.modules.Commands import AssignCommand, VarDefCommandWithoutValue\n\nc = create_default_compiler()\n# define scalar\nc.set_grouped_lines([\n    VarDefCommandWithoutValue('byte x;'),\n])\nc.compile_lines()\n# assign scalar\nc.set_grouped_lines([\n    AssignCommand('x = 5'),\n])\nc.compile_lines()\n# define array\nc.set_grouped_lines([\n    VarDefCommandWithoutValue('byte[3] arr;'),\n])\nc.compile_lines()\n# assign array element\nc.set_grouped_lines([\n    AssignCommand('arr[1] = 7'),\n])\nc.compile_lines()\nprint('\\n'.join(c.get_assembly_lines()))\nPY"
 			]
+		},
+		{
+			"label": "run smoke compile (count_test)",
+			"type": "shell",
+			"command": "python",
+			"args": [
+				"- << 'PY'\nfrom compiler.modules.CompilerHelper import create_default_compiler\n\nc = create_default_compiler()\n\n# Compile count_test.arn and print assembly\nc.load_lines('files/count_test.arn')\nc.break_commands()\nc.clean_lines()\nc.group_commands()\nc.compile_lines()\nprint('\\n'.join(c.get_assembly_lines()))\nPY"
+			],
+			"problemMatcher": [
+				"$python"
+			],
+			"group": "build"
+		},
+		{
+			"label": "quick-compile-smoke-2",
+			"type": "shell",
+			"command": "python",
+			"args": [
+				"- << 'PY'\nfrom compiler.modules.CompilerHelper import create_default_compiler\nfrom compiler.modules.Commands import AssignCommand, VarDefCommandWithoutValue\n\nc = create_default_compiler()\n# define scalar\nc.set_grouped_lines([\n    VarDefCommandWithoutValue('byte x;'),\n])\nc.compile_lines()\n# assign scalar\nc.set_grouped_lines([\n    AssignCommand('x = 5'),\n])\nc.compile_lines()\n# define array\nc.set_grouped_lines([\n    VarDefCommandWithoutValue('byte[3] arr;'),\n])\nc.compile_lines()\n# assign array element\nc.set_grouped_lines([\n    AssignCommand('arr[1] = 7'),\n])\nc.compile_lines()\nprint('\\n'.join(c.get_assembly_lines()))\nPY"
+			],
+			"problemMatcher": [
+				"$python"
+			],
+			"group": "build"
 		}
 	]
 }

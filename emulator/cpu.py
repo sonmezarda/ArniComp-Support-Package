@@ -349,7 +349,8 @@ class CPU:
             return
         if inst_name == 'AND' and len(args) == 1:
             src_val = self.get_register_value(args[0])
-            self.acc = self.acc & src_val
+            # Hardware semantics: ACC <- RD & src
+            self.acc = self.rd & src_val
             # Flags from RD vs src (keep comparator policy)
             self.flags.update_flags(self.rd, src_val)
             return

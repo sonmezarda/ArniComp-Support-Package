@@ -1,0 +1,6 @@
+byte a = 0b00001111;
+byte b = 0b11110000;
+
+byte c;
+c = a & b;
+

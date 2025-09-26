@@ -106,10 +106,10 @@ class VarDefCommand(Command):
             self.var_type = VarTypes[base_type]
 
         self.var_name = name
-
+        print(f"Defining variable '{self.var_name}' of type '{self.var_type}' with initial value '{value}'")
         if self.var_type == VarTypes.BYTE or self.var_type == VarTypes.UINT16:
             try:
-                self.var_value = int(value)
+                self.var_value = CSM.convert_to_decimal(value)
             except ValueError:
                 raise ValueError(f"Unsupported initial value for scalar byte: {value}")
         elif self.var_type == VarTypes.BYTE_ARRAY:

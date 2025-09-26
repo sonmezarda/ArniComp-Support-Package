@@ -136,9 +136,9 @@ class Compiler:
         
         if command.var_type == VarTypes.BYTE:
             # Set MAR first, then RA, then store (keeps optimal instruction order)
-            self.__set_mar(new_var)
+            self.__set_mar_abs(new_var.address)
             self.__set_ra_const(command.var_value)
-            self.__store_with_current_mar(new_var, self.register_manager.ra)
+            self.__store_with_current_mar_abs(new_var.address, self.register_manager.ra)
 
             self.register_manager.marl.set_variable(new_var, RegisterMode.ADDR)
 
@@ -151,6 +151,8 @@ class Compiler:
     def __rhs_needs_memory(self, expr: str) -> bool:
         """Return True if evaluating expr requires memory loads (variables/array)."""
         s = expr.strip()
+        if s.startswith('*'):
+            return True
         # Pure literal?
         try:
             if CompilerStaticMethods.convert_to_decimal(s) is not None:
@@ -178,6 +180,26 @@ class Compiler:
     def __compute_rhs(self, expr: str) -> Register:
         """Compute RHS expression and return the register holding the result (RA/ACC/RD)."""
         s = expr.strip()
+        # Direct absolute memory dereference: *<number>
+        if s.startswith('*'):
+            inner = s[1:].strip()
+            try:
+                address = CompilerStaticMethods.convert_to_decimal(inner)
+            except Exception:
+                address = None
+            if address is None:
+                raise ValueError(f"Invalid dereference address: {s}")
+            # Point MAR to address and load into RD
+            self.__set_mar_abs(address)
+            if address <= MAX_LOW_ADDRESS:
+                self.__add_assembly_line("ldrl rd")
+            else:
+                self.__add_assembly_line("ldrh rd")
+            try:
+                self.register_manager.rd.set_unknown_mode()
+            except Exception:
+                pass
+            return self.register_manager.rd
         # Array read: name[idx]
         m = re.match(r'^([A-Za-z_][A-Za-z0-9_]*)\[(.+)\]$', s)
         if m:
@@ -200,7 +222,7 @@ class Compiler:
             return self.register_manager.rd
 
         # Has operators? use existing expression evaluator into ACC
-        if ('+' in s) or ('-' in s):
+        if ('+' in s) or ('-' in s) or ('&' in s):
             norm = self.__normalize_expression(s)
             self.__evaluate_expression(norm)  # leaves result in ACC
             return self.register_manager.acc
@@ -288,9 +310,9 @@ class Compiler:
             src_reg: Register
             if needs_mem:
                 src_reg = self.__compute_rhs(rhs_expr)
-                self.__set_mar(var)
+                self.__set_mar_abs(var.address)
             else:
-                self.__set_mar(var)
+                self.__set_mar_abs(var.address)
                 src_reg = self.__compute_rhs(rhs_expr)
             # store (var is byte for now)
             if var.address <= MAX_LOW_ADDRESS:
@@ -344,8 +366,19 @@ class Compiler:
         else:
             self.__set_mar_array_elem(arr_var, index_expr)
             src_reg = self.__compute_rhs(rhs_expr)
-        # store (assume low-page arrays unless index made MARH set already)
-        self.__add_assembly_line(f"strl {src_reg.name}")
+        # store: if constant index, select strl/strh by absolute address; else dynamic index is restricted to low page
+        try:
+            idx = CompilerStaticMethods.convert_to_decimal(index_expr)
+        except Exception:
+            idx = None
+        if idx is not None:
+            abs_addr = arr_var.address + int(idx)
+            if abs_addr <= MAX_LOW_ADDRESS:
+                self.__add_assembly_line(f"strl {src_reg.name}")
+            else:
+                self.__add_assembly_line(f"strh {src_reg.name}")
+        else:
+            self.__add_assembly_line(f"strl {src_reg.name}")
         return self.__get_assembly_lines_len()
 
     def __create_var(self, command:VarDefCommandWithoutValue)-> int:
@@ -374,12 +407,8 @@ class Compiler:
         return len(self.assembly_lines)
     
     def __set_mar(self, var:Variable) -> int:
-        if var.address <= MAX_LOW_ADDRESS:
-            self.__set_marl(var)
-        else:
-            self.__set_marl(var)
-            self.__set_marh(var)
-        return self.__get_assembly_lines_len()
+        """Deprecated compatibility: route through __set_mar_abs."""
+        return self.__set_mar_abs(var.address)
 
     def __set_mar_abs(self, address: int) -> int:
         """Set MAR to an absolute address (low/optional high). Keeps register cache tags."""
@@ -393,17 +422,34 @@ class Compiler:
         # Reuse if possible (based on AbsAddrTag, independent of register.mode)
         if marl.tag is not None and isinstance(marl.tag, AbsAddrTag):
             if (marl.tag.addr & 0xFF) == low:
-                # ensure MARH matches when needed
+                # Low byte already correct; update only MARH if needed and return
                 if address > MAX_LOW_ADDRESS:
+                    # If MARH already correct, nothing to do
                     if marh.tag and isinstance(marh.tag, AbsAddrTag) and ((marh.tag.addr >> 8) & 0xFF) == high:
                         return self.__get_assembly_lines_len()
+                    # Otherwise set MARH to 'high' without touching MARL
+                    if high <= MAX_LDI:
+                        self.__set_ra_const(high)
+                        self.__add_assembly_line("mov marh, ra")
+                    else:
+                        self.__build_const_in_reg(high, marh)
+                    try:
+                        marh.set_unknown_mode()
+                    except Exception:
+                        pass
+                    try:
+                        marh.tag = AbsAddrTag(address)
+                    except Exception:
+                        pass
+                    return self.__get_assembly_lines_len()
                 else:
+                    # Address in low page and MARL already matches; nothing to do
                     return self.__get_assembly_lines_len()
 
-        # set MARL (prefer direct build when value exceeds LDI range)
+        # set MARL (force LDI to avoid relying on RA-const cache)
         if low <= MAX_LDI:
-            # Cheap path: load via RA then move
-            self.__set_ra_const(low)
+            self.__ldi(low)
+            self.register_manager.ra.set_mode(RegisterMode.CONST, low)
             self.__add_assembly_line("mov marl, ra")
         else:
             # Build directly into MARL (ends with 'mov marl, acc')
@@ -421,7 +467,8 @@ class Compiler:
         # set MARH if needed
         if address > MAX_LOW_ADDRESS:
             if high <= MAX_LDI:
-                self.__set_ra_const(high)
+                self.__ldi(high)
+                self.register_manager.ra.set_mode(RegisterMode.CONST, high)
                 self.__add_assembly_line("mov marh, ra")
             else:
                 # Build directly into MARH (ends with 'mov marh, acc')
@@ -437,96 +484,12 @@ class Compiler:
         return self.__get_assembly_lines_len()
     
     def __set_marh(self, var:Variable) -> int:
-        marh = self.register_manager.marh
-        ra = self.register_manager.ra
-        high_addr = var.get_high_address()
-
-        if marh.variable == var and marh.mode == RegisterMode.ADDR_HIGH:
-            return self.__get_assembly_lines_len()
-        
-        if marh.variable != None and marh.variable.get_high_address() == var.get_high_address():
-            marh.set_variable(var, RegisterMode.ADDR_HIGH)
-            return self.__get_assembly_lines_len()
-        
-         # if var high_addr in another register
-        if ra.variable == var:
-            if ra.mode == RegisterMode.ADDR_HIGH:
-                self.__add_assembly_line("mov marh, ra")
-                marh.set_variable(var, RegisterMode.ADDR_HIGH)
-                return self.__get_assembly_lines_len()
-        elif ra.mode == RegisterMode.CONST and ra.value == var.get_high_address():
-            self.__add_assembly_line("mov marh, ra")
-            marh.set_variable(var, RegisterMode.ADDR_HIGH)
-            return self.__get_assembly_lines_len()
-
-        # Build/load constant into MARH
-        if high_addr <= MAX_LDI:
-            self.__add_assembly_line(f"ldi #{high_addr}")
-            self.__add_assembly_line("mov marh, ra")
-            ra.set_mode(RegisterMode.CONST, high_addr)
-        else:
-            self.__build_const_in_reg(high_addr, marh)
-        marh.set_variable(var, RegisterMode.ADDR_HIGH)
+        """Deprecated compatibility: route through __set_mar_abs."""
+        return self.__set_mar_abs(var.address)
 
     def __set_marl(self, var:Variable) -> int:
-        marl = self.register_manager.marl
-        ra = self.register_manager.ra
-        low_addr = var.get_low_address()
-        is_addr_fit_low = var.address == var.get_low_address()
-
-        # If MARL already contains the exact same variable
-        if marl.variable == var and marl.mode in [RegisterMode.ADDR, RegisterMode.ADDR_LOW]:
-            return self.__get_assembly_lines_len()
-        
-        # Check if another variable in MARL has the same address (rare case)
-        if (marl.variable != None and 
-            marl.variable != var and 
-            marl.variable.get_low_address() == var.get_low_address()):
-            if is_addr_fit_low:
-                marl.set_variable(var, RegisterMode.ADDR)
-            else:
-                marl.set_variable(var, RegisterMode.ADDR_LOW)
-            return self.__get_assembly_lines_len()
-        
-        # if var addr in another register
-        if ra.variable == var:
-            if ra.mode == RegisterMode.ADDR:
-                self.__add_assembly_line("mov marl, ra")
-                marl.set_variable(var, RegisterMode.ADDR)
-                return self.__get_assembly_lines_len()
-            elif ra.mode == RegisterMode.ADDR_LOW:
-                self.__add_assembly_line("mov marl, ra")
-                if is_addr_fit_low:
-                    marl.set_variable(var, RegisterMode.ADDR)
-                else:
-                    marl.set_variable(var, RegisterMode.ADDR_LOW)
-                return self.__get_assembly_lines_len()
-        elif ra.mode == RegisterMode.CONST and ra.value == var.get_low_address():
-            self.__add_assembly_line("mov marl, ra")
-            if is_addr_fit_low:
-                marl.set_variable(var, RegisterMode.ADDR)
-            else:
-                marl.set_variable(var, RegisterMode.ADDR_LOW)
-            return self.__get_assembly_lines_len()
-            
-        # Load/build constant into MARL
-        if low_addr <= MAX_LDI:
-            self.__add_assembly_line(f"ldi #{low_addr}")
-            self.__add_assembly_line("mov marl, ra")
-            if is_addr_fit_low:
-                marl.set_variable(var, RegisterMode.ADDR)
-                ra.set_variable(var, RegisterMode.ADDR)
-            else:
-                ra.set_variable(var, RegisterMode.ADDR_LOW)
-                marl.set_variable(var, RegisterMode.ADDR_LOW)
-        else:
-            self.__build_const_in_reg(low_addr, marl)
-            if is_addr_fit_low:
-                marl.set_variable(var, RegisterMode.ADDR)
-            else:
-                marl.set_variable(var, RegisterMode.ADDR_LOW)
-
-        return self.__get_assembly_lines_len()
+        """Deprecated compatibility: route through __set_mar_abs."""
+        return self.__set_mar_abs(var.address)
 
     def __ldi(self, value:int) -> int:
         if value > MAX_LDI:
@@ -1144,6 +1107,7 @@ class Compiler:
         expression = expression.replace(' ', '')
         expression = expression.replace('+', ' + ')
         expression = expression.replace('-', ' - ')
+        expression = expression.replace('&', ' & ')
         return expression
     
     def __evaluate_expression(self, expression: str) -> int:
@@ -1163,7 +1127,7 @@ class Compiler:
         tokens = [t for t in expr.split(' ') if t]
 
         def is_op(tok: str) -> bool:
-            return tok in ('+', '-')
+            return tok in ('+', '-', '&')
 
         def is_int(tok: str) -> bool:
             try:
@@ -1192,21 +1156,23 @@ class Compiler:
 
         idx += 1
 
-        # 3) (+/- term)* döngüsü
+        # 3) (+/- & term)* döngüsü
         while idx < len(tokens):
             op = tokens[idx]
             if not is_op(op):
-                raise ValueError(f"Expected '+' or '-', got '{op}' in '{expression}'")
+                raise ValueError(f"Expected '+' or '-' or '&', got '{op}' in '{expression}'")
             idx += 1
             if idx >= len(tokens):
                 raise ValueError(f"Trailing operator '{op}' without term in '{expression}'")
 
             term = tokens[idx]
 
-            if is_int(term):
-                self.__set_reg_const(ra, int(term))
+            if CSM.is_decimal(term):
+                self.__set_reg_const(ra, CSM.convert_to_decimal(term))
                 if op == '+':
                     self.__add_reg(ra)     # ACC = RD + RA
+                elif op == '&':
+                    self.__and_reg(ra)
                 else:
                     self.__add_assembly_line(f"sub {ra.name}")  # ACC = RD - RA
                 # Move ACC back to RD only if more operations follow
@@ -1220,6 +1186,8 @@ class Compiler:
                 self.__set_marl(v)
                 if op == '+':
                     self.__add_ml()        # ACC = RD + [MAR]
+                elif op == '&':
+                    self.__and_ml()        # ACC = RD & [MAR]
                 else:
                     self.__add_assembly_line("sub ml")  # ACC = RD - [MAR]
                 if idx + 1 < len(tokens):
@@ -1258,12 +1226,23 @@ class Compiler:
         pre_assembly_lines = []
         rd = self.register_manager.rd
         self.__add_assembly_line(f"add {register.name}")
-
+        self.register_manager.acc.set_temp_var_mode(f"{rd.name} + {register.name}")
+        return self.__get_assembly_lines_len()
+    
+    def __and_reg(self, register:Register) -> int:
+        pre_assembly_lines = []
+        rd = self.register_manager.rd
+        self.__add_assembly_line(f"and {register.name}")
+        self.register_manager.acc.set_temp_var_mode(f"{rd.name} & {register.name}")
         return self.__get_assembly_lines_len()
     
     def __add_ml(self) -> int:
         
         self.assembly_lines.append("add ml")
+        return self.__get_assembly_lines_len()
+
+    def __and_ml(self) -> int:
+        self.assembly_lines.append("and ml")
         return self.__get_assembly_lines_len()
 
     def __compile_condition(self, condition: Condition) -> int:
@@ -1511,7 +1490,7 @@ if __name__ == "__main__":
     compiler = create_default_compiler()
 
     
-    compiler.load_lines('files/uint16_test.arn')
+    compiler.load_lines('files/count_test.arn')
     compiler.break_commands()
     compiler.clean_lines()
     compiler.group_commands()
