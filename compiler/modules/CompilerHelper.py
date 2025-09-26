@@ -833,80 +833,85 @@ class Compiler:
         is_contains_else = if_else_clause.is_contains_else()
         is_contains_elif = if_else_clause.is_contains_elif()
 
+        # Case 1: simple IF without else/elif
         if (not is_contains_else) and (not is_contains_elif):
-            # set flags for if condition
             self.__compile_condition(if_else_clause.get_if().condition)
 
-            # create context compiler for 'if' block
             self.register_manager.reset_change_detector()
-            if_context_compiler = self.create_context_compiler()
-            if_context_compiler.grouped_lines = if_else_clause.get_if().get_lines()
-            if_context_compiler.compile_lines() 
-            if_inner_len = if_context_compiler.__get_assembly_lines_len()
-            # create & set label for 'if' block
-            if_label, if_label_position = self.label_manager.create_if_label(self.__get_assembly_lines_len() + if_inner_len)
-            self.__set_prl_as_label(if_label, if_label_position)
-            
-            condition_type = if_else_clause.get_if().condition.type
-            # Add jump instruction based on condition type
-            self.__add_assembly_line(CompilerStaticMethods.get_inverted_jump_str(condition_type))
-            # add 'if' block assembly lines
-            self.__add_assembly_line(if_context_compiler.assembly_lines)
+            if_comp = self.create_context_compiler()
+            if_comp.grouped_lines = if_else_clause.get_if().get_lines()
+            if_comp.compile_lines()
+            if_len = if_comp.__get_assembly_lines_len()
+
+            skip_label, _ = self.label_manager.create_if_label(self.__get_assembly_lines_len() + if_len)
+            self.__set_prl_as_label(skip_label, self.label_manager.get_label(skip_label))
+            self.__add_assembly_line(CompilerStaticMethods.get_inverted_jump_str(if_else_clause.get_if().condition.type))
+            self.__add_assembly_line(if_comp.assembly_lines)
             self.register_manager.set_changed_registers_as_unknown()
-            # Update label position
-            self.label_manager.update_label_position(if_label, self.__get_assembly_lines_len())
-            del if_context_compiler
-            # add label for 'if' block
-            self.__add_assembly_line(f"{if_label}:")
-            print("changed regs:", [reg.name for reg in self.register_manager.changed_registers])
-            self.register_manager.set_changed_registers_as_unknown()
+            self.label_manager.update_label_position(skip_label, self.__get_assembly_lines_len())
+            self.__add_assembly_line(f"{skip_label}:")
             return self.__get_assembly_lines_len()
-            
-        elif is_contains_else and not is_contains_elif:
-            self.__compile_condition(if_else_clause.get_if().condition)
 
-            self.register_manager.ra.set_unknown_mode()
-            self.register_manager.prl.set_unknown_mode()
+        # Case 2: IF with optional ELIFs and optional ELSE
+        branches: list[tuple[Condition, Compiler]] = []
+        first_if = if_else_clause.get_if()
+        # Precompile IF body
+        if_comp = self.create_context_compiler()
+        if_comp.grouped_lines = first_if.get_lines()
+        if_comp.compile_lines()
+        branches.append((first_if.condition, if_comp))
 
-            self.register_manager.reset_change_detector()
-            if_context_compiler = self.create_context_compiler()
-            if_context_compiler.grouped_lines = if_else_clause.get_if().get_lines()
-            if_context_compiler.compile_lines() 
-            if_inner_len = if_context_compiler.__get_assembly_lines_len()
-            # create & set label for 'if' block
-            if_label, if_label_position = self.label_manager.create_if_label(self.__get_assembly_lines_len() + if_inner_len)
-            self.__set_prl_as_label(if_label, if_label_position)
-            
-            condition_type = if_else_clause.get_if().condition.type
-            # Add jump instruction based on condition type
-            self.__add_assembly_line(CompilerStaticMethods.get_inverted_jump_str(condition_type))
-            # add 'if' block assembly lines
-            self.__add_assembly_line(if_context_compiler.assembly_lines)
+        # Precompile ELIF bodies
+        for e in if_else_clause.get_elif():
+            e_comp = self.create_context_compiler()
+            e_comp.grouped_lines = e.get_lines()
+            e_comp.compile_lines()
+            branches.append((e.condition, e_comp))
+
+        # Precompile ELSE body if present
+        else_comp = None
+        if is_contains_else:
+            else_comp = self.create_context_compiler()
+            else_comp.grouped_lines = if_else_clause.get_else().get_lines()
+            else_comp.compile_lines()
+
+        # Reserve END label
+        end_est = self.__get_assembly_lines_len() + sum(comp.__get_assembly_lines_len() for _, comp in branches)
+        if else_comp is not None:
+            end_est += else_comp.__get_assembly_lines_len()
+        end_label, _ = self.label_manager.create_else_label(end_est)
+
+        # Emit the chain: for each branch, jump over if false, run body, then jump to END
+        for cond, comp in branches:
+            # Evaluate and set PRL to skip label
+            self.__compile_condition(cond)
+
+            body_len = comp.__get_assembly_lines_len()
+            skip_label, _ = self.label_manager.create_if_label(self.__get_assembly_lines_len() + body_len)
+            self.__set_prl_as_label(skip_label, self.label_manager.get_label(skip_label))
+            self.__add_assembly_line(CompilerStaticMethods.get_inverted_jump_str(cond.type))
+
+            # Body
+            self.__add_assembly_line(comp.assembly_lines)
             self.register_manager.set_changed_registers_as_unknown()
-            # Update label position
-            self.label_manager.update_label_position(if_label, self.__get_assembly_lines_len())
-            del if_context_compiler
-            
-            self.register_manager.ra.set_unknown_mode()
-            self.register_manager.prl.set_unknown_mode()
-            else_context_compiler = self.create_context_compiler()
-            else_context_compiler.grouped_lines = if_else_clause.get_else().get_lines()
-            else_context_compiler.compile_lines()
-            else_inner_len = else_context_compiler.__get_assembly_lines_len()
 
-            else_label, else_label_position = self.label_manager.create_else_label(self.__get_assembly_lines_len() + else_inner_len)
-            self.__set_prl_as_label(else_label, else_label_position)
-
+            # Jump to END after executing this branch
+            self.__set_prl_as_label(end_label, self.label_manager.get_label(end_label))
             self.__add_assembly_line("jmp")
-            self.__add_assembly_line(f"{if_label}:")
 
-            self.__add_assembly_line(else_context_compiler.assembly_lines)
-            self.__add_assembly_line(f"{else_label}:")
+            # Place skip label for next branch
+            self.label_manager.update_label_position(skip_label, self.__get_assembly_lines_len())
+            self.__add_assembly_line(f"{skip_label}:")
+
+        # ELSE body (if any)
+        if else_comp is not None:
+            self.__add_assembly_line(else_comp.assembly_lines)
             self.register_manager.set_changed_registers_as_unknown()
-            # add label for 'if' block
-        else:
-            raise NotImplementedError("If-Else chains with 'elif' or 'else' are not implemented yet.")
-        pass
+
+        # Place END label
+        self.label_manager.update_label_position(end_label, self.__get_assembly_lines_len())
+        self.__add_assembly_line(f"{end_label}:")
+        return self.__get_assembly_lines_len()
 
     def __handle_while(self, command: Command) -> int:
         if not isinstance(command.line, WhileClause):
@@ -1256,8 +1261,8 @@ class Compiler:
         left_var = self.var_manager.get_variable(left)
 
         # Load RIGHT into RD (strict: don't rely on cached-const in RA, it may be clobbered in loop body)
-        if self.is_number(right):
-            self.__set_reg_const_strict(rd, int(right) & 0xFF)
+        if CSM.is_decimal(right):
+            self.__set_reg_const_strict(rd, CSM.convert_to_decimal(right) & 0xFF)
         else:
             if not self.var_manager.check_variable_exists(right):
                 raise ValueError(f"Right part of condition '{right}' is not a defined variable.")
