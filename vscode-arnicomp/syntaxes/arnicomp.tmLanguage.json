@@ -44,13 +44,14 @@
 			"patterns": [
 				{
 					"name": "storage.type.arnicomp",
-					"match": "\\bbyte\\b(?:\\s*\\[\\s*\\d+\\s*\\])?"
+					"match": "\\b(byte|uint16)\\b(?:\\s*\\[\\s*\\d+\\s*\\])?"
 				}
 			]
 		},
 		"numbers": {
 			"patterns": [
 				{ "name": "constant.numeric.hex.arnicomp", "match": "\\b0x[0-9A-Fa-f]+\\b" },
+				{ "name": "constant.numeric.binary.arnicomp", "match": "\\b0b[01]+\\b" },
 				{ "name": "constant.numeric.decimal.arnicomp", "match": "\\b\\d+\\b" }
 			]
 		},

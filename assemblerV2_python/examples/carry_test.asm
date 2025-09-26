@@ -1,19 +1,18 @@
-const SS_HIGH 0x10
-const SS_LOW 0x00
 
-ldi $SS_LOW
-mov marl, ra
-ldi $SS_HIGH
-mov marh, ra
 
 ldi #0b1111111
-mov rd, ra
-add ra
+mov rd, ra ; rd = 0x7F
+add ra ; acc = 0xFE
+add acc ; acc = 0x7F + 0xFE = 0x17D -> 0x7D with carry
+
+mov ml, acc ; ml = 0x7D
+
+adc acc ; acc = rd + acc + carry
+; acc = 0x7F + 0x7D + 1  =  FD
 
 ldi #1
-add ra
-add ra
+mov marl, ra
 
-
-
+mov ml, acc
 HLT
+

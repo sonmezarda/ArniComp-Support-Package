@@ -34,15 +34,16 @@ class EepromLoader:
             ser.flush()
             print("Yükleme tamamlandı. Cihaza yazılıyor...")
 
+        """
         # Serial'den logları oku
-        timeout = time.time() + 5  # max 5 saniye log bekle
+        timeout = time.time() + 2  # max 2 saniye log bekle
         while True:
             if ser.in_waiting:
                 line = ser.readline().decode(errors="ignore").strip()
                 print("PICO:", line)
             if time.time() > timeout:
                 break
-
+        """
     def check_file(self, program_file:str="program.bin", top_n=64):
         with open(program_file, "rb") as f:
             data = f.read()

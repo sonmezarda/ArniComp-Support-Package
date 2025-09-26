@@ -7,6 +7,7 @@ from LabelManager import LabelManager
 from RegisterManager import RegisterManager, RegisterMode, Register, TempVarMode
 from ConditionHelper import IfElseClause, Condition, WhileClause, DirectAssemblyClause,  WhileTypes
 import CompilerStaticMethods as CompilerStaticMethods
+from MyEnums import ExpressionTypes
 import re
 
 from Commands import *
@@ -95,6 +96,8 @@ class Compiler:
                     self.__create_var(command)
                 elif command.var_type == VarTypes.BYTE_ARRAY:
                     self.__create_var(command)
+                elif command.var_type == VarTypes.UINT16:
+                    self.__create_var(command)
                 else:
                     raise ValueError(f"Unsupported variable type: {command.var_type}")
             elif type(command) is AssignCommand:
@@ -123,7 +126,6 @@ class Compiler:
         return self.__get_assembly_lines_len()
 
     def __store_to_direct_address(self, command:StoreToDirectAddressCommand)->int:
-        # Unified: *ABS = RHS
         return self.__assign_store_to_abs(command.addr, command.new_value)
 
     def __create_var_with_value(self, command:VarDefCommand) -> int:
@@ -265,7 +267,7 @@ class Compiler:
             # set MAR first, then compute
             self.__set_mar_abs(address)
             src_reg = self.__compute_rhs(rhs_expr)
-        # store
+
         if address <= MAX_LOW_ADDRESS:
             self.__add_assembly_line(f"strl {src_reg.name}")
         else:
@@ -281,20 +283,55 @@ class Compiler:
 
     def __compile_assign_var(self, var: Variable, rhs_expr: str) -> int:
         """var = expr; Choose MAR ordering smartly based on RHS memory needs."""
-        needs_mem = self.__rhs_needs_memory(rhs_expr)
-        src_reg: Register
-        if needs_mem:
-            src_reg = self.__compute_rhs(rhs_expr)
-            self.__set_mar(var)
+        if type(var) is VarTypes.BYTE.value:
+            needs_mem = self.__rhs_needs_memory(rhs_expr)
+            src_reg: Register
+            if needs_mem:
+                src_reg = self.__compute_rhs(rhs_expr)
+                self.__set_mar(var)
+            else:
+                self.__set_mar(var)
+                src_reg = self.__compute_rhs(rhs_expr)
+            # store (var is byte for now)
+            if var.address <= MAX_LOW_ADDRESS:
+                self.__add_assembly_line(f"strl {src_reg.name}")
+            else:
+                self.__add_assembly_line(f"strh {src_reg.name}")
+            return self.__get_assembly_lines_len()
+        elif type(var) is VarTypes.UINT16.value:
+            exp_type = CompilerStaticMethods.get_expression_type(rhs_expr)
+            if exp_type == ExpressionTypes.SINGLE_DEC or exp_type == ExpressionTypes.ALL_DEC:
+
+                if exp_type == ExpressionTypes.SINGLE_DEC:
+                    rhs_dec = CompilerStaticMethods.convert_to_decimal(rhs_expr)    
+                elif exp_type == ExpressionTypes.ALL_DEC:     
+                    rhs_dec = eval(rhs_expr)
+
+                if rhs_dec is None:
+                    raise ValueError("Invalid UINT16 value.")
+
+                rhs_byte_count = CompilerStaticMethods.get_decimal_byte_count(rhs_dec)
+                if rhs_byte_count > 2:
+                    raise ValueError("UINT16 value out of range (0-65535).")
+                
+                rhs_bytes = CompilerStaticMethods.get_decimal_bytes(rhs_dec)
+                print("Var:", var.name, var.address)
+                self.__set_mar_abs(var.address)
+                self.__set_ra_const(rhs_bytes[0])
+                self.__store_with_current_mar_abs(    var.address, self.register_manager.ra)
+
+                self.__set_mar_abs(var.address+1)
+                self.__set_ra_const(rhs_bytes[1])
+                self.__store_with_current_mar_abs(var.address+1, self.register_manager.ra)
+                
+                return self.__get_assembly_lines_len()
+                
+            else:
+                raise NotImplementedError("UINT16 assignment only supports direct literals for now.")
+            
         else:
-            self.__set_mar(var)
-            src_reg = self.__compute_rhs(rhs_expr)
-        # store (var is byte for now)
-        if var.address <= MAX_LOW_ADDRESS:
-            self.__add_assembly_line(f"strl {src_reg.name}")
-        else:
-            self.__add_assembly_line(f"strh {src_reg.name}")
-        return self.__get_assembly_lines_len()
+            raise ValueError(f"Unsupported variable type for assignment: {type(var)}")
+
 
     def __compile_assign_array(self, arr_var: Variable, index_expr: str, rhs_expr: str) -> int:
         """arr[idx] = expr; Set MAR to element, compute RHS with smart ordering, then store."""
@@ -815,9 +852,9 @@ class Compiler:
                 raise ValueError("Array index missing.")
             return self.__compile_assign_array(var, command.index_expr, command.new_value)
 
-        # Simple byte var
-        if type(var) == VarTypes.BYTE.value:
+        if type(var) == VarTypes.BYTE.value or type(var) == VarTypes.UINT16.value:
             return self.__compile_assign_var(var, command.new_value)
+        
 
         raise ValueError(f"Unsupported variable type for assignment: {var.var_type}")
     
@@ -1474,7 +1511,7 @@ if __name__ == "__main__":
     compiler = create_default_compiler()
 
     
-    compiler.load_lines('files/outtest.arn')
+    compiler.load_lines('files/uint16_test.arn')
     compiler.break_commands()
     compiler.clean_lines()
     compiler.group_commands()

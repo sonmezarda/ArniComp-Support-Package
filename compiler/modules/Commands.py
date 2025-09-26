@@ -107,15 +107,12 @@ class VarDefCommand(Command):
 
         self.var_name = name
 
-        # Şimdilik sadece scalar byte init destekleyelim
-        if self.var_type == VarTypes.BYTE:
-            # basit int init
+        if self.var_type == VarTypes.BYTE or self.var_type == VarTypes.UINT16:
             try:
                 self.var_value = int(value)
             except ValueError:
                 raise ValueError(f"Unsupported initial value for scalar byte: {value}")
         elif self.var_type == VarTypes.BYTE_ARRAY:
-            # diziye = ile init henüz yok
             raise NotImplementedError("Array initialization (e.g., byte[3] a = [...]) henüz desteklenmiyor.")
         else:
             raise ValueError(f"Unsupported variable type: {self.var_type}")
@@ -144,7 +141,7 @@ class VarDefCommandWithoutValue(VarDefCommand):
 
         if size_text is not None:  # byte[] veya byte[5]
             if not hasattr(VarTypes, 'BYTE_ARRAY'):
-                raise ValueError("VarTypes.BYTE_ARRAY tanımlı değil. Lütfen VarTypes'a ekleyin.")
+                raise ValueError("")
             self.var_type = VarTypes.BYTE_ARRAY
             self.array_length = int(size_text) if size_text != '' else None
             if self.array_length is None:
