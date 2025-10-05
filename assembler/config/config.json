@@ -4,183 +4,151 @@
         "label":":"
     },
     "keywords":{
-        "constant": "const"
+        "constant": "equ"
     },
-    "argcode_types":{
-        "out_reg":{
-            "RA":"000",
-            "RD":"001",
-            "ML":"010",
-            "MH":"011",
-            "PCL":"100",
-            "PCH":"101",
-            "ACC":"110",
-            "P":"111" ,
-            "ra":"000",
-            "rd":"001",
-            "ml":"010",
-            "mh":"011",
-            "pcl":"100",
-            "pch":"101",
-            "acc":"110",
-            "p":"111" 
-        }
+    "destinations":{
+        "RA":"000",
+        "RD":"001",
+        "RB":"010",
+        "PRL":"011",
+        "PRH":"100",
+        "MARL":"101",
+        "MARH":"110",
+        "M":"111"
     },
-    "opcode_types":{
-        "in_reg":{
-            "RA":"1000",
-            "RD":"1001",
-            "ML":"1010",
-            "MH":"1011",
-            "PRL":"1100",
-            "PRH":"1101",
-            "MARL":"1110",
-            "P":"1111",
-            "MARH":"0001",
-            "ra":"1000",
-            "rd":"1001",
-            "ml":"1010",
-            "mh":"1011",
-            "prl":"1100",
-            "prh":"1101",
-            "marl":"1110",
-            "p":"1111",
-            "marh":"0001"
-        }
+    "sources":{
+        "RA":"000",
+        "RD":"001",
+        "RB":"010",
+        "ACC":"011",
+        "PCL":"100",
+        "PCH":"101",
+        "M":"110"
     },
     "instructions" : {
+        "LDI" : {
+            "description": "Load immediate to RA",
+            "format": "LDI #imm7",
+            "encoding": "IM7=1, immediate=7bits"
+        },
         "MOV" : {
-            "IM7" : "0",
-            "argcode_type": "out_reg",
-            "argcode_arg_order": 1,
-            "opcode_type": "in_reg",
-            "opcode_arg_order": 0
+            "description": "Move from source to destination",
+            "format": "MOV dest, src",
+            "encoding": "IM7=0, MV=1, A1A2=dest(3bits), J=src(3bits), rest=0",
+            "forbidden": ["RA,RA", "RD,RD", "RB,RB", "M,M"]
         },
-        "IN":{
-            "IM7": "0",
-            "argcode_type": "constant",
-            "opcode_type": "in_reg",
-            "opcode_arg_order": 0,
-            "argcode":"111"
+        "NOT" : {
+            "description": "Bitwise NOT",
+            "format": "NOT src",
+            "encoding": "IM7=0, MV=1, varies by source",
+            "allowed_sources": ["RA", "RB", "ACC", "RD", "M"]
         },
-        "OUT":{
-            "IM7": "0",
-            "argcode_type": "out_reg",
-            "argcode_arg_order": 0,
-            "opcode_type": "constant",
-            "opcode": "1111"            
+        "ADD" : {
+            "description": "Add source to RD, result to ACC",
+            "format": "ADD src",
+            "encoding": "IM7=0, MV=0, A1A2=00, J=src, S2S1=S0"
         },
-        "LDRL":{
-            "IM7": "0",
-            "argcode_type": "constant",
-            "argcode": "010",
-            "opcode_type": "in_reg",
-            "opcode_arg_order": 0
+        "XOR" : {
+            "description": "XOR operation",
+            "format": "XOR src",
+            "encoding": "IM7=0, MV=0, varies by source",
+            "allowed_sources": ["RA", "RB", "RD", "ACC", "M"]
         },
-        "LDRH":{
-            "IM7": "0",
-            "argcode_type": "constant",
-            "argcode": "011",
-            "opcode_type": "in_reg",
-            "opcode_arg_order": 0
+        "SUB" : {
+            "description": "Subtract (with carry) source from RD",
+            "format": "SUB src",
+            "encoding": "IM7=0, MV=0, A1A2=01, J=src, S2S1=S0"
         },
-        "STRL":{
-            "IM7": "0",
-            "argcode_type": "out_reg",
-            "argcode_arg_order": 0,
-            "opcode_type": "constant",
-            "opcode": "1010"
+        "ADC" : {
+            "description": "Add with carry",
+            "format": "ADC src",
+            "encoding": "IM7=0, MV=0, A1A2=01, J=src, S2S1=S0"
         },
-        "STRH":{
-            "IM7": "0",
-            "argcode_type": "out_reg",
-            "argcode_arg_order": 0,
-            "opcode_type": "constant",
-            "opcode": "1011"
+        "SBC" : {
+            "description": "Subtract with carry",
+            "format": "SBC src",
+            "encoding": "IM7=0, MV=0, A1A2=01, J=src, S2S1=S0"
         },
-        "JMP":{
-            "IM7": "0",
-            "argcode_type": "constant",
-            "argcode": "000",
-            "opcode_type": "constant",
-            "opcode": "0010"
+        "AND" : {
+            "description": "Bitwise AND",
+            "format": "AND src",
+            "encoding": "IM7=0, MV=0, A1A2=10, J=src, S2S1=S0"
         },
-        "JEQ":{
-            "IM7": "0",
-            "argcode_type": "constant",
-            "argcode": "100",
-            "opcode_type": "constant",
-            "opcode": "0010"
+        "JMP" : {
+            "description": "Unconditional jump",
+            "format": "JMP",
+            "encoding": "IM7=0, MV=0, A1=1, A2J=000, S2S1S0=JS2JS1JS0(000)"
         },
-        "JLT":{
-            "IM7": "0",
-            "argcode_type": "constant",
-            "argcode": "010",
-            "opcode_type": "constant",
-            "opcode": "0010"
+        "JEQ" : {
+            "description": "Jump if equal",
+            "format": "JEQ",
+            "encoding": "IM7=0, MV=0, A1=1, A2J=000, S2S1S0=001"
         },
-        "JGT":{
-            "IM7": "0",
-            "argcode_type": "constant",
-            "argcode": "001",
-            "opcode_type": "constant",
-            "opcode": "0010"
+        "JGT" : {
+            "description": "Jump if greater than",
+            "format": "JGT",
+            "encoding": "IM7=0, MV=0, A1=1, A2J=000, S2S1S0=010"
         },
-        "JLE":{
-            "IM7": "0",
-            "argcode_type": "constant",
-            "argcode": "110",
-            "opcode_type": "constant",
-            "opcode": "0010"
+        "JLT" : {
+            "description": "Jump if less than",
+            "format": "JLT",
+            "encoding": "IM7=0, MV=0, A1=1, A2J=000, S2S1S0=011"
         },
-        "JGE":{
-            "IM7": "0",
-            "argcode_type": "constant",
-            "argcode": "101",
-            "opcode_type": "constant",
-            "opcode": "0010"
+        "JGE" : {
+            "description": "Jump if greater or equal",
+            "format": "JGE",
+            "encoding": "IM7=0, MV=0, A1=1, A2J=000, S2S1S0=100"
         },
-        "JNE":{
-            "IM7": "0",
-            "argcode_type": "constant",
-            "argcode": "111",
-            "opcode_type": "constant",
-            "opcode": "0010"
+        "JLE" : {
+            "description": "Jump if less or equal",
+            "format": "JLE",
+            "encoding": "IM7=0, MV=0, A1=1, A2J=000, S2S1S0=101"
         },
-        "ADD":{
-            "IM7": "0",
-            "argcode_type": "out_reg",
-            "argcode_arg_order": 0,
-            "opcode_type": "constant",
-            "opcode":"0100"
+        "JNE" : {
+            "description": "Jump if not equal",
+            "format": "JNE",
+            "encoding": "IM7=0, MV=0, A1=1, A2J=000, S2S1S0=110"
         },
-        "SUB":{
-            "IM7": "0",
-            "argcode_type": "out_reg",
-            "argcode_arg_order": 0,
-            "opcode_type": "constant",
-            "opcode":"0101"
+        "JC" : {
+            "description": "Jump if carry",
+            "format": "JC",
+            "encoding": "IM7=0, MV=0, A1=1, A2J=000, S2S1S0=111"
         },
-        "ADDI":{
-            "IM7": "0",
-            "argcode_type": "number",
-            "argcode_length": 3,
-            "argcode_arg_order": 0,
-            "opcode_type": "constant",
-            "opcode": "0011"
+        "ADDI" : {
+            "description": "Add immediate (3-bit)",
+            "format": "ADDI #imm3",
+            "encoding": "IM7=0, MV=0, A1A2=11, J=0, IM2IM1IM0=imm3"
         },
-        "SUBI":{
-            "IM7": "0",
-            "argcode_type": "number",
-            "argcode_arg_order":0,
-            "argcode_length": 3,
-            "opcode_type": "constant",
-            "opcode": "0110"
+        "SUBI" : {
+            "description": "Subtract immediate (3-bit)",
+            "format": "SUBI #imm3",
+            "encoding": "IM7=0, MV=0, A1A2=11, J=1, IM2IM1IM0=imm3"
         },
-        "LDI":{
-            "IM7":"1",
-            "argcode_type":null,
-            "opcoce_type":null
+        "NOP" : {
+            "description": "No operation",
+            "format": "NOP",
+            "encoding": "00000000"
+        },
+        "HLT" : {
+            "description": "Halt",
+            "format": "HLT",
+            "encoding": "00000001"
+        },
+        "SMSBRA" : {
+            "description": "Set MSB of RA to 1",
+            "format": "SMSBRA",
+            "encoding": "00000010"
+        },
+        "INX" : {
+            "description": "Increment MARL",
+            "format": "INX",
+            "encoding": "00000011"
+        },
+        "CMP" : {
+            "description": "Compare (RA, M, or ACC with RD)",
+            "format": "CMP src",
+            "encoding": "varies by source",
+            "allowed_sources": ["RA", "M", "ACC"]
         }
     }
 }
