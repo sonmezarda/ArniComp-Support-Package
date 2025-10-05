@@ -1,13 +1,16 @@
 from enum import StrEnum, auto
+import re
+
 from VariableManager import VarTypes
 from ConditionHelper import DirectAssemblyClause
 import CompilerStaticMethods as CSM
-import re
 
 VARIABLE_IDENT = r'[A-Za-z_][A-Za-z0-9_]*'
 NUMBER_LITERAL = r'(0x|0b|)[A-Za-z0-9_]*'
 
+
 class CommandTypes(StrEnum):
+    """Command type enumeration"""
     ASSIGN = auto()
     CONDITION = auto()
     VARDEF = auto()
@@ -18,20 +21,23 @@ class CommandTypes(StrEnum):
     DIRECT_ASSEMBLY = auto()
     STORE_DIRECT_ADDRESS = auto()
 
+
 def types_pattern():
-    # VarTypes isimlerini lower-case birleştiriyoruz
-    from VariableManager import VarTypes
+    """Generate regex pattern for variable types"""
     return r'(?:' + '|'.join(t.name.lower() for t in VarTypes) + r')'
 
+
 class Command:
-    REGEX:str = ""
-    TYPE:CommandTypes = None
-    def __init__(self, command_type:str, line:str):
+    """Base command class"""
+    REGEX: str = ""
+    TYPE: CommandTypes = None
+    
+    def __init__(self, command_type: str, line: str):
         self.command_type = command_type
         self.line = line
     
     def __repr__(self):
-        return f"({self.command_type} : '{self.line}')"
+        return f"({self.command_type}: '{self.line}')"
     
     def parse_params(self):
         raise NotImplementedError("This method should be implemented by subclasses.")
@@ -41,12 +47,13 @@ class Command:
         return re.match(cls.REGEX, line)
 
 class FreeCommand(Command):
+    """Free/deallocate variable command"""
     REGEX = r'^free\s+(\w+)+;?$'
     TYPE = CommandTypes.FREE
 
-    def __init__(self, line:str):
+    def __init__(self, line: str):
         super().__init__(CommandTypes.FREE, line)
-        self.var_name:str = ""
+        self.var_name: str = ""
         self.parse_params()
     
     def parse_params(self):
@@ -55,15 +62,13 @@ class FreeCommand(Command):
             self.var_name = match.group(1)
         else:
             raise ValueError(f"Invalid free command: {self.line}")
-    
-def types_pattern():
-    from VariableManager import VarTypes
-    return r'(?:' + '|'.join(t.name.lower() for t in VarTypes) + r')'
 
 
 class DirectAssemblyCommand(Command):
+    """Direct assembly insertion command"""
     TYPE = CommandTypes.DIRECT_ASSEMBLY
-    def __init__(self, dasm_clause:DirectAssemblyClause):
+    
+    def __init__(self, dasm_clause: DirectAssemblyClause):
         super().__init__(CommandTypes.DIRECT_ASSEMBLY, dasm_clause)
         self.assembly_lines: list[str] = dasm_clause.lines
         self.parse_params()
@@ -72,18 +77,17 @@ class DirectAssemblyCommand(Command):
         pass
 
 
-
 class VarDefCommand(Command):
-    # byte[5] a = 10;  (NOT: array init şimdilik desteklemiyoruz)
+    """Variable definition with initialization"""
     REGEX = rf'''^\s*(?P<type>{types_pattern()})\s*(?:\[(?P<size>\d*)\])?\s+(?P<name>{VARIABLE_IDENT})\s*=\s*(?P<value>.+?)\s*;?\s*$'''
     TYPE = CommandTypes.VARDEF
 
-    def __init__(self, line:str):
+    def __init__(self, line: str):
         super().__init__(CommandTypes.VARDEF, line)
-        self.var_name:str = ""
-        self.var_type:VarTypes = VarTypes.BYTE
-        self.var_value:any = None
-        self.array_length:int|None = None
+        self.var_name: str = ""
+        self.var_type: VarTypes = VarTypes.BYTE
+        self.var_value: any = None
+        self.array_length: int | None = None
         self.parse_params()
     
     def parse_params(self):
@@ -92,14 +96,13 @@ class VarDefCommand(Command):
             raise ValueError(f"Invalid variable definition: {self.line}")
 
         base_type = match.group('type').upper()
-        size_text = match.group('size')  # None, '' veya '5'
+        size_text = match.group('size')
         name = match.group('name')
         value = match.group('value')
 
         if size_text is not None:
-            # VarTypes.BYTE_ARRAY bekliyoruz
             if not hasattr(VarTypes, 'BYTE_ARRAY'):
-                raise ValueError("VarTypes.BYTE_ARRAY tanımlı değil. Lütfen VarTypes'a ekleyin.")
+                raise ValueError("VarTypes.BYTE_ARRAY not defined.")
             self.var_type = VarTypes.BYTE_ARRAY
             self.array_length = int(size_text) if size_text != '' else None
         else:
@@ -111,23 +114,23 @@ class VarDefCommand(Command):
             try:
                 self.var_value = CSM.convert_to_decimal(value)
             except ValueError:
-                raise ValueError(f"Unsupported initial value for scalar byte: {value}")
+                raise ValueError(f"Unsupported initial value for scalar: {value}")
         elif self.var_type == VarTypes.BYTE_ARRAY:
-            raise NotImplementedError("Array initialization (e.g., byte[3] a = [...]) henüz desteklenmiyor.")
+            raise NotImplementedError("Array initialization not yet supported.")
         else:
             raise ValueError(f"Unsupported variable type: {self.var_type}")
 
 
 class VarDefCommandWithoutValue(VarDefCommand):
+    """Variable definition without initialization"""
     REGEX = rf'''^\s*(?P<type>{types_pattern()})\s*(?:\[(?P<size>\d*)\])?\s+(?P<name>{VARIABLE_IDENT})\s*;?\s*$'''
     TYPE = CommandTypes.VARDEFWV
     
-    def __init__(self, line:str):
-        # VarDefCommand.__init__ çağırmak istemiyoruz (o = value bekliyor)
+    def __init__(self, line: str):
         Command.__init__(self, CommandTypes.VARDEFWV, line)
-        self.var_name:str = ""
-        self.var_type:VarTypes = VarTypes.BYTE
-        self.array_length:int|None = None
+        self.var_name: str = ""
+        self.var_type: VarTypes = VarTypes.BYTE
+        self.array_length: int | None = None
         self.parse_params()
     
     def parse_params(self):
@@ -139,9 +142,9 @@ class VarDefCommandWithoutValue(VarDefCommand):
         size_text = match.group('size')
         name = match.group('name')
 
-        if size_text is not None:  # byte[] veya byte[5]
+        if size_text is not None:
             if not hasattr(VarTypes, 'BYTE_ARRAY'):
-                raise ValueError("")
+                raise ValueError("VarTypes.BYTE_ARRAY not defined.")
             self.var_type = VarTypes.BYTE_ARRAY
             self.array_length = int(size_text) if size_text != '' else None
             if self.array_length is None:

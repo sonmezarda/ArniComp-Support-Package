@@ -11,16 +11,6 @@
   </attributes>
   <visualElements>
     <visualElement>
-      <elementName>asdas.dig</elementName>
-      <elementAttributes>
-        <entry>
-          <string>rotation</string>
-          <rotation rotation="1"/>
-        </entry>
-      </elementAttributes>
-      <pos x="520" y="400"/>
-    </visualElement>
-    <visualElement>
       <elementName>Splitter</elementName>
       <elementAttributes>
         <entry>
@@ -58,10 +48,6 @@
         <entry>
           <string>runRealTime</string>
           <boolean>true</boolean>
-        </entry>
-        <entry>
-          <string>Frequency</string>
-          <int>5000</int>
         </entry>
       </elementAttributes>
       <pos x="300" y="440"/>
@@ -995,6 +981,16 @@
         </entry>
       </elementAttributes>
       <pos x="2500" y="820"/>
+    </visualElement>
+    <visualElement>
+      <elementName>arnicompV2.dig</elementName>
+      <elementAttributes>
+        <entry>
+          <string>rotation</string>
+          <rotation rotation="1"/>
+        </entry>
+      </elementAttributes>
+      <pos x="520" y="400"/>
     </visualElement>
   </visualElements>
   <wires>

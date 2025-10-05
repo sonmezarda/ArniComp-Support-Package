@@ -1,20 +1,20 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
+
 from VariableManager import VarTypes, Variable, ByteVariable, VarManager
 from StackManager import StackManager
 from LabelManager import LabelManager
-from RegisterManager import RegisterManager, RegisterMode, Register, TempVarMode
-from ConditionHelper import IfElseClause, Condition, WhileClause, DirectAssemblyClause,  WhileTypes
-import CompilerStaticMethods as CompilerStaticMethods
+from RegisterManager import RegisterManager, RegisterMode, Register
+from ConditionHelper import IfElseClause, Condition, WhileClause, DirectAssemblyClause, WhileTypes
+import CompilerStaticMethods as CSM
 from MyEnums import ExpressionTypes
-import re
-
 from Commands import *
-from RegTags import AbsAddrTag, SymbolBaseTag, ElementTag
+from RegTags import AbsAddrTag
 
-MAX_LDI = 0b1111111  # Maximum value for LDI instruction (7 bits)
-MAX_LOW_ADDRESS = 0b11111111  # Maximum low address for LDI instruction (8 bits)
+MAX_LDI = 127  # 7-bit LDI instruction max value
+MAX_LOW_ADDRESS = 255  # 8-bit low address max value
 
 class Compiler:
     def __init__(self, comment_char: str, variable_start_addr: int = 0x0000,
@@ -38,32 +38,35 @@ class Compiler:
         self.stack_manager = StackManager(stack_start_addr, memory_size)
         self.label_manager = LabelManager()
         self.lines = []
-        # Simple object-like macro defines: {name: replacement}
-        self.defines = {}
+        self.defines = {}  # Preprocessor macro definitions
 
     def load_lines(self, filename:str) -> None:
         with open(filename, 'r') as file:
             self.lines = file.readlines()
     
     def break_commands(self) -> None:
-        # Run preprocessor to handle #def before tokenizing
+        """Process preprocessor directives and remove comments"""
         self.__preprocess_lines()
-        self.lines = [line.split(';')[0].strip() for line in self.lines if line.strip() and not line.startswith(self.comment_char)]
+        self.lines = [line.split(';')[0].strip() for line in self.lines 
+                     if line.strip() and not line.startswith(self.comment_char)]
 
     def clean_lines(self) -> None:
-        self.lines = [re.sub(r'\s+', ' ', line).strip() for line in self.lines if line.strip() and not line.startswith(self.comment_char)]
+        """Normalize whitespace in lines"""
+        self.lines = [re.sub(r'\s+', ' ', line).strip() for line in self.lines 
+                     if line.strip() and not line.startswith(self.comment_char)]
     
-    def is_variable_defined(self, var_name:str) -> bool:
+    def is_variable_defined(self, var_name: str) -> bool:
         return self.var_manager.check_variable_exists(var_name)
 
-    def is_number(self, value:str) -> bool:
+    def is_number(self, value: str) -> bool:
         try:
             int(value)
             return True
         except ValueError:
             return False
         
-    def copy_commpiler_as_context(self) -> Compiler:
+    def copy_compiler_as_context(self) -> Compiler:
+        """Create a copy of compiler with shared managers for nested contexts"""
         new_compiler = Compiler(self.comment_char, 
                                 self.variable_start_addr, 
                                 self.variable_end_addr, 
@@ -76,27 +79,21 @@ class Compiler:
         new_compiler.label_manager = self.label_manager
         return new_compiler
 
-    def compile_if_else(self, if_else_clause:IfElseClause) -> list[str]:
-        pass
-
     def compile_lines(self):
+        """Compile grouped command lines into assembly"""
         if self.grouped_lines is None:
             raise ValueError("Commands must be grouped before compilation.")
-        print("Grouped lines to compile: ", self.grouped_lines)
+        print("Grouped lines to compile:", self.grouped_lines)
         for command in self.grouped_lines:
             if type(command) is VarDefCommand:     
                 if command.var_type == VarTypes.BYTE:
                     self.__create_var_with_value(command)
                 elif command.var_type == VarTypes.BYTE_ARRAY:
-                    raise NotImplementedError("Array initialization (e.g., byte[3] a = [...]) henüz desteklenmiyor.")
+                    raise NotImplementedError("Array initialization not yet supported.")
                 else:
                     raise ValueError(f"Unsupported variable type: {command.var_type}")
             elif type(command) is VarDefCommandWithoutValue:
-                if command.var_type == VarTypes.BYTE: 
-                    self.__create_var(command)
-                elif command.var_type == VarTypes.BYTE_ARRAY:
-                    self.__create_var(command)
-                elif command.var_type == VarTypes.UINT16:
+                if command.var_type in [VarTypes.BYTE, VarTypes.BYTE_ARRAY, VarTypes.UINT16]:
                     self.__create_var(command)
                 else:
                     raise ValueError(f"Unsupported variable type: {command.var_type}")
@@ -113,66 +110,62 @@ class Compiler:
             elif type(command) is DirectAssemblyCommand:
                 self.__handle_direct_assembly(command)
             elif type(command) is IfElseClause:
-                # Nested if-else clause'ları da işle
                 self.__handle_if_else(Command(CommandTypes.IF, command))
             else:
                 raise ValueError(f"Unsupported command type: {type(command)} - {command}")
         return self.assembly_lines
 
-    def __handle_direct_assembly(self, command:DirectAssemblyCommand):
+    def __handle_direct_assembly(self, command: DirectAssemblyCommand):
+        """Insert raw assembly lines directly"""
         for line in command.assembly_lines:
             self.__add_assembly_line(line)
-        print(f"[X] !! Direct assembly line command register change detection not added yet!!")
         return self.__get_assembly_lines_len()
 
-    def __store_to_direct_address(self, command:StoreToDirectAddressCommand)->int:
+    def __store_to_direct_address(self, command: StoreToDirectAddressCommand) -> int:
+        """Store value to absolute memory address"""
         return self.__assign_store_to_abs(command.addr, command.new_value)
 
-    def __create_var_with_value(self, command:VarDefCommand) -> int:
+    def __create_var_with_value(self, command: VarDefCommand) -> int:
+        """Create and initialize variable with value"""
         new_var = self.var_manager.create_variable(
                     var_name=command.var_name, 
                     var_type=command.var_type, 
                     var_value=command.var_value)
         
         if command.var_type == VarTypes.BYTE:
-            # Set MAR first, then RA, then store (keeps optimal instruction order)
             self.__set_mar_abs(new_var.address)
             self.__set_ra_const(command.var_value)
             self.__store_with_current_mar_abs(new_var.address, self.register_manager.ra)
-
             self.register_manager.marl.set_variable(new_var, RegisterMode.ADDR)
-
         else:
             raise ValueError(f"Unsupported variable type: {command.var_type}")
         
         return self.__get_assembly_lines_len()
 
-    # ================= Unified assignment helpers =================
+    # === Unified assignment helpers ===
     def __rhs_needs_memory(self, expr: str) -> bool:
-        """Return True if evaluating expr requires memory loads (variables/array)."""
+        """Check if evaluating expression requires memory loads"""
         s = expr.strip()
         if s.startswith('*'):
             return True
-        # Pure literal?
+        # Check for numeric literal
         try:
-            if CompilerStaticMethods.convert_to_decimal(s) is not None:
+            if CSM.convert_to_decimal(s) is not None:
                 return False
         except Exception:
             pass
-        # Array read like a[i]
+        # Check for array access
         if re.search(r"[A-Za-z_][A-Za-z0-9_]*\s*\[", s):
             return True
-        # Tokenize by +/-
+        # Check for variables in expression
         norm = self.__normalize_expression(s)
-        tokens = [t for t in norm.split(' ') if t and t not in ['+','-']]
+        tokens = [t for t in norm.split(' ') if t and t not in ['+', '-']]
         for t in tokens:
-            # numeric literal?
             try:
-                if CompilerStaticMethods.convert_to_decimal(t) is not None:
+                if CSM.convert_to_decimal(t) is not None:
                     continue
             except Exception:
                 pass
-            # variable name?
             if self.var_manager.check_variable_exists(t):
                 return True
         return False
@@ -184,7 +177,7 @@ class Compiler:
         if s.startswith('*'):
             inner = s[1:].strip()
             try:
-                address = CompilerStaticMethods.convert_to_decimal(inner)
+                address = CSM.convert_to_decimal(inner)
             except Exception:
                 address = None
             if address is None:
@@ -208,7 +201,7 @@ class Compiler:
                 raise ValueError(f"Array '{arr_name}' is not defined.")
             arr_var = self.var_manager.get_variable(arr_name)
             if type(arr_var) != VarTypes.BYTE_ARRAY.value:
-                raise ValueError(f"'{arr_name}' bir dizi değil.")
+                raise ValueError(f"'{arr_name}' is not an array.")
             # Set MAR to element, load into RD
             self.__set_mar_array_elem(arr_var, idx_expr)
             if arr_var.address <= MAX_LOW_ADDRESS and (arr_var.get_high_address() == 0):
@@ -229,7 +222,7 @@ class Compiler:
 
         # Pure literal
         try:
-            val = CompilerStaticMethods.convert_to_decimal(s)
+            val = CSM.convert_to_decimal(s)
             if val is not None:
                 self.__set_ra_const(val)
                 return self.register_manager.ra
@@ -249,7 +242,7 @@ class Compiler:
         idx_s = index_expr.strip()
         # Constant index
         try:
-            idx = CompilerStaticMethods.convert_to_decimal(idx_s)
+            idx = CSM.convert_to_decimal(idx_s)
             if idx is not None:
                 address = arr_var.address + int(idx)
                 return self.__set_mar_abs(address)
@@ -321,22 +314,22 @@ class Compiler:
                 self.__add_assembly_line(f"strh {src_reg.name}")
             return self.__get_assembly_lines_len()
         elif type(var) is VarTypes.UINT16.value:
-            exp_type = CompilerStaticMethods.get_expression_type(rhs_expr)
+            exp_type = CSM.get_expression_type(rhs_expr)
             if exp_type == ExpressionTypes.SINGLE_DEC or exp_type == ExpressionTypes.ALL_DEC:
 
                 if exp_type == ExpressionTypes.SINGLE_DEC:
-                    rhs_dec = CompilerStaticMethods.convert_to_decimal(rhs_expr)    
+                    rhs_dec = CSM.convert_to_decimal(rhs_expr)    
                 elif exp_type == ExpressionTypes.ALL_DEC:     
                     rhs_dec = eval(rhs_expr)
 
                 if rhs_dec is None:
                     raise ValueError("Invalid UINT16 value.")
 
-                rhs_byte_count = CompilerStaticMethods.get_decimal_byte_count(rhs_dec)
+                rhs_byte_count = CSM.get_decimal_byte_count(rhs_dec)
                 if rhs_byte_count > 2:
                     raise ValueError("UINT16 value out of range (0-65535).")
                 
-                rhs_bytes = CompilerStaticMethods.get_decimal_bytes(rhs_dec)
+                rhs_bytes = CSM.get_decimal_bytes(rhs_dec)
                 print("Var:", var.name, var.address)
                 self.__set_mar_abs(var.address)
                 self.__set_ra_const(rhs_bytes[0])
@@ -368,7 +361,7 @@ class Compiler:
             src_reg = self.__compute_rhs(rhs_expr)
         # store: if constant index, select strl/strh by absolute address; else dynamic index is restricted to low page
         try:
-            idx = CompilerStaticMethods.convert_to_decimal(index_expr)
+            idx = CSM.convert_to_decimal(index_expr)
         except Exception:
             idx = None
         if idx is not None:
@@ -845,7 +838,7 @@ class Compiler:
 
             skip_label, _ = self.label_manager.create_if_label(self.__get_assembly_lines_len() + if_len)
             self.__set_prl_as_label(skip_label, self.label_manager.get_label(skip_label))
-            self.__add_assembly_line(CompilerStaticMethods.get_inverted_jump_str(if_else_clause.get_if().condition.type))
+            self.__add_assembly_line(CSM.get_inverted_jump_str(if_else_clause.get_if().condition.type))
             self.__add_assembly_line(if_comp.assembly_lines)
             self.register_manager.set_changed_registers_as_unknown()
             self.label_manager.update_label_position(skip_label, self.__get_assembly_lines_len())
@@ -889,7 +882,7 @@ class Compiler:
             body_len = comp.__get_assembly_lines_len()
             skip_label, _ = self.label_manager.create_if_label(self.__get_assembly_lines_len() + body_len)
             self.__set_prl_as_label(skip_label, self.label_manager.get_label(skip_label))
-            self.__add_assembly_line(CompilerStaticMethods.get_inverted_jump_str(cond.type))
+            self.__add_assembly_line(CSM.get_inverted_jump_str(cond.type))
 
             # Body
             self.__add_assembly_line(comp.assembly_lines)
@@ -937,7 +930,7 @@ class Compiler:
             # Create end label and set PRL to it for conditional jump
             end_label, _ = self.label_manager.create_while_end_label(self.__get_assembly_lines_len() + body_len + 3)
             self.__set_prl_as_label(end_label, self.label_manager.get_label(end_label))
-            self.__add_assembly_line(CompilerStaticMethods.get_inverted_jump_str(while_clause.condition.type))
+            self.__add_assembly_line(CSM.get_inverted_jump_str(while_clause.condition.type))
 
             # Emit body
             self.__add_assembly_line(body_comp.assembly_lines)
@@ -1069,7 +1062,7 @@ class Compiler:
             if cmd.is_array:
                 idx_expr = cmd.index_expr
                 try:
-                    idx = CompilerStaticMethods.convert_to_decimal(idx_expr) if idx_expr is not None else None
+                    idx = CSM.convert_to_decimal(idx_expr) if idx_expr is not None else None
                 except Exception:
                     idx = None
                 if idx is None:
