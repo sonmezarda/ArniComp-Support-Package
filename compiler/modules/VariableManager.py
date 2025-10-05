@@ -1,5 +1,8 @@
 from __future__ import annotations
 from enum import Enum, IntEnum
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class Variable():
@@ -166,9 +169,10 @@ class VarManager():
         elif int_type == IntTypes.HEX:
             val_str = "{:04X}"
             
+        logger.debug(f"Memory dump from 0x{start_addr:04X} to 0x{end_addr:04X}")
         for addr in range(start_addr, end_addr+1):
             var = self.get_variable_from_address(addr)
-            print(f"{addr:04X}: {val_str.format(var.value if var else 0)}")
+            logger.debug(f"  {addr:04X}: {val_str.format(var.value if var else 0)}")
 
     
     def free_variable(self, var_name:str) -> None:
@@ -187,8 +191,9 @@ class VarManager():
         return var_name.isidentifier()
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.DEBUG)
     vm = VarManager(mem_start_addr=0, mem_end_addr=0x0100)
 
     var = vm.create_variable("test", VarTypes.BYTE, 42)
     vm.print_memory(0, 10, IntTypes.HEX)
-    print(var)
+    logger.info(f"Created variable: {var}")

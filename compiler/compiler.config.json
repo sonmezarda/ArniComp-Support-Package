@@ -1,0 +1,13 @@
+{
+    "comment_char": "//",
+    "variable_start_addr": 0,
+    "variable_end_addr": 512,
+    "stack_start_addr": 256,
+    "stack_size": 256,
+    "memory_size": 65536,
+    "output_format": "asm",
+    "optimization_level": 0,
+    "debug_mode": false,
+    "verbose": false,
+    "show_stats": true
+}

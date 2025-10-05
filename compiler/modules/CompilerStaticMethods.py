@@ -1,4 +1,7 @@
+import logging
 from MyEnums import ConditionTypes, ExpressionTypes, MATH_OPERATORS
+
+logger = logging.getLogger(__name__)
 
 def get_inverted_jump_str(condition:ConditionTypes) -> str:
     """
@@ -79,7 +82,7 @@ def split_expression(expression:str):
 def get_expression_type(expression:str):
     expression = expression.strip()
     splitted = split_expression(expression)
-    print("SplittedExp: ", splitted)
+    logger.debug(f"Expression split result: {splitted}")
     # Is single?
     if len(splitted) == 1:
         if is_decimal(splitted[0]):

@@ -1,3 +1,8 @@
+import logging
+
+logger = logging.getLogger(__name__)
+
+
 class LabelManager:
     def __init__(self):
         self.labels = {}
@@ -14,7 +19,7 @@ class LabelManager:
         return self.labels[name] if name in self.labels else None
 
     def is_label_defined(self, name: str) -> bool:
-        print(f"Checking if label '{name}' is defined: {'Yes' if name in self.labels else 'No'}")
+        logger.debug(f"Label check: '{name}' {'found' if name in self.labels else 'not found'}")
         return name in self.labels.keys()
 
     def remove_label(self, name: str):

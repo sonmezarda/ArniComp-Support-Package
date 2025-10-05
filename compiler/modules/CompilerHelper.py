@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import logging
 from dataclasses import dataclass
 
 from VariableManager import VarTypes, Variable, ByteVariable, VarManager
@@ -12,6 +13,9 @@ import CompilerStaticMethods as CSM
 from MyEnums import ExpressionTypes
 from Commands import *
 from RegTags import AbsAddrTag
+
+# Create logger for this module
+logger = logging.getLogger(__name__)
 
 MAX_LDI = 127  # 7-bit LDI instruction max value
 MAX_LOW_ADDRESS = 255  # 8-bit low address max value
@@ -29,9 +33,6 @@ class Compiler:
         self.stack_size = stack_size
         self.memory_size = memory_size
         self.assembly_lines = []
-
-        if stack_size != 256:
-            raise ValueError("Stack size must be 256 bytes.")
 
         self.var_manager = VarManager(variable_start_addr, variable_end_addr, memory_size)
         self.register_manager = RegisterManager()
@@ -83,7 +84,7 @@ class Compiler:
         """Compile grouped command lines into assembly"""
         if self.grouped_lines is None:
             raise ValueError("Commands must be grouped before compilation.")
-        print("Grouped lines to compile:", self.grouped_lines)
+        logger.debug(f"Compiling {len(self.grouped_lines)} grouped lines")
         for command in self.grouped_lines:
             if type(command) is VarDefCommand:     
                 if command.var_type == VarTypes.BYTE:
@@ -330,7 +331,7 @@ class Compiler:
                     raise ValueError("UINT16 value out of range (0-65535).")
                 
                 rhs_bytes = CSM.get_decimal_bytes(rhs_dec)
-                print("Var:", var.name, var.address)
+                logger.debug(f"Variable definition: {var.name} at address 0x{var.address:04X}")
                 self.__set_mar_abs(var.address)
                 self.__set_ra_const(rhs_bytes[0])
                 self.__store_with_current_mar_abs(    var.address, self.register_manager.ra)
@@ -754,7 +755,6 @@ class Compiler:
             return self.__get_assembly_lines_len()
         
         # If MAR is already pointing to right_var, load it
-        print(right_var, marl.variable)
         if marl.variable is not None and marl.variable.name == right_var.name and marl.mode in [RegisterMode.ADDR, RegisterMode.ADDR_LOW]:
             self.__load_var_to_reg(right_var, self.register_manager.rd)
             self.__store_to_var(left_var, self.register_manager.rd)
@@ -910,7 +910,7 @@ class Compiler:
         if not isinstance(command.line, WhileClause):
             raise ValueError("Command line must be a WhileClause instance.")
         while_clause: WhileClause = command.line
-        print("Handling while clause:", while_clause.type, while_clause.condition, while_clause.get_lines() )
+        logger.debug(f"Processing while loop: type={while_clause.type}, condition='{while_clause.condition}'")
         if while_clause.type == WhileTypes.BYPASS:
             return self.__get_assembly_lines_len()
         elif while_clause.type == WhileTypes.CONDITIONAL:
@@ -1283,29 +1283,29 @@ class Compiler:
             lines = [lines]
         while lindex < len(lines):
             line = lines[lindex]
-            print(f"Processing line {lindex}: '{line}'")
+            logger.debug(f"Parsing line {lindex}: '{line}'")
             if VarDefCommand.match_regex(line):
-                print(f"'{line}' matches VarDefCommand regex")
+                logger.debug(f"Matched VarDefCommand: '{line}'")
                 grouped_lines.append(VarDefCommand(line))
                 lindex += 1
             elif VarDefCommandWithoutValue.match_regex(line):
-                print(f"'{line}' matches VarDefCommandWithoutValue regex")
+                logger.debug(f"Matched VarDefCommandWithoutValue: '{line}'")
                 grouped_lines.append(VarDefCommandWithoutValue(line))
                 lindex += 1
             elif StoreToDirectAddressCommand.match_regex(line):
-                print(f"'{line}' matches StoreToDirectAddressCommand regex")
+                logger.debug(f"Matched StoreToDirectAddressCommand: '{line}'")
                 grouped_lines.append(StoreToDirectAddressCommand(line))
                 lindex += 1
             elif AssignCommand.match_regex(line):
-                print(f"'{line}' matches AssignCommand regex")
+                logger.debug(f"Matched AssignCommand: '{line}'")
                 grouped_lines.append(AssignCommand(line))
                 lindex += 1
             elif FreeCommand.match_regex(line):
-                print(f"'{line}' matches FreeCommand regex")
+                logger.debug(f"Matched FreeCommand: '{line}'")
                 grouped_lines.append(FreeCommand(line))
                 lindex += 1
             elif line.startswith('dasm'):
-                print(f"{line} starts a direct assembly block")
+                logger.debug(f"Direct assembly block starting at line {lindex}")
                 group = []
                 while lindex < len(lines):
                     lindex += 1
@@ -1317,7 +1317,7 @@ class Compiler:
                 grouped_lines.append(DirectAssemblyCommand(DirectAssemblyClause.parse_from_lines(group)))
             
             elif line.startswith('if '):
-                print(f"'{line}' starts an if clause")
+                logger.debug(f"If block starting at line {lindex}")
                 nested_count = 0
                 group = []
                 while lindex < len(lines):
@@ -1332,15 +1332,13 @@ class Compiler:
                     lindex += 1
                 
                 grouped_if_else = IfElseClause.group_nested_if_else(group)
-                print(f"Grouped if-else lines: {grouped_if_else}")
+                logger.debug(f"Parsed if-else with {len(grouped_if_else)} sections")
                 if_clause = IfElseClause.parse_from_lines(grouped_if_else)
-                print(if_clause)
                 if_clause.apply_to_all_lines(lambda lines: Compiler.__group_line_commands(lines) if isinstance(lines, list) else Compiler.__group_line_commands([lines]))
-                print(f"Processed if-else clause: {if_clause}")
                 grouped_lines.append(Command(CommandTypes.IF, if_clause))
 
             elif line.startswith('while '):
-                print(f"'{line}' starts a while clause")
+                logger.debug(f"While loop starting at line {lindex}")
                 # Collect until matching 'endwhile'
                 nested = 0
                 group = []
@@ -1361,7 +1359,7 @@ class Compiler:
                     raise ValueError("Missing 'endwhile' for while loop")
                 # Parse into WhileClause
                 cond = header[len('while '):].strip()
-                print(f"While condition: '{cond}'")
+                logger.debug(f"While condition: '{cond}'")
                 wc = WhileClause(cond)
                 # Body is group[1:]; convert entire body into Commands, preserving nested if/else
                 body = group[1:]
@@ -1372,7 +1370,7 @@ class Compiler:
                 lindex += 1
 
             elif line.startswith('endif'):
-                print(f"'{line}' is an endif, skipping")
+                logger.debug(f"endif at line {lindex}, skipping")
                 lindex += 1
             else:
                 command_type = Compiler.__determine_command_type(line)
@@ -1485,17 +1483,20 @@ def create_default_compiler() -> Compiler:
                     variable_end_addr=0x0200, memory_size=65536)
 
 if __name__ == "__main__":
+    # Setup logging for test execution
+    logging.basicConfig(level=logging.DEBUG, format='%(levelname)s: %(message)s')
+    
     compiler = create_default_compiler()
-
     
     compiler.load_lines('files/count_test.arn')
     compiler.break_commands()
     compiler.clean_lines()
     compiler.group_commands()
-    print("Grouped Commands:" + str(compiler.grouped_lines))
+    logger.info(f"Grouped {len(compiler.grouped_lines)} commands")
     compiler.compile_lines()
     
-    for i in compiler.assembly_lines:
-        print(i)
-    #print("Compiled Condition:" + str(l))
+    logger.info(f"Generated {len(compiler.assembly_lines)} assembly lines")
+    for line in compiler.assembly_lines:
+        print(line)
+
 

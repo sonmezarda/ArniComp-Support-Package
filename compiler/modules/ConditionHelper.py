@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import logging
 from MyEnums import ConditionTypes, WhileTypes
 import CompilerStaticMethods as CSM
+
+logger = logging.getLogger(__name__)
 
 class GroupObject:
     pass
@@ -65,7 +68,7 @@ class IfElseClause(GroupObject):
             if_lines = if_statement.get_lines()
             processed_lines = []
             for i, line in enumerate(if_lines):
-                print(f"Processing if line {i}: '{line}'")
+                logger.debug(f"Processing if line {i}: {type(line).__name__}")
                 if isinstance(line, IfElseClause):
                     line.apply_to_all_lines(func)
                     processed_lines.append(line)
@@ -353,5 +356,5 @@ if __name__ == '__main__':
     lines = [line.strip() for line in lines if line.strip()]  
     glines = IfElseClause.group_nested_if_else(lines)
     parsed = IfElseClause.parse_from_lines(glines)
-    print(parsed.get_if().lines[1].get_if().lines[1].get_if().lines)
+    logger.info(f"Parsed nested if-else: {len(parsed.get_if().lines)} lines")
 

@@ -1,9 +1,12 @@
 from enum import StrEnum, auto
 import re
+import logging
 
 from VariableManager import VarTypes
 from ConditionHelper import DirectAssemblyClause
 import CompilerStaticMethods as CSM
+
+logger = logging.getLogger(__name__)
 
 VARIABLE_IDENT = r'[A-Za-z_][A-Za-z0-9_]*'
 NUMBER_LITERAL = r'(0x|0b|)[A-Za-z0-9_]*'
@@ -109,7 +112,7 @@ class VarDefCommand(Command):
             self.var_type = VarTypes[base_type]
 
         self.var_name = name
-        print(f"Defining variable '{self.var_name}' of type '{self.var_type}' with initial value '{value}'")
+        logger.debug(f"Variable definition: '{self.var_name}' type={self.var_type} initial_value='{value}'")
         if self.var_type == VarTypes.BYTE or self.var_type == VarTypes.UINT16:
             try:
                 self.var_value = CSM.convert_to_decimal(value)
@@ -229,6 +232,4 @@ class WhileCommand(Command):
 if __name__ == "__main__":
     # Example usage
     command = StoreToDirectAddressCommand("*0x0012 = 12;")
-    print(command.REGEX)
-    print(command.addr)
-    print(command.new_value)
+    logger.info(f"Parsed command: addr=0x{command.addr:04X}, value={command.new_value}")
