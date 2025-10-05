@@ -19,6 +19,7 @@ from typing import Optional
 
 from modules.AssemblyHelper import AssemblyHelper
 from modules.EepromLoader import EepromLoader
+from modules.HexConverter import save_intelHexFile
 
 
 class AssemblerCLI:
@@ -161,6 +162,43 @@ class AssemblerCLI:
             print(f"Error creating binary file: {e}")
             sys.exit(1)
     
+    def create_ihex(self, input_file: str, output_file: Optional[str] = None) -> None:
+        """Convert assembly file to Intel HEX format for Digital circuit simulator"""
+        # Determine output file
+        if output_file is None:
+            base_name = os.path.splitext(input_file)[0]
+            output_file = f"{base_name}.hex"
+        
+        # Read input file
+        try:
+            with open(input_file, 'r') as f:
+                raw_lines = f.readlines()
+        except FileNotFoundError:
+            print(f"Error: Input file '{input_file}' not found")
+            sys.exit(1)
+        
+        # Assemble and convert to Intel HEX
+        try:
+            binary_lines, labels, constants = self.helper.convert_to_machine_code(raw_lines)
+            
+            # Save as Intel HEX format
+            save_intelHexFile(output_file, binary_lines, line_type='bin')
+            
+            print(f"Intel HEX file created successfully!")
+            print(f"  Input: {input_file}")
+            print(f"  Output: {output_file}")
+            print(f"  Instructions: {len(binary_lines)}")
+            print(f"  Format: Intel HEX (for Digital circuit simulator)")
+            
+            if labels:
+                print(f"  Labels: {len(labels)}")
+            if constants:
+                print(f"  Constants: {len(constants)}")
+            
+        except Exception as e:
+            print(f"Error creating Intel HEX file: {e}")
+            sys.exit(1)
+    
     def load_to_eeprom(self, bin_file: str) -> None:
         """Load a binary file to EEPROM"""
         try:
@@ -243,6 +281,10 @@ COMMANDS:
     createbin <input.txt> [output.bin]
         Convert binary text format to .bin file
         Example: python main.py createbin program.txt program.bin
+
+    createihex <input.asm> [output.hex]
+        Assemble and convert to Intel HEX format (for Digital circuit simulator)
+        Example: python main.py createihex program.asm program.hex
 
     load <binary.bin>
         Load a binary file to EEPROM
@@ -359,6 +401,16 @@ def main():
         input_file = sys.argv[2]
         output_file = sys.argv[3] if len(sys.argv) >= 4 else None
         cli.create_bin(input_file, output_file)
+    
+    elif command == "createihex":
+        if len(sys.argv) < 3:
+            print("Error: Input file required")
+            print("Usage: python main.py createihex <input.asm> [output.hex]")
+            sys.exit(1)
+        
+        input_file = sys.argv[2]
+        output_file = sys.argv[3] if len(sys.argv) >= 4 else None
+        cli.create_ihex(input_file, output_file)
     
     elif command == "load":
         if len(sys.argv) < 3:

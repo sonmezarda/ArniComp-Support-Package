@@ -35,8 +35,15 @@ class InstructionEncoder:
     @staticmethod
     def encode_mov(dest: str, src: str) -> str:
         """Encode MOV instruction: MOV dest, src
-        Format: 0 1 A1 A2 J S2 S1 S0
-        Where A1A2J = destination (3 bits), S2S1S0 = source (3 bits)
+        Format: 0 1 [A1 A2 J=source] [S2 S1 S0=dest]
+        Based on instruction table:
+        - Row 3: Move From RA -> 01 000 [D2D1D0]
+        - Row 5: Move From RD -> 01 001 [D2D1D0]
+        - Row 7: Move From RB -> 01 010 [D2D1D0]
+        - Row 9: Move From ACC -> 01 011 [D2D1D0]
+        - Row 11: Move From PCL -> 01 100 [D2D1D0]
+        - Row 12: Move From PCH -> 01 101 [D2D1D0]
+        - Row 13: Move From Memory -> 01 110 [D2D1D0]
         """
         dest_upper = dest.upper()
         src_upper = src.upper()
@@ -55,12 +62,19 @@ class InstructionEncoder:
         dest_bits = DESTINATIONS[dest_upper]
         src_bits = SOURCES[src_upper]
         
-        return f"01{dest_bits}{src_bits}"
+        # CORRECT FORMAT: 01 [source] [dest]
+        return f"01{src_bits}{dest_bits}"
     
     @staticmethod
     def encode_not(src: str) -> str:
         """Encode NOT instruction
         Allowed sources: RA, RB, ACC, RD, M
+        Based on instruction table:
+        - Row 4: NOT RA  -> 0 1 0 0 0 0 0 0 = 01000000
+        - Row 6: NOT RD  -> 0 1 0 0 1 0 0 1 = 01001001
+        - Row 8: NOT ACC -> 0 1 0 1 0 0 1 0 = 01010010
+        - Row 14: NOT M  -> 0 1 1 1 1 1 1 1 = 01111111
+        - Row 31: NOT RB -> 0 0 0 0 0 1 0 0 = 00000100
         """
         src_upper = src.upper()
         allowed = ["RA", "RB", "ACC", "RD", "M"]
@@ -68,18 +82,12 @@ class InstructionEncoder:
         if src_upper not in allowed:
             raise ValueError(f"NOT instruction only supports {allowed}, got {src}")
         
-        # Based on instruction table
-        # Row 4: NOT RA -> 0 1 0 0 0 0 0 0  (0x10)
-        # Row 6: NOT RD -> 0 1 0 0 1 0 D2 D1 D0
-        # Row 8: NOT ACC -> 0 1 0 1 0 0 1 0
-        # Row 14: NOT M -> 0 1 1 1 1 1 1 1
-        
         encodings = {
-            "RA": "01000000",   # Row 4
-            "RD": "01001000",   # Row 6 (assuming D2D1D0=000)
-            "ACC": "01010010",  # Row 8
-            "RB": "01010000",   # Row 7 (NOT RB)
-            "M": "01111111"     # Row 14 (NOT M)
+            "RA": "01000000",   # Row 4:  NOT RA
+            "RD": "01001001",   # Row 6:  NOT RD (düzeltildi: 01001001, 01001000 değil)
+            "ACC": "01010010",  # Row 8:  NOT ACC
+            "M": "01111111",    # Row 14: NOT M
+            "RB": "00000100"    # Row 31: NOT RB (düzeltildi: 00000100, 01010000 değil)
         }
         
         return encodings[src_upper]

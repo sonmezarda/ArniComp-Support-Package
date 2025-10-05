@@ -2,9 +2,12 @@ equ A 0x11
 equ B 0x55
 
 ldi $A
-mov rd, ACC
+mov rd, ra
 ldi $B
-add RA
+add ra
 
-mov RB, ACC
+mov rb, acc
+
+not rb
+mov rb, acc
 hlt

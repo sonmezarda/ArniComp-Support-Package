@@ -7,8 +7,6 @@
 - **`$`** - Constants: `LDI $COUNTER`, `CMP $MAX`
 - **`@`** - Labels: `LDI @loop`, `LDI @start`
 
-**IMPORTANT**: Do NOT combine prefixes! No `#$`, `#@`, `$#`, or `@#`!
-
 ### Comments and Definitions
 ```assembly
 ; This is a comment
