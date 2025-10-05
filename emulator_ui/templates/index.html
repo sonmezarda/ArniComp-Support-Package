@@ -121,6 +121,10 @@
                                     <span id="reg-rd" class="reg-value">0x00</span>
                                 </div>
                                 <div class="register">
+                                    <span class="reg-name">RB:</span>
+                                    <span id="reg-rb" class="reg-value">0x00</span>
+                                </div>
+                                <div class="register">
                                     <span class="reg-name">ACC:</span>
                                     <span id="reg-acc" class="reg-value">0x00</span>
                                 </div>
@@ -166,9 +170,9 @@
                                     <span class="flag" id="flag-eq">EQ: 0</span>
                                     <span class="flag" id="flag-lt">LT: 0</span>
                                     <span class="flag" id="flag-gt">GT: 0</span>
+                                    <span class="flag" id="flag-carry">C: 0</span>
                                 </div>
                                 <div class="io-compact">
-                                    <span id="memory-mode" class="mode-display">Mode: LOW</span>
                                     <span>Out: <span id="output-data">0x00</span>@<span id="output-addr">0x00</span></span>
                                 </div>
                             </div>
@@ -216,8 +220,27 @@
                 <button class="modal-close">&times;</button>
             </div>
             <div class="modal-body">
-                <div class="file-list" id="file-list">
-                    <div class="loading">Loading files...</div>
+                <div class="file-source-tabs">
+                    <button class="file-source-tab active" data-source="local">💻 From Computer</button>
+                    <button class="file-source-tab" data-source="examples">📚 Example Files</button>
+                </div>
+                
+                <div id="local-files" class="file-source-content active">
+                    <div class="file-upload-area">
+                        <input type="file" id="file-input" accept=".asm,.txt,.bin" style="display: none;">
+                        <button id="browse-file-btn" class="btn btn-primary">📁 Browse Files</button>
+                        <p class="file-hint">Select an assembly (.asm), text (.txt), or binary (.bin) file</p>
+                        <div id="selected-file-info" class="selected-file-info" style="display: none;">
+                            <span id="selected-file-name"></span>
+                            <button id="clear-selection-btn" class="btn btn-small">✕</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="examples-files" class="file-source-content">
+                    <div class="file-list" id="file-list">
+                        <div class="loading">Loading example files...</div>
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">

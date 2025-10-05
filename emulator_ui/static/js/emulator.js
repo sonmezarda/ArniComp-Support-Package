@@ -350,6 +350,7 @@ ldi #0b11111111
         // Update registers
         this.updateRegister('reg-ra', cpu.registers.ra);
         this.updateRegister('reg-rd', cpu.registers.rd);
+        this.updateRegister('reg-rb', cpu.registers.rb);
         this.updateRegister('reg-acc', cpu.registers.acc);
         this.updateRegister('reg-marl', cpu.registers.marl);
         this.updateRegister('reg-marh', cpu.registers.marh);
@@ -361,10 +362,10 @@ ldi #0b11111111
         document.getElementById('data-addr').textContent = this.formatValue(cpu.data_addr, 16);
 
         // Update flags
-        document.getElementById('flag-eq').textContent = `EQ: ${cpu.flags.equal ? 1 : 0}`;
+        document.getElementById('flag-eq').textContent = `EQ: ${cpu.flags.eq ? 1 : 0}`;
         document.getElementById('flag-lt').textContent = `LT: ${cpu.flags.lt ? 1 : 0}`;
         document.getElementById('flag-gt').textContent = `GT: ${cpu.flags.gt ? 1 : 0}`;
-        document.getElementById('memory-mode').textContent = `Mode: ${cpu.memory_mode}`;
+        document.getElementById('flag-carry').textContent = `C: ${cpu.flags.carry ? 1 : 0}`;
 
         // Update I/O
         document.getElementById('output-data').textContent = this.formatValue(cpu.output.data);
@@ -1095,16 +1096,142 @@ ldi #0b11111111
         const fileList = document.getElementById('file-list');
         
         modal.style.display = 'block';
+        
+        // Initialize file source tabs (only once)
+        if (!this.fileInputInitialized) {
+            this.initializeFileSourceTabs();
+            this.initializeFileInput();
+            this.fileInputInitialized = true;
+        }
+        
+        // Load example files list
         this.loadFileList();
         
         // Handle modal close
         modal.querySelector('.modal-close').onclick = () => {
             modal.style.display = 'none';
+            this.resetFileModal();
         };
         
         document.getElementById('modal-cancel').onclick = () => {
             modal.style.display = 'none';
+            this.resetFileModal();
         };
+    }
+    
+    initializeFileSourceTabs() {
+        const tabs = document.querySelectorAll('.file-source-tab');
+        const contents = document.querySelectorAll('.file-source-content');
+        
+        tabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                // Remove active class from all tabs and contents
+                tabs.forEach(t => t.classList.remove('active'));
+                contents.forEach(c => c.classList.remove('active'));
+                
+                // Add active class to clicked tab
+                tab.classList.add('active');
+                
+                // Show corresponding content
+                const source = tab.dataset.source;
+                document.getElementById(`${source}-files`).classList.add('active');
+                
+                // Reset modal open button
+                document.getElementById('modal-open').disabled = true;
+            });
+        });
+    }
+    
+    initializeFileInput() {
+        const fileInput = document.getElementById('file-input');
+        const browseBtn = document.getElementById('browse-file-btn');
+        const selectedFileInfo = document.getElementById('selected-file-info');
+        const selectedFileName = document.getElementById('selected-file-name');
+        const clearSelectionBtn = document.getElementById('clear-selection-btn');
+        const modalOpenBtn = document.getElementById('modal-open');
+        
+        if (!fileInput || !browseBtn) {
+            console.error('File input elements not found');
+            return;
+        }
+        
+        // Remove any existing listeners by cloning elements
+        const newBrowseBtn = browseBtn.cloneNode(true);
+        browseBtn.parentNode.replaceChild(newBrowseBtn, browseBtn);
+        
+        const newClearBtn = clearSelectionBtn.cloneNode(true);
+        clearSelectionBtn.parentNode.replaceChild(newClearBtn, clearSelectionBtn);
+        
+        // Browse button click
+        newBrowseBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('Browse button clicked');
+            fileInput.click();
+        });
+        
+        // File selection
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            console.log('File selected:', file?.name);
+            if (file) {
+                selectedFileName.textContent = file.name;
+                selectedFileInfo.style.display = 'flex';
+                modalOpenBtn.disabled = false;
+                
+                // Store file reference
+                this.selectedLocalFile = file;
+                
+                // Set up open button to load local file
+                modalOpenBtn.onclick = () => this.loadLocalFile(file);
+            }
+        });
+        
+        // Clear selection
+        newClearBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            fileInput.value = '';
+            selectedFileInfo.style.display = 'none';
+            modalOpenBtn.disabled = true;
+            this.selectedLocalFile = null;
+        });
+    }
+    
+    async loadLocalFile(file) {
+        try {
+            const content = await file.text();
+            
+            // Create new tab with file content
+            const newId = `local-${file.name}-${Date.now()}`;
+            const newTab = this.createTab(newId, file.name, content, false);
+            newTab.filepath = null; // Local file, not from server
+            this.setActiveTab(newId);
+            
+            document.getElementById('file-modal').style.display = 'none';
+            this.resetFileModal();
+            
+            document.getElementById('compile-status').textContent = `Loaded: ${file.name}`;
+        } catch (error) {
+            alert('Error loading file: ' + error.message);
+        }
+    }
+    
+    resetFileModal() {
+        // Reset file input
+        const fileInput = document.getElementById('file-input');
+        fileInput.value = '';
+        document.getElementById('selected-file-info').style.display = 'none';
+        
+        // Reset tab selection
+        document.querySelectorAll('.file-source-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.file-source-tab')[0].classList.add('active');
+        document.querySelectorAll('.file-source-content').forEach(c => c.classList.remove('active'));
+        document.getElementById('local-files').classList.add('active');
+        
+        // Reset file list selection
+        document.querySelectorAll('.file-item').forEach(f => f.classList.remove('selected'));
+        document.getElementById('modal-open').disabled = true;
     }
 
     async loadFileList() {

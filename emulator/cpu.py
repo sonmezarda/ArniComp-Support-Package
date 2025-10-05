@@ -36,13 +36,14 @@ class CPUFlags:
 class CPU:
     def __init__(self):
         # 8-bit registers
-        self.ra = 0      # General purpose register
-        self.rd = 0      # ALU input register
+        self.ra = 0      # General purpose register A
+        self.rd = 0      # General purpose register D (ALU input)
+        self.rb = 0      # General purpose register B
         self.acc = 0     # Accumulator
         self.marl = 0    # Memory Address Register Low
         self.marh = 0    # Memory Address Register High
-        self.prl = 0     # Program Counter Low
-        self.prh = 0     # Program Counter High
+        self.prl = 0     # Program Register Low
+        self.prh = 0     # Program Register High
 
         # Separate memory spaces (Harvard Architecture)
         self.program_memory = bytearray(65536)  # EEPROM - Program storage
@@ -93,6 +94,7 @@ class CPU:
         """Reset CPU to initial state"""
         self.ra = 0
         self.rd = 0
+        self.rb = 0
         self.acc = 0
         self.marl = 0
         self.marh = 0
@@ -157,22 +159,13 @@ class CPU:
             return self.ra
         if name == 'RD':
             return self.rd
+        if name == 'RB':
+            return self.rb
         if name == 'ACC':
             return self.acc
-        if name == 'ML':
-            # Force LOW mode read regardless of current mode
-            prev = self.memory_mode_high
-            self.memory_mode_high = False
-            val = self.read_memory()
-            self.memory_mode_high = prev
-            return val
-        if name == 'MH':
-            # Force HIGH mode read regardless of current mode
-            prev = self.memory_mode_high
-            self.memory_mode_high = True
-            val = self.read_memory()
-            self.memory_mode_high = prev
-            return val
+        if name == 'M':
+            # Read from memory at [MARH:MARL]
+            return self.read_memory()
         if name == 'PCL':
             return self.prl
         if name == 'PCH':
@@ -197,6 +190,8 @@ class CPU:
             self.ra = value
         elif reg_name.upper() == 'RD':
             self.rd = value
+        elif reg_name.upper() == 'RB':
+            self.rb = value
         elif reg_name.upper() == 'ACC':
             self.acc = value
         elif reg_name.upper() == 'MARL':
@@ -211,9 +206,8 @@ class CPU:
             self.prl = value
         elif reg_name.upper() == 'PRH':
             self.prh = value
-        elif reg_name.upper() in ['ML', 'MH']:
-            # Writing to ML/MH means writing to memory
-            self.memory_mode_high = (reg_name.upper() == 'MH')
+        elif reg_name.upper() == 'M':
+            # Writing to M means writing to memory at [MARH:MARL]
             self.write_memory(value)
         elif reg_name.upper() == 'P':
             # Writing to P sets both PRL and PRH
@@ -230,71 +224,148 @@ class CPU:
         return instruction
     
     def decode_instruction(self, instruction):
-        """Decode 8-bit instruction according to new Sept 2025 encoding"""
-        # LDI (bit7=1)
+        """Decode 8-bit instruction according to new instruction set (Oct 2025)"""
+        # LDI (bit7=1): 1 [imm7]
         if instruction & 0x80:
             return 'LDI', [instruction & 0x7F]
 
         bits = f"{instruction:08b}"
 
-        # Fixed single-byte patterns
-        if bits == '00000000' or bits == '00000010':
+        # Special instructions
+        if instruction == 0b00000000:
             return 'NOP', []
-        if bits == '00000001':
+        if instruction == 0b00000001:
             return 'HLT', []
-        if bits == '00000011':
-            return 'CRA', []
+        if instruction == 0b00000010:
+            return 'SMSBRA', []
+        if instruction == 0b00000011:
+            return 'INX', []
+        
+        # NOT RB: 00000100
+        if instruction == 0b00000100:
+            return 'NOT', ['RB']
+        
+        # CMP instructions: 00000101, 00000110, 00000111
+        if instruction == 0b00000101:
+            return 'CMP', ['RA']
+        if instruction == 0b00000110:
+            return 'CMP', ['M']
+        if instruction == 0b00000111:
+            return 'CMP', ['ACC']
 
-        # SUBI 000001ii
-        if bits.startswith('000001'):
-            imm = instruction & 0x03
-            return 'SUBI', [imm]
-
-        # Jump 00001ccc
+        # ADD (00001xxx): 0 0 0 0 1 S2 S1 S0
         if bits.startswith('00001'):
-            cond = bits[5:8]
-            cond_map = {
-                '000': 'JMP', '001': 'JEQ', '010': 'JGT', '011': 'JLT',
-                '100': 'JGE', '101': 'JLE', '110': 'JNE', '111': 'JC'
-            }
-            return cond_map.get(cond, 'UNKNOWN'), []
+            src = bits[5:8]
+            return 'ADD', [self._decode_src_reg(src)]
 
-        # ADDI 00011iii
+        # XOR RA: 00001100
+        if instruction == 0b00001100:
+            return 'XOR', ['RA']
+
+        # SUB (00010xxx): 0 0 0 1 0 S2 S1 S0
+        if bits.startswith('00010'):
+            src = bits[5:8]
+            # Check for special XOR RB: 00010100
+            if instruction == 0b00010100:
+                return 'XOR', ['RB']
+            return 'SUB', [self._decode_src_reg(src)]
+
+        # ADC (00011xxx): 0 0 0 1 1 S2 S1 S0
         if bits.startswith('00011'):
+            src = bits[5:8]
+            # Check for special XOR ACC: 00011010
+            if instruction == 0b00011010:
+                return 'XOR', ['ACC']
+            return 'ADC', [self._decode_src_reg(src)]
+
+        # SBC (00100xxx): 0 0 1 0 0 S2 S1 S0
+        if bits.startswith('00100'):
+            src = bits[5:8]
+            # Check for special XOR M: 00100100
+            if instruction == 0b00100100:
+                return 'XOR', ['M']
+            # Check for JMP family: 00100xxx where xxx = condition
+            if bits[2:5] == '100':  # Confirm it's 001 00 xxx
+                cond = bits[5:8]
+                cond_map = {
+                    '000': 'JMP', '001': 'JEQ', '010': 'JGT', '011': 'JLT',
+                    '100': 'JGE', '101': 'JLE', '110': 'JNE', '111': 'JC'
+                }
+                return cond_map.get(cond, 'UNKNOWN'), []
+            return 'SBC', [self._decode_src_reg(src)]
+
+        # AND (00101xxx): 0 0 1 0 1 S2 S1 S0
+        if bits.startswith('00101'):
+            src = bits[5:8]
+            # Check for special XOR RD: 00101100
+            if instruction == 0b00101100:
+                return 'XOR', ['RD']
+            return 'AND', [self._decode_src_reg(src)]
+
+        # ADDI (00110xxx): 0 0 1 1 0 IM2 IM1 IM0
+        if bits.startswith('00110'):
             imm = instruction & 0x07
             return 'ADDI', [imm]
 
-        # AND 00010src
-        if bits.startswith('00010'):
-            src = bits[5:8]
-            return 'AND', [self._decode_src_reg(src)]
+        # SUBI (00111xxx): 0 0 1 1 1 IM2 IM1 IM0
+        if bits.startswith('00111'):
+            imm = instruction & 0x07
+            return 'SUBI', [imm]
 
-        # Arithmetic 001ooosrc
-        if bits.startswith('001'):
-            op = bits[3:5]
-            src = bits[5:8]
-            op_map = {'00': 'ADD', '01': 'SUB', '10': 'ADC', '11': 'SBC'}
-            return op_map.get(op, 'UNKNOWN'), [self._decode_src_reg(src)]
-
-        # MOV 01dddsrc
+        # MOV (01xxxxxx): 0 1 [source 3-bit] [dest 3-bit]
         if bits.startswith('01'):
-            dest = bits[2:5]
-            src = bits[5:8]
-            return 'MOV', [self._decode_dest_reg(dest), self._decode_src_reg(src)]
+            src_bits = bits[2:5]
+            dest_bits = bits[5:8]
+            
+            # Check for NOT instructions (special MOV encodings)
+            # NOT RA: 01000000
+            if instruction == 0b01000000:
+                return 'NOT', ['RA']
+            # NOT RD: 01001001
+            if instruction == 0b01001001:
+                return 'NOT', ['RD']
+            # NOT ACC: 01010010
+            if instruction == 0b01010010:
+                return 'NOT', ['ACC']
+            # NOT M: 01111111
+            if instruction == 0b01111111:
+                return 'NOT', ['M']
+            
+            return 'MOV', [self._decode_dest_reg(dest_bits), self._decode_src_reg(src_bits)]
 
         return 'UNKNOWN', []
 
-    def _decode_dest_reg(self, bits3:str):
+    def _decode_dest_reg(self, bits3: str):
+        """Decode 3-bit destination register
+        000: RA, 001: RD, 010: RB, 011: MARL, 
+        100: MARH, 101: PRL, 110: PRH, 111: M
+        """
         mapping = {
-            '000': 'RA', '001': 'RD', '010': 'MARL', '011': 'MARH',
-            '100': 'PRL', '101': 'PRH', '110': 'ML', '111': 'MH'
+            '000': 'RA',
+            '001': 'RD',
+            '010': 'RB',
+            '011': 'MARL',
+            '100': 'MARH',
+            '101': 'PRL',
+            '110': 'PRH',
+            '111': 'M'
         }
         return mapping.get(bits3, 'RA')
 
-    def _decode_src_reg(self, bits3:str):
+    def _decode_src_reg(self, bits3: str):
+        """Decode 3-bit source register
+        000: RA, 001: RD, 010: RB, 011: ACC,
+        100: PCL, 101: PCH, 110: M
+        """
         mapping = {
-            '000': 'RA', '001': 'RD', '010': 'ACC', '011': 'CLR',
-            '100': 'PCL', '101': 'PCH', '110': 'ML', '111': 'MH'
+            '000': 'RA',
+            '001': 'RD',
+            '010': 'RB',
+            '011': 'ACC',
+            '100': 'PCL',
+            '101': 'PCH',
+            '110': 'M',
+            '111': 'M'  # 111 also maps to M for safety
         }
         return mapping.get(bits3, 'RA')
     
@@ -303,73 +374,110 @@ class CPU:
         if self.debug_mode:
             print(f"Executing: {inst_name} {args}")
         
+        # Special instructions
         if inst_name == 'NOP':
             return
+        
         if inst_name == 'HLT':
             self.halted = True
             return
-        if inst_name == 'CRA':
-            # CRA only clears RA (original hardware semantic)
-            self.ra = 0
+        
+        if inst_name == 'SMSBRA':
+            # Set Most Significant Bit of RA as 1
+            self.ra |= 0x80
             return
+        
+        if inst_name == 'INX':
+            # Increment MARL (MARL <- MARL + 1)
+            self.marl = (self.marl + 1) & 0xFF
+            return
+        
+        # Load immediate
         if inst_name == 'LDI':
             self.ra = args[0] & 0x7F
             return
+        
+        # Move instruction
         if inst_name == 'MOV' and len(args) == 2:
             dest, src = args
-            val = 0
-            if src == 'CLR':
-                val = 0
-            else:
-                val = self.get_register_value(src)
+            val = self.get_register_value(src)
             self.set_register_value(dest, val)
-            if dest in ['ML','MH']:
-                self.memory_mode_high = (dest == 'MH')
             return
-        if inst_name in ['ADD','SUB','ADC','SBC'] and len(args) == 1:
+        
+        # NOT instruction
+        if inst_name == 'NOT' and len(args) == 1:
             src_val = self.get_register_value(args[0])
-            # Comparator uses RD vs source
+            self.acc = (~src_val) & 0xFF
+            return
+        
+        # XOR instruction
+        if inst_name == 'XOR' and len(args) == 1:
+            src_val = self.get_register_value(args[0])
+            # ACC = src XOR RD
+            self.acc = (src_val ^ self.rd) & 0xFF
+            return
+        
+        # CMP instruction
+        if inst_name == 'CMP' and len(args) == 1:
+            src_val = self.get_register_value(args[0])
+            # Compare src with RD and update flags
+            self.flags.update_flags(src_val, self.rd)
+            return
+        
+        # Arithmetic operations
+        if inst_name in ['ADD', 'SUB', 'ADC', 'SBC'] and len(args) == 1:
+            src_val = self.get_register_value(args[0])
+            # Update comparator flags (RD vs source)
             self.flags.update_flags(self.rd, src_val)
-            if inst_name in ['ADD','ADC']:
-                base = self.rd + src_val
-                if inst_name == 'ADC' and self.flags.carry:
-                    base += 1
-                self.flags.carry = base > 0xFF
-                self.acc = base & 0xFF
-            else:  # SUB / SBC
-                minuend = self.acc if inst_name in ['SUB','SBC'] else self.rd
-                subtrahend = src_val + (1 if (inst_name == 'SBC' and self.flags.carry) else 0)
-                result = (minuend - subtrahend) & 0x1FF
-                # Borrow occurred if minuend < subtrahend
-                borrow = minuend < subtrahend
-                # Convention: carry flag = NOT borrow (so JC means no borrow) OR keep borrow semantics?
-                # We'll set carry=False on borrow for typical 6502-like SBC semantics
-                self.flags.carry = not borrow
+            
+            if inst_name == 'ADD':
+                result = self.rd + src_val
+                self.flags.carry = result > 0xFF
+                self.acc = result & 0xFF
+            
+            elif inst_name == 'ADC':
+                result = self.rd + src_val + (1 if self.flags.carry else 0)
+                self.flags.carry = result > 0xFF
+                self.acc = result & 0xFF
+            
+            elif inst_name == 'SUB':
+                result = self.rd - src_val
+                self.flags.carry = not (result < 0)  # Carry = NOT borrow
+                self.acc = result & 0xFF
+            
+            elif inst_name == 'SBC':
+                result = self.rd - src_val - (0 if self.flags.carry else 1)
+                self.flags.carry = not (result < 0)  # Carry = NOT borrow
                 self.acc = result & 0xFF
             return
+        
+        # AND instruction
         if inst_name == 'AND' and len(args) == 1:
             src_val = self.get_register_value(args[0])
-            # Hardware semantics: ACC <- RD & src
-            self.acc = self.rd & src_val
-            # Flags from RD vs src (keep comparator policy)
+            self.acc = (self.rd & src_val) & 0xFF
             self.flags.update_flags(self.rd, src_val)
             return
+        
+        # Immediate arithmetic
         if inst_name == 'ADDI' and len(args) == 1:
             imm = args[0] & 0x07
             self.flags.update_flags(self.rd, imm)
-            total = self.rd + imm
-            self.flags.carry = total > 0xFF
-            self.acc = total & 0xFF
-            return
-        if inst_name == 'SUBI' and len(args) == 1:
-            imm = args[0] & 0x03
-            self.flags.update_flags(self.rd, imm)
-            result = (self.rd - imm) & 0x1FF
-            borrow = self.rd < imm
-            self.flags.carry = not borrow
+            result = self.rd + imm
+            self.flags.carry = result > 0xFF
             self.acc = result & 0xFF
             return
-        if inst_name in ['JMP','JEQ','JGT','JLT','JGE','JLE','JNE','JC']:
+        
+        if inst_name == 'SUBI' and len(args) == 1:
+            imm = args[0] & 0x07
+            self.flags.update_flags(self.rd, imm)
+            result = self.rd - imm
+            self.flags.carry = not (result < 0)
+
+            self.acc = result & 0xFF
+            return
+        
+        # Jump instructions
+        if inst_name in ['JMP', 'JEQ', 'JGT', 'JLT', 'JGE', 'JLE', 'JNE', 'JC']:
             target = (self.prh << 8) | self.prl
             take = False
             if inst_name == 'JMP':

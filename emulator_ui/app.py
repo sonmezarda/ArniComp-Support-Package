@@ -20,7 +20,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 
 from emulator.cpu import CPU
-from assemblerV2_python.modules.AssemblyHelper import AssemblyHelper
+from assembler.modules.AssemblyHelper import AssemblyHelper
 
 app = FastAPI(title="ArniComp Emulator", description="8-bit CPU Emulator Web Interface")
 
@@ -35,7 +35,7 @@ cpu = CPU()
 assembly_helper = AssemblyHelper(
     comment_char=';', 
     label_char=':', 
-    constant_keyword="const", 
+    constant_keyword='equ', 
     number_prefix='#',
     constant_prefix='$',
     label_prefix='@'
@@ -62,44 +62,110 @@ class FileContent(BaseModel):
 class SaveFileRequest(BaseModel):
     content: str
 
-def decode_instruction(instruction_byte:int):
+def decode_instruction(instruction_byte: int):
+    """Decode instruction for display (Oct 2025 IS)"""
     try:
         b = instruction_byte & 0xFF
         bits = f"{b:08b}"
+        
         # LDI
         if b & 0x80:
             return f"LDI #{b & 0x7F}"
-        if bits in ['00000000','00000010']:
+        
+        # Special instructions
+        if b == 0b00000000:
             return 'NOP'
-        if bits == '00000001':
+        if b == 0b00000001:
             return 'HLT'
-        if bits == '00000011':
-            return 'CRA'
-        if bits.startswith('000001'):
-            return f"SUBI #{b & 0x03}"
+        if b == 0b00000010:
+            return 'SMSBRA'
+        if b == 0b00000011:
+            return 'INX'
+        if b == 0b00000100:
+            return 'NOT RB'
+        if b == 0b00000101:
+            return 'CMP RA'
+        if b == 0b00000110:
+            return 'CMP M'
+        if b == 0b00000111:
+            return 'CMP ACC'
+        
+        # ADD family
         if bits.startswith('00001'):
-            cond = bits[5:8]
-            jm = {'000':'JMP','001':'JEQ','010':'JGT','011':'JLT','100':'JGE','101':'JLE','110':'JNE','111':'JC'}
-            return jm.get(cond,'J?')
-        if bits.startswith('00011'):
-            return f"ADDI #{b & 0x07}"
+            if b == 0b00001100:
+                return 'XOR RA'
+            src = bits[5:8]
+            src_map = {'000':'RA', '001':'RD', '010':'RB', '011':'ACC', '100':'PCL', '101':'PCH', '110':'M'}
+            return f"ADD {src_map.get(src,'?')}"
+        
+        # SUB family
         if bits.startswith('00010'):
+            if b == 0b00010100:
+                return 'XOR RB'
             src = bits[5:8]
-            src_map = {'000':'RA','001':'RD','010':'ACC','011':'CLR','100':'PCL','101':'PCH','110':'ML','111':'MH'}
+            src_map = {'000':'RA', '001':'RD', '010':'RB', '011':'ACC', '100':'PCL', '101':'PCH', '110':'M'}
+            return f"SUB {src_map.get(src,'?')}"
+        
+        # ADC family
+        if bits.startswith('00011'):
+            if b == 0b00011010:
+                return 'XOR ACC'
+            src = bits[5:8]
+            src_map = {'000':'RA', '001':'RD', '010':'RB', '011':'ACC', '100':'PCL', '101':'PCH', '110':'M'}
+            return f"ADC {src_map.get(src,'?')}"
+        
+        # SBC/JMP family
+        if bits.startswith('00100'):
+            if b == 0b00100100:
+                return 'XOR M'
+            # Check for JMP
+            if bits[2:5] == '100':
+                cond = bits[5:8]
+                jm = {'000':'JMP', '001':'JEQ', '010':'JGT', '011':'JLT',
+                      '100':'JGE', '101':'JLE', '110':'JNE', '111':'JC'}
+                return jm.get(cond, 'J?')
+            src = bits[5:8]
+            src_map = {'000':'RA', '001':'RD', '010':'RB', '011':'ACC', '100':'PCL', '101':'PCH', '110':'M'}
+            return f"SBC {src_map.get(src,'?')}"
+        
+        # AND family
+        if bits.startswith('00101'):
+            if b == 0b00101100:
+                return 'XOR RD'
+            src = bits[5:8]
+            src_map = {'000':'RA', '001':'RD', '010':'RB', '011':'ACC', '100':'PCL', '101':'PCH', '110':'M'}
             return f"AND {src_map.get(src,'?')}"
-        if bits.startswith('001'):
-            op = bits[3:5]
-            src = bits[5:8]
-            opm = {'00':'ADD','01':'SUB','10':'ADC','11':'SBC'}
-            src_map = {'000':'RA','001':'RD','010':'ACC','011':'CLR','100':'PCL','101':'PCH','110':'ML','111':'MH'}
-            return f"{opm.get(op,'A?')} {src_map.get(src,'?')}"
+        
+        # ADDI
+        if bits.startswith('00110'):
+            return f"ADDI #{b & 0x07}"
+        
+        # SUBI
+        if bits.startswith('00111'):
+            return f"SUBI #{b & 0x07}"
+        
+        # MOV/NOT family
         if bits.startswith('01'):
-            dest = bits[2:5]
-            src = bits[5:8]
-            dest_map = {'000':'RA','001':'RD','010':'MARL','011':'MARH','100':'PRL','101':'PRH','110':'ML','111':'MH'}
-            src_map = {'000':'RA','001':'RD','010':'ACC','011':'CLR','100':'PCL','101':'PCH','110':'ML','111':'MH'}
-            return f"MOV {dest_map.get(dest,'?')}, {src_map.get(src,'?')}"
-        return f"UNK {b:02X}"
+            # Check for NOT instructions
+            if b == 0b01000000:
+                return 'NOT RA'
+            if b == 0b01001001:
+                return 'NOT RD'
+            if b == 0b01010010:
+                return 'NOT ACC'
+            if b == 0b01111111:
+                return 'NOT M'
+            
+            # Regular MOV: 01 [source] [dest]
+            src_bits = bits[2:5]
+            dest_bits = bits[5:8]
+            dest_map = {'000':'RA', '001':'RD', '010':'RB', '011':'MARL',
+                       '100':'MARH', '101':'PRL', '110':'PRH', '111':'M'}
+            src_map = {'000':'RA', '001':'RD', '010':'RB', '011':'ACC',
+                      '100':'PCL', '101':'PCH', '110':'M'}
+            return f"MOV {dest_map.get(dest_bits,'?')}, {src_map.get(src_bits,'?')}"
+        
+        return f"??? {bits}"
     except Exception:
         return f"ERR_{instruction_byte:02X}"
 
@@ -119,6 +185,7 @@ async def get_cpu_state():
                 'registers': {
                     'ra': cpu.ra,
                     'rd': cpu.rd,
+                    'rb': cpu.rb,
                     'acc': cpu.acc,
                     'marl': cpu.marl,
                     'marh': cpu.marh,
@@ -179,8 +246,25 @@ async def compile_code(request: CompileRequest):
     try:
         
         lines = request.code.strip().split('\n')
+        
+        # Filter out status messages that might have been accidentally added to code
+        # These are UI messages, not assembly code
+        filtered_lines = []
+        for line in lines:
+            line_stripped = line.strip()
+            line_lower = line_stripped.lower()
+            # Skip lines that look like status messages
+            # Be careful: only filter lines that clearly look like English sentences
+            if (('program halted' in line_lower) or 
+                ('compilation' in line_lower and ('success' in line_lower or 'error' in line_lower or 'failed' in line_lower)) or
+                ('executed' in line_lower and 'step' in line_lower)):
+                print(f"Filtering out status message: '{line_stripped}'")
+                continue
+            filtered_lines.append(line)
+        
         print(f"Raw lines: {lines}")  # Debug
-        binary_lines, labels, constants = assembly_helper.convert_to_machine_code(lines)
+        print(f"Filtered lines: {filtered_lines}")  # Debug
+        binary_lines, labels, constants = assembly_helper.convert_to_machine_code(filtered_lines)
         print(f"Binary lines: {binary_lines}")  # Debug
         if not binary_lines:
             return {'success': False, 'error': 'No valid instructions found'}
