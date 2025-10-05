@@ -5,15 +5,22 @@
 
 byte c = 0;
 byte button;
-byte temp;
+byte b1;
+byte b2;
 byte flag = 0;
 
 while 1
     button = *BUTTON_ADR;
-    temp = button & BUTTON1_MASK;
-    if temp == 1
+    b1 = button & BUTTON1_MASK;
+    b2 = button & BUTTON2_MASK;
+    if b1 == BUTTON1_MASK
         if flag == 0
             c = c + 1;
+            flag = 1;
+        endif
+    elif b2 == BUTTON2_MASK
+        if flag == 0
+            c = c - 1;
             flag = 1;
         endif
     else

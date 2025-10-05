@@ -1,6 +1,6 @@
 from enum import StrEnum, auto
-from VariableManager import VarTypes, Variable, ByteVariable, VarManager
-from ConditionHelper import IfElseClause, GroupObject, Condition, WhileClause, DirectAssemblyClause
+from VariableManager import VarTypes
+from ConditionHelper import DirectAssemblyClause
 import CompilerStaticMethods as CSM
 import re
 
