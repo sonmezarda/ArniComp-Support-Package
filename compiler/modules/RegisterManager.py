@@ -33,13 +33,15 @@ class TempVarMode(IntEnum):
     VAR_CONST_SUB=3
     
 class Register:
-    def __init__(self, name:str, Variable:Variable=None, mode:RegisterMode = RegisterMode.VALUE, value:int = None, manager:'RegisterManager'=None):
+    def __init__(self, name:str, Variable:Variable=None, mode:RegisterMode = RegisterMode.VALUE, value:int = None, writable:bool=False, outable:bool=False, manager:'RegisterManager'=None):
         self.name = name
         self.variable = Variable
         self.mode = mode
         self.value = None
         self.special_expression = None
         self.manager = manager
+        self.writable = writable
+        self.outable = outable  
         # Address/identity tag for caching (symbolic/absolute)
         self.tag = None
     
@@ -122,13 +124,16 @@ class Register:
     
 class RegisterManager():
     def __init__(self):
-        self.ra:Register = Register("ra", manager=self)
-        self.rd:Register = Register("rd", manager=self)
-        self.acc:Register = Register("acc", manager=self)
-        self.marl:Register= Register("marl", manager=self)
-        self.marh:Register = Register("marh", manager=self)
-        self.prl:Register = Register("prl", manager=self)
-        self.prh:Register = Register("prh", manager=self)
+        self.ra:Register = Register("ra", manager=self, writable=True, outable=True)
+        self.rd:Register = Register("rd", manager=self, writable=True, outable=True)
+        self.rb:Register = Register("rb", manager=self, writable=True, outable=True)
+        self.acc:Register = Register("acc", manager=self, writable=False, outable=True)
+        self.marl:Register= Register("marl", manager=self, writable=True, outable=False)
+        self.marh:Register = Register("marh", manager=self, writable=True, outable=False)
+        self.prl:Register = Register("prl", manager=self, writable=True, outable=False)
+        self.prh:Register = Register("prh", manager=self, writable=True, outable=False)
+        self.pcl:Register = Register("pcl", manager=self, writable=False, outable=True)
+        self.pch:Register = Register("pch", manager=self, writable=False, outable=True)
         self.changed_registers:list[Register] = []
 
     def check_for_variable(self, variable:Variable) -> Register | None:
@@ -164,5 +169,20 @@ class RegisterManager():
         for reg in self.changed_registers:
             reg.set_unknown_mode()
         self.reset_change_detector()
-
+        
+    def get_writable_registers(self) -> list[Register]:
+        regs = []
+        for reg in [self.ra, self.rd, self.rb, self.marl, self.marh, self.prl, self.prh]:
+            if reg.writable:
+                regs.append(reg)
+        return regs
     
+    def get_outable_registers(self) -> list[Register]:
+        regs = []
+        for reg in [self.ra, self.rd, self.rb, self.acc]:
+            if reg.outable:
+                regs.append(reg)
+        return regs
+
+    def check_is_outable(self, reg:Register) -> bool:
+        return reg.outable

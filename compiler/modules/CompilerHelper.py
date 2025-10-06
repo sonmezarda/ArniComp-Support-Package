@@ -492,167 +492,73 @@ class Compiler:
         self.register_manager.ra.set_mode(RegisterMode.CONST, value)
         return self.__get_assembly_lines_len()
 
+    def __ldi(self, value:int) -> int:
+        if value > MAX_LDI:
+            raise ValueError(f"Value {value} exceeds maximum LDI value of {MAX_LDI}.")
+        self.__add_assembly_line(f"ldi #{value}")
+        self.register_manager.ra.set_mode(RegisterMode.CONST, value)
+        return self.__get_assembly_lines_len()
+    
+    def __set_msb_ra(self) -> int:
+        self.__add_assembly_line("smsbra")
+        if self.register_manager.ra.mode == RegisterMode.CONST:
+            new_val = self.register_manager.ra.value | 0x80
+            self.register_manager.ra.set_mode(RegisterMode.CONST, new_val)
+        else:
+            self.register_manager.ra.set_unknown_mode()
+        return self.__get_assembly_lines_len()
+    
+    def __mov(self, dst:Register, src:Register) -> int:
+        if dst.name == src.name:
+            return self.__get_assembly_lines_len()
+        if not src.outable:
+            raise ValueError(f"Source register {src.name} is not outable.")
+        
+        if not dst.writable:
+            raise ValueError(f"Destination register {dst.name} is not writable.")
+        
+        self.__add_assembly_line(f"mov {dst.name}, {src.name}")
+        if src.mode == RegisterMode.UNKNOWN:
+            dst.set_unknown_mode()
+        elif src.mode == RegisterMode.CONST:
+            dst.set_mode(RegisterMode.CONST, src.value)
+        else:
+            dst.set_mode(src.mode, src.value, src.variable)
+        return self.__get_assembly_lines_len()
+    
+    # newestIS
     def __build_const_in_reg(self, value: int, target_reg: Register) -> int:
-        """Build any 8-bit constant (0-255) into specified register using optimal combination of LDI/ADDI/SUBI.
-        Strategy: Find the most efficient method among:
-        1. Single LDI (if <= 127)
-        2. LDI + ADDI sequence 
-        3. LDI + LDI + ADD sequence
-        4. 127*2 - SUBI sequence
+        """
+        Build any 8-bit constant (0-255) into specified register using
         """
         ra = self.register_manager.ra
-        rd = self.register_manager.rd
-        acc = self.register_manager.acc
         if value > 255:
             raise ValueError(f"Value {value} exceeds maximum 8-bit value of 255.")
         
-        target = value & 0xFF
-        if target <= MAX_LDI:
-            self.__ldi(target)
+        # Reuse existing register with constant if possible
+        reg_with_const = self.register_manager.check_for_const(value)
+        if reg_with_const is not None:
+            # If it's the target reg, nothing to do
+            if reg_with_const.name == target_reg.name:
+                return self.__get_assembly_lines_len()
+            else:
+                # Move from existing const reg to target reg if possible
+                if reg_with_const.outable:
+                    self.__mov(target_reg, reg_with_const)
+                    return self.__get_assembly_lines_len()
+        
+        if value <= MAX_LDI:
+            self.__ldi(value)
             if target_reg.name != "ra":
-                self.__add_assembly_line(f"mov {target_reg.name}, ra")
-                target_reg.set_mode(RegisterMode.CONST, target)
+                self.__mov(target_reg, ra)
             return self.__get_assembly_lines_len()
 
-        # Calculate cost for different strategies
-        strategies = []
-        
-        # Strategy 1: LDI base + ADDI remainder
-        for base in range(MAX_LDI, 0, -1):  # Try from 127 down
-            remainder = target - base
-            if remainder > 0:
-                addi_steps = (remainder + 6) // 7  # Ceiling division for 7-bit chunks
-                if remainder <= 7 * 7:  # Max 7 ADDI instructions (7*7=49 max remainder)
-                    cost = 3 + (2 * addi_steps)  # ldi + mov rd,ra + N*(addi + mov rd,acc) + mov target,acc
-                    strategies.append(('addi', base, remainder, cost))
-        
-        # Strategy 2: LDI + LDI + ADD (for values that can be sum of two LDIs)
-        for base1 in range(MAX_LDI, target // 2, -1):  # First LDI
-            base2 = target - base1
-            if base2 <= MAX_LDI and base2 > 0:
-                cost = 4  # ldi + mov rd,ra + ldi + add ra + mov target,acc
-                strategies.append(('add_two_ldi', base1, base2, cost))
-        
-        # Strategy 3: 127*2 - SUBI (for values close to 254)
-        if target >= 128 and target <= 254:
-            remainder = 254 - target
-            if remainder >= 0:  # Only valid for values <= 254
-                subi_steps = (remainder + 6) // 7
-                if remainder <= 7 * 7:  # Max 7 SUBI instructions
-                    cost = 4 + subi_steps  # ldi + mov rd,ra + add rd + N*subi + mov target,acc
-                    strategies.append(('subi_from_254', 127, remainder, cost))
-        
-        # Strategy 4: 255 = 127*2 + 1 (special case for maximum value)
-        if target == 255:
-            cost = 5  # ldi + mov rd,ra + add rd + addi + mov target,acc
-            strategies.append(('add_254_plus_1', 127, 1, cost))
-        
-        # Choose the strategy with minimum cost
-        if not strategies:
-            # Fallback to simple ADDI approach
-            self.__ldi(MAX_LDI)
-            remainder = target - MAX_LDI
-            self.__add_assembly_line("mov rd, ra")
-            rd.set_mode(RegisterMode.CONST, MAX_LDI)
-            
-            current = MAX_LDI
-            while remainder > 0:
-                step = min(7, remainder)
-                self.__add_assembly_line(f"addi #{step}")
-                current += step
-                if remainder > step:  # Don't mov rd,acc on last iteration
-                    self.__add_assembly_line("mov rd, acc")
-                    rd.set_mode(RegisterMode.CONST, current)
-                remainder -= step
-            
-            if target_reg != acc:
-                self.__add_assembly_line(f"mov {target_reg.name}, acc")
-            # Even if target is ACC, update its mode info
-            target_reg.set_mode(RegisterMode.CONST, current)
-            ra.set_unknown_mode()
-            return self.__get_assembly_lines_len()
-        
-        # Execute the best strategy
-        best_strategy = min(strategies, key=lambda x: x[3])
-        strategy_type, param1, param2, cost = best_strategy
-        
-        if strategy_type == 'addi':
-            base, remainder = param1, param2
-            self.__ldi(base)
-            self.__add_assembly_line("mov rd, ra")
-            rd.set_mode(RegisterMode.CONST, base)
-            
-            current = base
-            while remainder > 0:
-                step = min(7, remainder)
-                self.__add_assembly_line(f"addi #{step}")
-                current += step
-                if remainder > step:  # Don't mov rd,acc on last iteration
-                    self.__add_assembly_line("mov rd, acc")
-                    rd.set_mode(RegisterMode.CONST, current)
-                remainder -= step
-            
-            if target_reg != acc:
-                self.__add_assembly_line(f"mov {target_reg.name}, acc")
-            target_reg.set_mode(RegisterMode.CONST, current)
-            
-        elif strategy_type == 'add_two_ldi':
-            base1, base2 = param1, param2
-            self.__ldi(base1)
-            self.__add_assembly_line("mov rd, ra")
-            self.__ldi(base2)
-            self.__add_assembly_line("add ra")  # acc = rd + ra
-            if target_reg != acc:
-                self.__add_assembly_line(f"mov {target_reg.name}, acc")
-            target_reg.set_mode(RegisterMode.CONST, target)
-            
-        elif strategy_type == 'add_254_plus_1':
-            # Build 255 = 254 + 1
-            # First create 254 = 127 * 2
-            self.__ldi(MAX_LDI)  # Load 127 into RA
-            ra.set_mode(RegisterMode.CONST, 127)
-            
-            self.__add_assembly_line("mov rd, ra")  # Copy 127 to RD
-            rd.set_mode(RegisterMode.CONST, 127)
-            
-            self.__add_assembly_line("add rd")  # ACC = RD + RA = 127 + 127 = 254
-            acc.set_mode(RegisterMode.CONST, 254)
-            
-            self.__add_assembly_line("mov rd, acc")  # Store 254 in RD
-            rd.set_mode(RegisterMode.CONST, 254)
-            
-            # ADDI semantics: ACC = RD + immediate = 254 + 1 = 255
-            self.__add_assembly_line("addi #1")  
-            acc.set_mode(RegisterMode.CONST, 255)
-            
-            # Move to target if needed
-            if target_reg != acc:
-                self.__add_assembly_line(f"mov {target_reg.name}, acc")
-                target_reg.set_mode(RegisterMode.CONST, 255)
-            
-        elif strategy_type == 'subi_from_254':
-            _, remainder = param1, param2
-            self.__ldi(MAX_LDI)  # 127
-            self.__add_assembly_line("mov rd, ra")
-            self.__add_assembly_line("add rd")  # ACC = 254
-            
-            current = 254
-            while remainder > 0:
-                step = min(7, remainder)
-                self.__add_assembly_line(f"subi #{step}")
-                current -= step
-                remainder -= step
-            
-            if target_reg != acc:
-                self.__add_assembly_line(f"mov {target_reg.name}, acc")
-            target_reg.set_mode(RegisterMode.CONST, current)
-        
-        ra.set_unknown_mode()  # RA is used for intermediate calculations
+        value_except_msb = value & 0x7F  # lower 7 bits
+        self.__ldi(value_except_msb)  # RA <- lower 7 bits
+        self.__set_msb_ra()  # RA <- RA | 0x80
+        if target_reg.name != "ra":
+            self.__mov(target_reg, ra)
         return self.__get_assembly_lines_len()
-
-    def __build_const_in_ra(self, value: int) -> int:
-        """Build constant in RA, reusing any cached const register via __set_ra_const."""
-        return self.__set_ra_const(value)
 
     def __store_with_current_mar(self, var: Variable, src: Register) -> int:
         """Store using current MAR (does not modify MAR registers)."""
