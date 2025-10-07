@@ -138,6 +138,8 @@ class Compiler:
             self.__set_ra_const(command.var_value)
             self.__store_with_current_mar_abs(new_var.address, self.register_manager.ra)
             self.register_manager.marl.set_variable(new_var, RegisterMode.ADDR)
+            # Track initial runtime value
+            self.var_manager.set_variable_runtime_value(command.var_name, command.var_value & 0xFF)
         else:
             raise ValueError(f"Unsupported variable type: {command.var_type}")
         
@@ -249,10 +251,21 @@ class Compiler:
                 return self.__set_mar_abs(address)
         except Exception:
             pass
-        # Dynamic low-page index
+        
+        # Dynamic index - check if runtime value is known
         if not self.var_manager.check_variable_exists(idx_s):
             raise NotImplementedError("Array index must be a constant or an existing byte variable.")
+        
         idx_var = self.var_manager.get_variable(idx_s)
+        runtime_idx = self.var_manager.get_variable_runtime_value(idx_s)
+        
+        # If runtime value is known, treat as constant
+        if runtime_idx is not None:
+            logger.debug(f"Using runtime value {runtime_idx} for index variable '{idx_s}'")
+            address = arr_var.address + runtime_idx
+            return self.__set_mar_abs(address)
+        
+        # Dynamic low-page index (runtime value unknown)
         base_low = arr_var.get_low_address()
         base_high = arr_var.get_high_address()
         # Low-page, no overflow assumption
@@ -300,6 +313,59 @@ class Compiler:
     def __compile_assign_var(self, var: Variable, rhs_expr: str) -> int:
         """var = expr; Choose MAR ordering smartly based on RHS memory needs."""
         if type(var) is VarTypes.BYTE.value:
+            # Check for "var = var + 1" pattern (ADDI optimization)
+            import re
+            addi_pattern = rf'^{re.escape(var.name)}\s*\+\s*1$'
+            if re.match(addi_pattern, rhs_expr.strip()):
+                logger.debug(f"ADDI optimization: {var.name} = {var.name} + 1")
+                # Load variable to RD, ADDI, store back
+                self.__set_mar_abs(var.address)
+                if var.address <= MAX_LOW_ADDRESS:
+                    self.__add_assembly_line("ldrl rd")
+                else:
+                    self.__add_assembly_line("ldrh rd")
+                self.__add_assembly_line("addi #1")
+                # ACC now has var+1
+                self.__store_with_current_mar_abs(var.address, self.register_manager.acc)
+                
+                # Track runtime value if previous value was known
+                prev_value = self.var_manager.get_variable_runtime_value(var.name)
+                if prev_value is not None:
+                    new_value = (prev_value + 1) & 0xFF
+                    self.var_manager.set_variable_runtime_value(var.name, new_value)
+                    logger.debug(f"Runtime value tracked: {var.name} = {new_value}")
+                else:
+                    self.var_manager.invalidate_runtime_value(var.name)
+                
+                return self.__get_assembly_lines_len()
+            
+            # Normal assignment path
+            needs_mem = self.__rhs_needs_memory(rhs_expr)
+            src_reg: Register
+            if needs_mem:
+                src_reg = self.__compute_rhs(rhs_expr)
+                self.__set_mar_abs(var.address)
+            else:
+                self.__set_mar_abs(var.address)
+                src_reg = self.__compute_rhs(rhs_expr)
+            # store (var is byte for now)
+            self.__store_with_current_mar_abs(var.address, src_reg)
+            
+            # Try to track runtime value for simple constants
+            try:
+                if '+' not in rhs_expr and '-' not in rhs_expr and '&' not in rhs_expr:
+                    value = CSM.convert_to_decimal(rhs_expr.strip())
+                    if value is not None:
+                        self.var_manager.set_variable_runtime_value(var.name, value & 0xFF)
+                    else:
+                        self.var_manager.invalidate_runtime_value(var.name)
+                else:
+                    self.var_manager.invalidate_runtime_value(var.name)
+            except:
+                self.var_manager.invalidate_runtime_value(var.name)
+            
+            return self.__get_assembly_lines_len()
+        elif type(var) is VarTypes.UINT16.value:
             needs_mem = self.__rhs_needs_memory(rhs_expr)
             src_reg: Register
             if needs_mem:
@@ -379,6 +445,9 @@ class Compiler:
             new_var:Variable = self.var_manager.create_array_variable(var_name=command.var_name, var_type=command.var_type, array_len=command.array_length, var_value=[0]*command.array_length)
         else:
             new_var:Variable = self.var_manager.create_variable(var_name=command.var_name, var_type=command.var_type, var_value=0)
+            # Track initial runtime value for non-array variables
+            if command.var_type == VarTypes.BYTE:
+                self.var_manager.set_variable_runtime_value(command.var_name, 0)
         return self.__get_assembly_lines_len()
     
     def __free_variable(self, command:FreeCommand) -> int:

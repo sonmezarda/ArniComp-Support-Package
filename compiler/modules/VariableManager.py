@@ -10,8 +10,9 @@ class Variable():
         self.size = size
         self.name = name
         self.address = address
-        self.value = value
+        self.value = value  # Initial/declared value
         self.value_type = value_type
+        self.runtime_value = None  # Runtime tracked value (like register tags)
         self.__post_init__()
 
     def __post_init__(self):
@@ -186,6 +187,25 @@ class VarManager():
 
     def check_variable_exists(self, var_name:str) -> bool:
         return var_name in self.variables
+    
+    def set_variable_runtime_value(self, var_name: str, value: int | None) -> None:
+        """Set the runtime tracked value of a variable (for optimization)"""
+        if var_name not in self.variables:
+            raise ValueError(f"Variable '{var_name}' does not exist.")
+        self.variables[var_name].runtime_value = value
+        logger.debug(f"Variable '{var_name}' runtime value set to {value}")
+    
+    def get_variable_runtime_value(self, var_name: str) -> int | None:
+        """Get the runtime tracked value of a variable"""
+        if var_name not in self.variables:
+            return None
+        return self.variables[var_name].runtime_value
+    
+    def invalidate_runtime_value(self, var_name: str) -> None:
+        """Mark variable's runtime value as unknown"""
+        if var_name in self.variables:
+            self.variables[var_name].runtime_value = None
+            logger.debug(f"Variable '{var_name}' runtime value invalidated")
     
     def __validate_variable_name(self, var_name:str) -> bool:
         return var_name.isidentifier()
