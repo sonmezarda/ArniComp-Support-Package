@@ -185,16 +185,8 @@ class Compiler:
                 address = None
             if address is None:
                 raise ValueError(f"Invalid dereference address: {s}")
-            # Point MAR to address and load into RD
             self.__set_mar_abs(address)
-            if address <= MAX_LOW_ADDRESS:
-                self.__add_assembly_line("ldrl rd")
-            else:
-                self.__add_assembly_line("ldrh rd")
-            try:
-                self.register_manager.rd.set_unknown_mode()
-            except Exception:
-                pass
+            self.__ldr(self.register_manager.rd)
             return self.register_manager.rd
         # Array read: name[idx]
         m = re.match(r'^([A-Za-z_][A-Za-z0-9_]*)\[(.+)\]$', s)
@@ -205,16 +197,8 @@ class Compiler:
             arr_var = self.var_manager.get_variable(arr_name)
             if type(arr_var) != VarTypes.BYTE_ARRAY.value:
                 raise ValueError(f"'{arr_name}' is not an array.")
-            # Set MAR to element, load into RD
             self.__set_mar_array_elem(arr_var, idx_expr)
-            if arr_var.address <= MAX_LOW_ADDRESS and (arr_var.get_high_address() == 0):
-                self.__add_assembly_line("ldrl rd")
-            else:
-                self.__add_assembly_line("ldrh rd")
-            try:
-                self.register_manager.rd.set_unknown_mode()
-            except Exception:
-                pass
+            self.__ldr(self.register_manager.rd)
             return self.register_manager.rd
 
         # Has operators? use existing expression evaluator into ACC
@@ -293,21 +277,27 @@ class Compiler:
             src_reg = self.__compute_rhs(rhs_expr)
             self.__set_mar_abs(address)
         else:
-            # set MAR first, then compute
             self.__set_mar_abs(address)
             src_reg = self.__compute_rhs(rhs_expr)
 
-        if address <= MAX_LOW_ADDRESS:
-            self.__add_assembly_line(f"strl {src_reg.name}")
-        else:
-            self.__add_assembly_line(f"strh {src_reg.name}")
-        # Invalidate any cached register bound to the stored var (if tracked)
+        self.__str(src_reg)
+        
         if address < self.var_manager.mem_end_addr and address >= self.var_manager.mem_start_addr:
             var_in_mem = self.var_manager.get_variable_from_address(address)
             if var_in_mem is not None:
                 reg_with_var = self.register_manager.check_for_variable(var_in_mem)
                 if reg_with_var is not None and reg_with_var.mode == RegisterMode.VALUE:
                     reg_with_var.set_unknown_mode()
+                
+                try:
+                    value = CSM.convert_to_decimal(rhs_expr.strip())
+                    if value is not None:
+                        self.var_manager.set_variable_runtime_value(var_in_mem.name, value & 0xFF)
+                    else:
+                        self.var_manager.invalidate_runtime_value(var_in_mem.name)
+                except:
+                    self.var_manager.invalidate_runtime_value(var_in_mem.name)
+        
         return self.__get_assembly_lines_len()
 
     def __compile_assign_var(self, var: Variable, rhs_expr: str) -> int:
@@ -318,17 +308,11 @@ class Compiler:
             addi_pattern = rf'^{re.escape(var.name)}\s*\+\s*1$'
             if re.match(addi_pattern, rhs_expr.strip()):
                 logger.debug(f"ADDI optimization: {var.name} = {var.name} + 1")
-                # Load variable to RD, ADDI, store back
                 self.__set_mar_abs(var.address)
-                if var.address <= MAX_LOW_ADDRESS:
-                    self.__add_assembly_line("ldrl rd")
-                else:
-                    self.__add_assembly_line("ldrh rd")
+                self.__ldr(self.register_manager.rd)
                 self.__add_assembly_line("addi #1")
-                # ACC now has var+1
-                self.__store_with_current_mar_abs(var.address, self.register_manager.acc)
+                self.__str(self.register_manager.acc)
                 
-                # Track runtime value if previous value was known
                 prev_value = self.var_manager.get_variable_runtime_value(var.name)
                 if prev_value is not None:
                     new_value = (prev_value + 1) & 0xFF
@@ -423,19 +407,8 @@ class Compiler:
         else:
             self.__set_mar_array_elem(arr_var, index_expr)
             src_reg = self.__compute_rhs(rhs_expr)
-        # store: if constant index, select strl/strh by absolute address; else dynamic index is restricted to low page
-        try:
-            idx = CSM.convert_to_decimal(index_expr)
-        except Exception:
-            idx = None
-        if idx is not None:
-            abs_addr = arr_var.address + int(idx)
-            if abs_addr <= MAX_LOW_ADDRESS:
-                self.__add_assembly_line(f"strl {src_reg.name}")
-            else:
-                self.__add_assembly_line(f"strh {src_reg.name}")
-        else:
-            self.__add_assembly_line(f"strl {src_reg.name}")
+        
+        self.__str(src_reg)
         return self.__get_assembly_lines_len()
 
     def __create_var(self, command:VarDefCommandWithoutValue)-> int:
@@ -642,6 +615,17 @@ class Compiler:
         
         return self.__get_assembly_lines_len()
     
+    def __ldr(self, dst: Register) -> int:
+        """Load from memory at MAR into dst register. Uses mov dst, m."""
+        self.__add_assembly_line(f"mov {dst.name}, m")
+        dst.set_unknown_mode()
+        return self.__get_assembly_lines_len()
+    
+    def __str(self, src: Register) -> int:
+        """Store src register to memory at MAR. Uses mov m, src."""
+        self.__add_assembly_line(f"mov m, {src.name}")
+        return self.__get_assembly_lines_len()
+    
     def __set_msb_ra(self) -> int:
         self.__add_assembly_line("smsbra")
         if self.register_manager.ra.mode == RegisterMode.CONST:
@@ -707,36 +691,21 @@ class Compiler:
         marl = self.register_manager.marl
         if marl.variable is not None and marl.variable.address != address:
             raise ValueError(f"MAR points to variable '{marl.variable.name}' at address 0x{marl.variable.address:04X}, cannot store to different address 0x{address:04X} without resetting MAR.")
-        self.__add_assembly_line(f"mov m, {src.name}")
+        self.__str(src)
         return self.__get_assembly_lines_len()
 
     def __load_with_current_mar_abs(self, address:int, dst:Register) -> int:
-        """Load from absolute address already in MAR into dst register (chooses ldrl/ldrh)."""
-        if address <= MAX_LOW_ADDRESS:
-            self.__add_assembly_line(f"ldrl {dst.name}")
-        else:
-            self.__add_assembly_line(f"ldrh {dst.name}")
-        # Content doesn't map to a named variable; mark dst unknown to avoid stale bindings
-        try:
-            dst.set_unknown_mode()
-        except Exception:
-            pass
+        self.__ldr(dst)
         return self.__get_assembly_lines_len()
 
-    # New helpers: MAR-aware load/store
     def __store_to_var(self, var: Variable, src: Register) -> int:
-        """Store src register to memory at var, using strl/strh depending on address width."""
         self.__set_mar(var)
         self.__store_with_current_mar_abs(var.address, src)
         return self.__get_assembly_lines_len()
 
     def __load_var_to_reg(self, var: Variable, dst: Register) -> int:
-        """Load memory at var to dst register, using ldrl/ldrh depending on address width."""
         self.__set_mar(var)
-        if var.address <= MAX_LOW_ADDRESS:
-            self.__add_assembly_line(f"ldrl {dst.name}")
-        else:
-            self.__add_assembly_line(f"ldrh {dst.name}")
+        self.__ldr(dst)
         dst.set_variable(var, RegisterMode.VALUE)
         return self.__get_assembly_lines_len()
 
@@ -905,33 +874,31 @@ class Compiler:
         if while_clause.type == WhileTypes.BYPASS:
             return self.__get_assembly_lines_len()
         elif while_clause.type == WhileTypes.CONDITIONAL:
-            # Create labels for loop start and exit
             start_label_name, _ = self.label_manager.create_while_start_label(self.__get_assembly_lines_len())
-            # Place loop start label
             self.__add_assembly_line(f"{start_label_name}:")
-            # Evaluate condition and jump to end if false
             self.__compile_condition(while_clause.condition)
 
-            # Compile body to measure length
             body_comp = self.create_context_compiler()
             body_comp.grouped_lines = while_clause.get_lines()
+            
+            for var_name in self.var_manager.variables.keys():
+                if self.var_manager.get_variable_runtime_value(var_name) is not None:
+                    self.var_manager.invalidate_runtime_value(var_name)
+                    logger.debug(f"Invalidated '{var_name}' runtime value (entering loop)")
+            
             body_comp.compile_lines()
             body_len = body_comp.__get_assembly_lines_len()
 
-            # Create end label and set PRL to it for conditional jump
             end_label, _ = self.label_manager.create_while_end_label(self.__get_assembly_lines_len() + body_len + 3)
             self.__set_prl_as_label(end_label, self.label_manager.get_label(end_label))
             self.__add_assembly_line(CSM.get_inverted_jump_str(while_clause.condition.type))
 
-            # Emit body
             self.__add_assembly_line(body_comp.assembly_lines)
             self.register_manager.set_changed_registers_as_unknown()
 
-            # Jump back to start
             self.__set_prl_as_label(start_label_name, self.label_manager.get_label(start_label_name))
             self.__add_assembly_line("jmp")
 
-            # Place end label at current position
             self.label_manager.update_label_position(end_label, self.__get_assembly_lines_len())
             self.__add_assembly_line(f"{end_label}:")
             return self.__get_assembly_lines_len()
@@ -948,6 +915,12 @@ class Compiler:
 
             body_comp = self.create_context_compiler()
             body_comp.grouped_lines = while_clause.get_lines()
+            
+            for var_name in self.var_manager.variables.keys():
+                if self.var_manager.get_variable_runtime_value(var_name) is not None:
+                    self.var_manager.invalidate_runtime_value(var_name)
+                    logger.debug(f"Invalidated '{var_name}' runtime value (entering infinite loop)")
+            
             body_comp.compile_lines()
             body_len = body_comp.__get_assembly_lines_len()
             
@@ -1178,7 +1151,7 @@ class Compiler:
                 elif op == '&':
                     self.__and_ml()        # ACC = RD & [MAR]
                 else:
-                    self.__add_assembly_line("sub ml")  # ACC = RD - [MAR]
+                    self.__add_assembly_line("sub m")  # ACC = RD - [MAR]
                 if idx + 1 < len(tokens):
                     self.__add_assembly_line("mov rd, acc")
                     self.register_manager.rd.set_unknown_mode()
@@ -1227,11 +1200,11 @@ class Compiler:
     
     def __add_ml(self) -> int:
         
-        self.assembly_lines.append("add ml")
+        self.assembly_lines.append("add m")
         return self.__get_assembly_lines_len()
 
     def __and_ml(self) -> int:
-        self.assembly_lines.append("and ml")
+        self.assembly_lines.append("and m")
         return self.__get_assembly_lines_len()
 
     def __compile_condition(self, condition: Condition) -> int:
@@ -1253,9 +1226,9 @@ class Compiler:
             right_var = self.var_manager.get_variable(right)
             self.__set_reg_variable(rd, right_var)
 
-        # Compare RD (A) with ML (B) where ML is LEFT
+        # Compare RD (A) with M (B) where M is LEFT
         self.__set_marl(left_var)
-        self.__add_assembly_line("sub ml")
+        self.__add_assembly_line("sub m")
 
         return self.__get_assembly_lines_len()
 

@@ -52,7 +52,7 @@ DATA Polling for End of Write Detection not implemented!</string>
         </entry>
         <entry>
           <string>Data</string>
-          <data>90,44,80,43,8a,47,1</data>
+          <data>8a,41,80,43,17,96,45,64,79,81,8,5b,85,47,80,43,79,31,5f,80,45,60</data>
         </entry>
         <entry>
           <string>inverterConfig</string>

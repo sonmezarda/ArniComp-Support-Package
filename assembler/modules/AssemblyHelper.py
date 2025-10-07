@@ -43,7 +43,7 @@ class InstructionEncoder:
         - Row 9: Move From ACC -> 01 011 [D2D1D0]
         - Row 11: Move From PCL -> 01 100 [D2D1D0]
         - Row 12: Move From PCH -> 01 101 [D2D1D0]
-        - Row 13: Move From Memory -> 01 110 [D2D1D0]
+        - Row 13: Move From Memory -> 01 111 [D2D1D0]
         """
         dest_upper = dest.upper()
         src_upper = src.upper()
@@ -172,7 +172,7 @@ class InstructionEncoder:
     @staticmethod
     def encode_jump(condition: str) -> str:
         """Encode jump instructions
-        Format: 0 0 1 0 0 JS2 JS1 JS0
+        Format: 0 1 1 0 0 JS2 JS1 JS0
         Conditions map to last 3 bits
         """
         conditions = {
@@ -190,7 +190,7 @@ class InstructionEncoder:
         if cond_upper not in conditions:
             raise ValueError(f"Unknown jump condition: {condition}")
         
-        return f"00100{conditions[cond_upper]}"
+        return f"01100{conditions[cond_upper]}"
     
     @staticmethod
     def encode_cmp(src: str) -> str:

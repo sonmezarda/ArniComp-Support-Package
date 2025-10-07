@@ -1,54 +1,49 @@
 ldi #0
 mov marl, ra
-strl ra
+mov m, ra
 ldi #4
 mov marl, ra
 ldi #0
-strl ra
+mov m, ra
 while_start_1:
-ldi #0
 mov marl, ra
 ldi #32
 mov marh, ra
-ldrh rd
+mov rd, m
+inx
+mov m, rd
+mov rd, m
 ldi #1
-mov marl, ra
-strl rd
-ldrl rd
 and ra
+inx
+mov m, acc
 ldi #2
-mov marl, ra
-strl acc
 and ra
-ldi #3
-mov marl, ra
-strl acc
+inx
+mov m, acc
 ldi #1
 mov rd, ra
 ldi #2
 mov marl, ra
-sub ml
+sub m
 ldi @if_3
 mov prl, ra
 jne
 ldi #0
 mov rd, ra
-ldi #4
-mov marl, ra
-sub ml
+inx
+sub m
 ldi @if_1
 mov prl, ra
 jne
-ldi #0
 mov marl, ra
-ldrl rd
-ldi #1
-add ra
-strl acc
+mov rd, m
+addi #1
+mov m, acc
 ldi #4
 mov marl, ra
 ldi #1
-strl ra
+mov m, ra
 if_1:
 ldi @else_1
 mov prl, ra
@@ -58,7 +53,7 @@ ldi #2
 mov rd, ra
 ldi #3
 mov marl, ra
-sub ml
+sub m
 ldi @if_4
 mov prl, ra
 jne
@@ -66,20 +61,19 @@ ldi #0
 mov rd, ra
 ldi #4
 mov marl, ra
-sub ml
+sub m
 ldi @if_2
 mov prl, ra
 jne
-ldi #0
-mov marl, ra
-ldrl rd
+mov marl, rd
+mov rd, m
 ldi #1
 sub ra
-strl acc
+mov m, acc
 ldi #4
 mov marl, ra
 ldi #1
-strl ra
+mov m, ra
 if_2:
 ldi @else_1
 mov prl, ra
@@ -88,14 +82,14 @@ if_4:
 ldi #4
 mov marl, ra
 ldi #0
-strl ra
+mov m, ra
 else_1:
 ldi #0
 mov marl, ra
-ldrl rd
+mov rd, m
 ldi #16
 mov marh, ra
-strh rd
+mov m, rd
 ldi @while_start_1
 mov prl, ra
 jmp
