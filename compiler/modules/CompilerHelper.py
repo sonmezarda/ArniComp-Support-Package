@@ -309,10 +309,7 @@ class Compiler:
                 self.__set_mar_abs(var.address)
                 src_reg = self.__compute_rhs(rhs_expr)
             # store (var is byte for now)
-            if var.address <= MAX_LOW_ADDRESS:
-                self.__add_assembly_line(f"strl {src_reg.name}")
-            else:
-                self.__add_assembly_line(f"strh {src_reg.name}")
+            self.__store_with_current_mar_abs(var.address, src_reg)
             return self.__get_assembly_lines_len()
         elif type(var) is VarTypes.UINT16.value:
             exp_type = CSM.get_expression_type(rhs_expr)
@@ -323,7 +320,7 @@ class Compiler:
                 elif exp_type == ExpressionTypes.ALL_DEC:     
                     rhs_dec = eval(rhs_expr)
 
-                if rhs_dec is None:
+                if rhs_dec is None or not isinstance(rhs_dec, int):
                     raise ValueError("Invalid UINT16 value.")
 
                 rhs_byte_count = CSM.get_decimal_byte_count(rhs_dec)
@@ -334,7 +331,7 @@ class Compiler:
                 logger.debug(f"Variable definition: {var.name} at address 0x{var.address:04X}")
                 self.__set_mar_abs(var.address)
                 self.__set_ra_const(rhs_bytes[0])
-                self.__store_with_current_mar_abs(    var.address, self.register_manager.ra)
+                self.__store_with_current_mar_abs(var.address, self.register_manager.ra)
 
                 self.__set_mar_abs(var.address+1)
                 self.__set_ra_const(rhs_bytes[1])
@@ -405,28 +402,26 @@ class Compiler:
         return self.__set_mar_abs(var.address)
 
     def __set_mar_abs(self, address: int) -> int:
-        """Set MAR to an absolute address (low/optional high). Keeps register cache tags."""
-        # small fast path: if MARL already holds this addr low
+        """Set MAR to an absolute address with INX optimization. Keeps register cache tags."""
         marl = self.register_manager.marl
         marh = self.register_manager.marh
         ra = self.register_manager.ra
         low = address & 0xFF
         high = (address >> 8) & 0xFF
 
-        # Reuse if possible (based on AbsAddrTag, independent of register.mode)
+        # Check if MARL already holds this address low
         if marl.tag is not None and isinstance(marl.tag, AbsAddrTag):
-            if (marl.tag.addr & 0xFF) == low:
-                # Low byte already correct; update only MARH if needed and return
+            current_low = marl.tag.addr & 0xFF
+            
+            if current_low == low:
+                # MARL already correct; update only MARH if needed
                 if address > MAX_LOW_ADDRESS:
-                    # If MARH already correct, nothing to do
+                    # Check if MARH already correct
                     if marh.tag and isinstance(marh.tag, AbsAddrTag) and ((marh.tag.addr >> 8) & 0xFF) == high:
+                        logger.debug(f"MAR already set to 0x{address:04X}")
                         return self.__get_assembly_lines_len()
-                    # Otherwise set MARH to 'high' without touching MARL
-                    if high <= MAX_LDI:
-                        self.__set_ra_const(high)
-                        self.__add_assembly_line("mov marh, ra")
-                    else:
-                        self.__build_const_in_reg(high, marh)
+                    # Set MARH to 'high' without touching MARL
+                    self.__build_const_in_reg(high, marh)
                     try:
                         marh.set_unknown_mode()
                     except Exception:
@@ -435,20 +430,88 @@ class Compiler:
                         marh.tag = AbsAddrTag(address)
                     except Exception:
                         pass
+                    logger.debug(f"Updated MARH to 0x{high:02X} (MAR=0x{address:04X})")
                     return self.__get_assembly_lines_len()
                 else:
-                    # Address in low page and MARL already matches; nothing to do
+                    # Address in low page and MARL already matches
+                    logger.debug(f"MARL already set to 0x{low:02X}")
                     return self.__get_assembly_lines_len()
+            
+            # MARL needs to be changed - check if INX is efficient
+            inx_steps = CSM.inc_steps_to_target(current_low, low)
+            logger.debug(f"MARL: 0x{current_low:02X} -> 0x{low:02X}, INX steps: {inx_steps}")
+            
+            if inx_steps == 1:
+                # Use INX (1 instruction)
+                logger.debug(f"Using 1x INX to reach 0x{low:02X}")
+                self.__inx()
+                # Update MARH if needed
+                if address > MAX_LOW_ADDRESS:
+                    if not (marh.tag and isinstance(marh.tag, AbsAddrTag) and ((marh.tag.addr >> 8) & 0xFF) == high):
+                        self.__build_const_in_reg(high, marh)
+                        try:
+                            marh.set_unknown_mode()
+                        except Exception:
+                            pass
+                        try:
+                            marh.tag = AbsAddrTag(address)
+                        except Exception:
+                            pass
+                return self.__get_assembly_lines_len()
+            
+            elif inx_steps == 2:
+                # Use 2x INX (2 instructions vs 2-3 for LDI+MOV)
+                logger.debug(f"Using 2x INX to reach 0x{low:02X}")
+                self.__inx()
+                self.__inx()
+                # Update MARH if needed
+                if address > MAX_LOW_ADDRESS:
+                    if not (marh.tag and isinstance(marh.tag, AbsAddrTag) and ((marh.tag.addr >> 8) & 0xFF) == high):
+                        self.__build_const_in_reg(high, marh)
+                        try:
+                            marh.set_unknown_mode()
+                        except Exception:
+                            pass
+                        try:
+                            marh.tag = AbsAddrTag(address)
+                        except Exception:
+                            pass
+                return self.__get_assembly_lines_len()
+            
+            # Otherwise fall through to normal LDI approach (3+ steps not worth it)
 
-        # set MARL (force LDI to avoid relying on RA-const cache)
-        if low <= MAX_LDI:
-            self.__ldi(low)
-            self.register_manager.ra.set_mode(RegisterMode.CONST, low)
-            self.__add_assembly_line("mov marl, ra")
-        else:
-            # Build directly into MARL (ends with 'mov marl, acc')
-            self.__build_const_in_reg(low, marl)
-        # invalidate stale var binding and tag MARL
+        # Check if target value exists in any register
+        low_reg = self.register_manager.check_for_const(low)
+        if low_reg is not None:
+            # Reuse from register (1 instruction)
+            logger.debug(f"Reusing 0x{low:02X} from {low_reg.name} for MARL")
+            self.__mov(marl, low_reg)
+            try:
+                marl.set_unknown_mode()
+            except Exception:
+                pass
+            try:
+                marl.tag = AbsAddrTag(address)
+            except Exception:
+                pass
+            # Update MARH if needed
+            if address > MAX_LOW_ADDRESS:
+                if not (marh.tag and isinstance(marh.tag, AbsAddrTag) and ((marh.tag.addr >> 8) & 0xFF) == high):
+                    self.__build_const_in_reg(high, marh)
+                    try:
+                        marh.set_unknown_mode()
+                    except Exception:
+                        pass
+                    try:
+                        marh.tag = AbsAddrTag(address)
+                    except Exception:
+                        pass
+            return self.__get_assembly_lines_len()
+
+        # No optimization possible - use LDI approach
+        logger.debug(f"Setting MARL to 0x{low:02X} using LDI")
+        self.__build_const_in_reg(low, marl)
+        # Invalidate stale var binding and tag MARL
         try:
             marl.set_unknown_mode()
         except Exception:
@@ -458,23 +521,19 @@ class Compiler:
         except Exception:
             pass
 
-        # set MARH if needed
+        # Set MARH if needed
         if address > MAX_LOW_ADDRESS:
-            if high <= MAX_LDI:
-                self.__ldi(high)
-                self.register_manager.ra.set_mode(RegisterMode.CONST, high)
-                self.__add_assembly_line("mov marh, ra")
-            else:
-                # Build directly into MARH (ends with 'mov marh, acc')
+            if not (marh.tag and isinstance(marh.tag, AbsAddrTag) and ((marh.tag.addr >> 8) & 0xFF) == high):
                 self.__build_const_in_reg(high, marh)
-            try:
-                marh.set_unknown_mode()
-            except Exception:
-                pass
-            try:
-                marh.tag = AbsAddrTag(address)
-            except Exception:
-                pass
+                try:
+                    marh.set_unknown_mode()
+                except Exception:
+                    pass
+                try:
+                    marh.tag = AbsAddrTag(address)
+                except Exception:
+                    pass
+        
         return self.__get_assembly_lines_len()
     
     def __set_marh(self, var:Variable) -> int:
@@ -491,12 +550,27 @@ class Compiler:
         self.__add_assembly_line(f"ldi #{value}")
         self.register_manager.ra.set_mode(RegisterMode.CONST, value)
         return self.__get_assembly_lines_len()
-
-    def __ldi(self, value:int) -> int:
-        if value > MAX_LDI:
-            raise ValueError(f"Value {value} exceeds maximum LDI value of {MAX_LDI}.")
-        self.__add_assembly_line(f"ldi #{value}")
-        self.register_manager.ra.set_mode(RegisterMode.CONST, value)
+    
+    def __inx(self) -> int:
+        """Increment MARL by 1 (wraps at 0xFF to 0x00). Updates MARL tag accordingly."""
+        self.__add_assembly_line("inx")
+        marl = self.register_manager.marl
+        
+        # Update MARL tag if it exists
+        if marl.tag is not None and isinstance(marl.tag, AbsAddrTag):
+            old_addr = marl.tag.addr
+            # Increment low byte, wrapping at 0xFF
+            new_low = (old_addr + 1) & 0xFF
+            new_addr = (old_addr & 0xFF00) | new_low
+            marl.tag = AbsAddrTag(new_addr)
+            logger.debug(f"INX: MARL 0x{old_addr:04X} -> 0x{new_addr:04X}")
+        else:
+            # If no tag, invalidate mode
+            try:
+                marl.set_unknown_mode()
+            except Exception:
+                pass
+        
         return self.__get_assembly_lines_len()
     
     def __set_msb_ra(self) -> int:
@@ -549,30 +623,22 @@ class Compiler:
         
         if value <= MAX_LDI:
             self.__ldi(value)
-            if target_reg.name != "ra":
+            if target_reg.name != ra.name:
                 self.__mov(target_reg, ra)
             return self.__get_assembly_lines_len()
 
         value_except_msb = value & 0x7F  # lower 7 bits
         self.__ldi(value_except_msb)  # RA <- lower 7 bits
         self.__set_msb_ra()  # RA <- RA | 0x80
-        if target_reg.name != "ra":
+        if target_reg.name != ra.name:
             self.__mov(target_reg, ra)
         return self.__get_assembly_lines_len()
 
-    def __store_with_current_mar(self, var: Variable, src: Register) -> int:
-        """Store using current MAR (does not modify MAR registers)."""
-        if var.address <= MAX_LOW_ADDRESS:
-            self.__add_assembly_line(f"strl {src.name}")
-        else:
-            self.__add_assembly_line(f"strh {src.name}")
-        return self.__get_assembly_lines_len()
-
     def __store_with_current_mar_abs(self, address:int, src:Register) -> int:
-        if address <= MAX_LOW_ADDRESS:
-            self.__add_assembly_line(f"strl {src.name}")
-        else:
-            self.__add_assembly_line(f"strh {src.name}")
+        marl = self.register_manager.marl
+        if marl.variable is not None and marl.variable.address != address:
+            raise ValueError(f"MAR points to variable '{marl.variable.name}' at address 0x{marl.variable.address:04X}, cannot store to different address 0x{address:04X} without resetting MAR.")
+        self.__add_assembly_line(f"mov m, {src.name}")
         return self.__get_assembly_lines_len()
 
     def __load_with_current_mar_abs(self, address:int, dst:Register) -> int:
@@ -592,10 +658,7 @@ class Compiler:
     def __store_to_var(self, var: Variable, src: Register) -> int:
         """Store src register to memory at var, using strl/strh depending on address width."""
         self.__set_mar(var)
-        if var.address <= MAX_LOW_ADDRESS:
-            self.__add_assembly_line(f"strl {src.name}")
-        else:
-            self.__add_assembly_line(f"strh {src.name}")
+        self.__store_with_current_mar_abs(var.address, src)
         return self.__get_assembly_lines_len()
 
     def __load_var_to_reg(self, var: Variable, dst: Register) -> int:
@@ -608,40 +671,9 @@ class Compiler:
         dst.set_variable(var, RegisterMode.VALUE)
         return self.__get_assembly_lines_len()
 
-    def __mov_marl_to_reg(self, reg:Register) -> int:
-        marl = self.register_manager.marl
-    
-        if marl.mode in [RegisterMode.ADDR, RegisterMode.ADDR_LOW]:
-            # Decide by the bound variable's address span
-            bound_var = marl.variable
-            if bound_var is None:
-                raise ValueError("MARL has no bound variable to load from.")
-            if bound_var.address <= MAX_LOW_ADDRESS:
-                self.__add_assembly_line(f"ldrl {reg.name}")
-            else:
-                self.__add_assembly_line(f"ldrh {reg.name}")
-            reg.set_variable(bound_var, RegisterMode.VALUE)
-        else:
-            raise ValueError("MARL must be set to an address before moving to a register.")
-        return self.__get_assembly_lines_len()
-
     def __set_ra_const(self, value:int) -> int:
         ra = self.register_manager.ra
-        reg_with_const = self.register_manager.check_for_const(value)
-
-        if reg_with_const is not None:
-            if reg_with_const.name != ra.name:
-                self.__add_assembly_line(f"mov ra, {reg_with_const.name}")
-            ra.set_mode(RegisterMode.CONST, value)
-            return self.__get_assembly_lines_len()
-
-        # Build RA constant efficiently: use LDI if within range, else compose via __build_const_in_reg
-        if value <= MAX_LDI:
-            self.__ldi(value)
-            ra.set_mode(RegisterMode.CONST, value)
-        else:
-            self.__build_const_in_reg(value, ra)
-
+        self.__build_const_in_reg(value, ra)
         return self.__get_assembly_lines_len()
 
     def __mov_var_to_var(self, left_var:Variable, right_var:Variable) -> int:
@@ -669,22 +701,6 @@ class Compiler:
         # Otherwise, load right var to RD then store to left
         self.__set_reg_variable(self.register_manager.rd, right_var)
         self.__store_to_var(left_var, self.register_manager.rd)
-        return self.__get_assembly_lines_len()
-
-    def __set_reg_const(self, reg:Register, value:int) -> list[str]:
-        reg_with_const = self.register_manager.check_for_const(value)
-
-        if reg_with_const is not None:
-            if reg_with_const.name != reg.name:
-                self.__add_assembly_line(f"mov {reg.name}, {reg_with_const.name}")
-            reg.set_mode(RegisterMode.CONST, value)
-            return self.__get_assembly_lines_len()
-
-        self.__set_ra_const(value)
-        if reg.name != 'ra':
-            self.__add_assembly_line(f"mov {reg.name}, ra")
-        reg.set_mode(RegisterMode.CONST, value)
-
         return self.__get_assembly_lines_len()
     
     def __set_reg_variable(self, reg:Register, variable:Variable) ->int:
@@ -1173,6 +1189,11 @@ class Compiler:
         self.__add_assembly_line("sub ml")
 
         return self.__get_assembly_lines_len()
+
+    def __set_reg_const(self, reg: Register, value: int) -> int:
+        """Build constant into register, reusing existing const registers if possible."""
+        value &= 0xFF
+        return self.__build_const_in_reg(value, reg)
 
     def __set_reg_const_strict(self, reg: Register, value: int) -> int:
         """Build the 8-bit constant directly into 'reg' without reusing another cached const register.

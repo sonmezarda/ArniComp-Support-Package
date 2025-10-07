@@ -2,9 +2,8 @@ ldi #0
 mov marl, ra
 ldi #72
 smsbra
-strl ra
-ldi #1
-mov marl, ra
+mov m, ra
+inx
 ldi #122
 smsbra
-strl ra
+mov m, ra

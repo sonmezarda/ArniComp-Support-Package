@@ -79,6 +79,16 @@ def split_expression(expression:str):
     splitted.append(''.join(buffer).strip())
     return splitted
 
+def check_marl_increment(current_address:int, target_address:int, max_allowed_increment:int) -> bool:
+    pass
+
+def inc_steps_to_target(current: int, target: int) -> int:
+    max_val = 0xFF
+    steps = (target - current) % max_val
+    if steps == 0 and current != target:
+        steps = max_val
+    return steps
+     
 def get_expression_type(expression:str):
     expression = expression.strip()
     splitted = split_expression(expression)
@@ -101,5 +111,12 @@ def get_expression_type(expression:str):
     if is_all_dec:
         return ExpressionTypes.ALL_DEC
     
-
     raise ValueError(f"Unsupported Expression Type : {expression}")
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.DEBUG)
+    logger.info(f"inc_steps_to_target(255, 1) = {inc_steps_to_target(255, 1)}")
+    logger.info(f"inc_steps_to_target(0, 1) = {inc_steps_to_target(0, 1)}")
+    logger.info(f"inc_steps_to_target(0, 2) = {inc_steps_to_target(0, 2)}")
+    logger.info(f"inc_steps_to_target(254, 1) = {inc_steps_to_target(254, 1)}")
+    
