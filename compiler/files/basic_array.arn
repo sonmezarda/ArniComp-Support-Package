@@ -3,6 +3,6 @@ byte i;
 byte[SIZE] array;
 
 while i < SIZE
-    array[i] = 5;
+    array[i] = i;
     i = i + 1;
 endwhile

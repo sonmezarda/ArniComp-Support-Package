@@ -134,12 +134,13 @@ class Compiler:
                     var_value=command.var_value)
         
         if command.var_type == VarTypes.BYTE:
+            self.var_manager.set_variable_runtime_value(command.var_name, command.var_value & 0xFF)
+            
             self.__set_mar_abs(new_var.address)
             self.__set_ra_const(command.var_value)
-            self.__store_with_current_mar_abs(new_var.address, self.register_manager.ra)
             self.register_manager.marl.set_variable(new_var, RegisterMode.ADDR)
-            # Track initial runtime value
-            self.var_manager.set_variable_runtime_value(command.var_name, command.var_value & 0xFF)
+            self.__store_with_current_mar_abs(new_var.address, self.register_manager.ra)
+            
         else:
             raise ValueError(f"Unsupported variable type: {command.var_type}")
         
@@ -577,15 +578,8 @@ class Compiler:
                     pass
         
         return self.__get_assembly_lines_len()
-    
-    def __set_marh(self, var:Variable) -> int:
-        """Deprecated compatibility: route through __set_mar_abs."""
-        return self.__set_mar_abs(var.address)
 
-    def __set_marl(self, var:Variable) -> int:
-        """Deprecated compatibility: route through __set_mar_abs."""
-        return self.__set_mar_abs(var.address)
-
+## LOW LEVEL ASSEMBLY HELPERS
     def __ldi(self, value:int) -> int:
         if value > MAX_LDI:
             raise ValueError(f"Value {value} exceeds maximum LDI value of {MAX_LDI}.")
@@ -626,15 +620,6 @@ class Compiler:
         self.__add_assembly_line(f"mov m, {src.name}")
         return self.__get_assembly_lines_len()
     
-    def __set_msb_ra(self) -> int:
-        self.__add_assembly_line("smsbra")
-        if self.register_manager.ra.mode == RegisterMode.CONST:
-            new_val = self.register_manager.ra.value | 0x80
-            self.register_manager.ra.set_mode(RegisterMode.CONST, new_val)
-        else:
-            self.register_manager.ra.set_unknown_mode()
-        return self.__get_assembly_lines_len()
-    
     def __mov(self, dst:Register, src:Register) -> int:
         if dst.name == src.name:
             return self.__get_assembly_lines_len()
@@ -651,6 +636,16 @@ class Compiler:
             dst.set_mode(RegisterMode.CONST, src.value)
         else:
             dst.set_mode(src.mode, src.value, src.variable)
+        return self.__get_assembly_lines_len()
+## END LOW LEVEL ASSEMBLY HELPERS
+
+    def __set_msb_ra(self) -> int:
+        self.__add_assembly_line("smsbra")
+        if self.register_manager.ra.mode == RegisterMode.CONST:
+            new_val = self.register_manager.ra.value | 0x80
+            self.register_manager.ra.set_mode(RegisterMode.CONST, new_val)
+        else:
+            self.register_manager.ra.set_unknown_mode()
         return self.__get_assembly_lines_len()
     
     # newestIS
@@ -689,6 +684,9 @@ class Compiler:
 
     def __store_with_current_mar_abs(self, address:int, src:Register) -> int:
         marl = self.register_manager.marl
+
+        logger.debug(f"MAR currently at 0x{marl.tag.addr:04X}" if marl.tag else "MAR tag unknown")
+        logger.debug(f"Storing to address 0x{address:04X} from {src.name}")
         if marl.variable is not None and marl.variable.address != address:
             raise ValueError(f"MAR points to variable '{marl.variable.name}' at address 0x{marl.variable.address:04X}, cannot store to different address 0x{address:04X} without resetting MAR.")
         self.__str(src)
@@ -713,34 +711,7 @@ class Compiler:
         ra = self.register_manager.ra
         self.__build_const_in_reg(value, ra)
         return self.__get_assembly_lines_len()
-
-    def __mov_var_to_var(self, left_var:Variable, right_var:Variable) -> int:
-        """Move value from right variable to left, ensuring types match."""
-        marl = self.register_manager.marl
-        if left_var.address == right_var.address:
-            return self.__get_assembly_lines_len()
-        
-        if left_var.value_type != right_var.value_type:
-            raise ValueError(f"Cannot move variable of type {right_var.value_type} to {left_var.value_type}")
-
-        right_var_reg = self.register_manager.check_for_variable(right_var.name)
-
-        if right_var_reg is not None:
-            # Store directly from existing register into left var
-            self.__store_to_var(left_var, right_var_reg)
-            return self.__get_assembly_lines_len()
-        
-        # If MAR is already pointing to right_var, load it
-        if marl.variable is not None and marl.variable.name == right_var.name and marl.mode in [RegisterMode.ADDR, RegisterMode.ADDR_LOW]:
-            self.__load_var_to_reg(right_var, self.register_manager.rd)
-            self.__store_to_var(left_var, self.register_manager.rd)
-            return self.__get_assembly_lines_len()
-
-        # Otherwise, load right var to RD then store to left
-        self.__set_reg_variable(self.register_manager.rd, right_var)
-        self.__store_to_var(left_var, self.register_manager.rd)
-        return self.__get_assembly_lines_len()
-    
+ 
     def __set_reg_variable(self, reg:Register, variable:Variable) ->int:
         pre_assembly_lines = []
         reg_with_var:Register = self.register_manager.check_for_variable(variable)
@@ -772,8 +743,7 @@ class Compiler:
             return self.__compile_assign_var(var, command.new_value)
         
 
-        raise ValueError(f"Unsupported variable type for assignment: {var.var_type}")
-    
+        raise ValueError(f"Unsupported variable type for assignment: {var.var_type}")  
 
     def __handle_if_else(self, command:Command) -> int:
         if not isinstance(command.line, IfElseClause):
@@ -1145,7 +1115,7 @@ class Compiler:
                 if not self.var_manager.check_variable_exists(term):
                     raise ValueError(f"Unknown variable in expression: '{term}'")
                 v = self.var_manager.get_variable(term)
-                self.__set_marl(v)
+                self.__set_mar(v)
                 if op == '+':
                     self.__add_ml()        # ACC = RD + [MAR]
                 elif op == '&':
@@ -1163,27 +1133,6 @@ class Compiler:
 
         return self.__get_assembly_lines_len()
 
-
-    
-    def __add(self, left:str, right:str) -> list[str]:
-        """Legacy method for simple two-term addition - now uses __evaluate_expression"""
-        expression = f"{left} + {right}"
-        normalized_expression = self.__normalize_expression(expression)
-        return self.__evaluate_expression(normalized_expression)
-
-    def __add_var_const(self, left_var:Variable, right_value:int) -> int:
-        pre_assembly_lines = []
-        rd = self.register_manager.rd
-        marl = self.register_manager.marl
-
-        self.__set_reg_const(rd, right_value)
-        self.__set_marl(left_var)
-        self.__add_ml()
-        expression = f"{left_var.name} + {right_value}"
-        self.register_manager.acc.set_temp_var_mode(expression)
-
-        return self.__get_assembly_lines_len()
-
     def __add_reg(self, register:Register) -> int:
         pre_assembly_lines = []
         rd = self.register_manager.rd
@@ -1198,8 +1147,7 @@ class Compiler:
         self.register_manager.acc.set_temp_var_mode(f"{rd.name} & {register.name}")
         return self.__get_assembly_lines_len()
     
-    def __add_ml(self) -> int:
-        
+    def __add_ml(self) -> int:     
         self.assembly_lines.append("add m")
         return self.__get_assembly_lines_len()
 
@@ -1228,7 +1176,7 @@ class Compiler:
 
         # Compare RD (A) with M (B) where M is LEFT
         self.__set_marl(left_var)
-        self.__add_assembly_line("sub m")
+        self.__add_assembly_line("cmp m")
 
         return self.__get_assembly_lines_len()
 

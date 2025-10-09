@@ -25,14 +25,14 @@ ldi #1
 mov rd, ra
 ldi #2
 mov marl, ra
-sub m
+cmp m
 ldi @if_3
 mov prl, ra
 jne
 ldi #0
 mov rd, ra
 inx
-sub m
+cmp m
 ldi @if_1
 mov prl, ra
 jne
@@ -53,7 +53,7 @@ ldi #2
 mov rd, ra
 ldi #3
 mov marl, ra
-sub m
+cmp m
 ldi @if_4
 mov prl, ra
 jne
@@ -61,7 +61,7 @@ ldi #0
 mov rd, ra
 ldi #4
 mov marl, ra
-sub m
+cmp m
 ldi @if_2
 mov prl, ra
 jne

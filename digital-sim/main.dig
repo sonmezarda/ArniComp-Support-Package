@@ -49,6 +49,10 @@
           <string>runRealTime</string>
           <boolean>true</boolean>
         </entry>
+        <entry>
+          <string>Frequency</string>
+          <int>100</int>
+        </entry>
       </elementAttributes>
       <pos x="300" y="440"/>
     </visualElement>

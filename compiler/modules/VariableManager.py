@@ -6,13 +6,14 @@ logger = logging.getLogger(__name__)
 
 
 class Variable():
-    def __init__(self, size:int, name:str, address:int, value:int = 0, value_type:any = None):
+    def __init__(self, size:int, name:str, address:int, value:int = 0, value_type:any = None, volatile:bool = False):
         self.size = size
         self.name = name
         self.address = address
         self.value = value  # Initial/declared value
         self.value_type = value_type
         self.runtime_value = None  # Runtime tracked value (like register tags)
+        self.volatile = volatile
         self.__post_init__()
 
     def __post_init__(self):
@@ -38,8 +39,8 @@ class Variable():
         return f"Variable(name={self.name}, address={addr_str}, size={self.size}, value={self.value}, value_type={self.value_type.__name__ if self.value_type else 'None'})"
 
 class ByteVariable(Variable):
-    def __init__(self, name:str, address:int, value:int = 0):
-        super().__init__(size=ByteVariable.get_size(), value_type=int, name=name, address=address, value=value)
+    def __init__(self, name:str, address:int, value:int = 0, volatile:bool = False):
+        super().__init__(size=ByteVariable.get_size(), value_type=int, name=name, address=address, value=value, volatile=volatile)
         if not (0 <= value < 256):
             raise ValueError("Byte variable value must be between 0 and 255")
 

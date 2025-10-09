@@ -3,7 +3,7 @@ ldi #10
 mov rd, ra
 ldi #0
 mov marl, ra
-sub m
+cmp m
 ldi @while_end_1
 mov prl, ra
 jge
@@ -11,8 +11,7 @@ mov rd, m
 ldi #1
 add ra
 mov marl, acc
-ldi #5
-mov m, ra
+mov m, rd
 ldi #0
 mov marl, ra
 mov rd, m

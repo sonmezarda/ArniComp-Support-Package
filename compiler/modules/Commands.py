@@ -47,7 +47,7 @@ class Command:
     
     @classmethod
     def match_regex(cls, line: str) -> re.Match[str] | None:
-        return re.match(cls.REGEX, line)
+        return re.match(cls.REGEX, line, re.VERBOSE)
 
 class FreeCommand(Command):
     """Free/deallocate variable command"""
@@ -80,9 +80,9 @@ class DirectAssemblyCommand(Command):
         pass
 
 
-class VarDefCommand(Command):
+class VarDefCommand(Command): 
     """Variable definition with initialization"""
-    REGEX = rf'''^\s*(?P<type>{types_pattern()})\s*(?:\[(?P<size>\d*)\])?\s+(?P<name>{VARIABLE_IDENT})\s*=\s*(?P<value>.+?)\s*;?\s*$'''
+    REGEX = rf"""^\s*(?:(?P<volatile1>(?i:volatile))\s+)? (?P<type>{types_pattern()})\s*(?:\[(?P<size>\d*)\])?(?:\s+(?P<volatile2>(?i:volatile)))? \s+(?P<name>{VARIABLE_IDENT})\s*=\s*(?P<value>.+?)\s*;?\s*$"""
     TYPE = CommandTypes.VARDEF
 
     def __init__(self, line: str):
@@ -98,6 +98,8 @@ class VarDefCommand(Command):
         if not match:
             raise ValueError(f"Invalid variable definition: {self.line}")
 
+        self.is_volatile = bool(match.group('volatile1') or match.group('volatile2'))
+
         base_type = match.group('type').upper()
         size_text = match.group('size')
         name = match.group('name')
@@ -112,8 +114,8 @@ class VarDefCommand(Command):
             self.var_type = VarTypes[base_type]
 
         self.var_name = name
-        logger.debug(f"Variable definition: '{self.var_name}' type={self.var_type} initial_value='{value}'")
-        if self.var_type == VarTypes.BYTE or self.var_type == VarTypes.UINT16:
+        logger.debug(f"Variable definition: '{self.var_name}' volatile={self.is_volatile} type={self.var_type} initial_value='{value}'")
+        if self.var_type in (VarTypes.BYTE, VarTypes.UINT16):
             try:
                 self.var_value = CSM.convert_to_decimal(value)
             except ValueError:
@@ -122,6 +124,7 @@ class VarDefCommand(Command):
             raise NotImplementedError("Array initialization not yet supported.")
         else:
             raise ValueError(f"Unsupported variable type: {self.var_type}")
+    
 
 
 class VarDefCommandWithoutValue(VarDefCommand):
@@ -231,5 +234,5 @@ class WhileCommand(Command):
 
 if __name__ == "__main__":
     # Example usage
-    command = StoreToDirectAddressCommand("*0x0012 = 12;")
-    logger.info(f"Parsed command: addr=0x{command.addr:04X}, value={command.new_value}")
+    command = VarDefCommand("byte zero = 0")
+    print(command, VarDefCommand.match_regex("byte zero = 0"))
