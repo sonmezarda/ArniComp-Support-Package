@@ -1,0 +1,18 @@
+#define SS_ADR 0x1000
+#define BUTTON_ADR 0x2000
+
+#define BUTTON1_MASK 0b1
+
+volatile byte button;
+volatile byte masked;
+
+
+
+while 1
+    button = *BUTTON_ADR;
+    masked = button & BUTTON1_MASK;
+    if masked == 1
+        *SS_ADR = 9;
+    else
+        *SS_ADR = 2;
+endwhile

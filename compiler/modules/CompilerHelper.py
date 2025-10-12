@@ -877,10 +877,6 @@ class Compiler:
         if not self.assembly_lines:
             return 0
         return len(self.assembly_lines)
-    
-    def __set_mar(self, var:Variable) -> int:
-        """Deprecated compatibility: route through __set_mar_abs."""
-        return self.__set_mar_abs(var.address)
 
     def __set_mar_abs(self, address: int) -> int:
         """Set MAR to an absolute address with INX optimization. Keeps register cache tags."""
@@ -890,146 +886,44 @@ class Compiler:
         low = address & 0xFF
         high = (address >> 8) & 0xFF
 
-        # Check if MARL already holds this address low
-        if marl.tag is not None and isinstance(marl.tag, AbsAddrTag):
-            current_low = marl.tag.addr & 0xFF
-            
-            if current_low == low:
-                # MARL already correct; update only MARH if needed
-                if address > MAX_LOW_ADDRESS:
-                    # Check if MARH already correct
-                    if marh.tag and isinstance(marh.tag, AbsAddrTag) and ((marh.tag.addr >> 8) & 0xFF) == high:
-                        logger.debug(f"MAR already set to 0x{address:04X}")
-                        return self.__get_assembly_lines_len()
-                    # Set MARH to 'high' without touching MARL
-                    self.__build_const_in_reg(high, marh)
-                    try:
-                        marh.set_unknown_mode()
-                    except Exception:
-                        pass
-                    try:
-                        marh.tag = AbsAddrTag(address)
-                    except Exception:
-                        pass
-                    logger.debug(f"Updated MARH to 0x{high:02X} (MAR=0x{address:04X})")
-                    return self.__get_assembly_lines_len()
+        current_low = marl.tag.addr & 0xFF if marl.tag is not None and isinstance(marl.tag, AbsAddrTag) else None
+        current_high = marh.tag.addr & 0xFF if marh.tag is not None and isinstance(marh.tag, AbsAddrTag) else None
+        
+        if current_low == None or current_low != low:
+            # MARL needs to be changed
+            if current_low is not None:
+                logger.debug(f"Current MARL is 0x{current_low:02X}, needs to change to 0x{low:02X}")
+                inx_steps = CSM.inc_steps_to_target(current_low, low)
+                if inx_steps <= 2:
+                    logger.debug(f"Using {inx_steps}x INX to reach 0x{low:02X}")
+                    for _ in range(inx_steps):
+                        self.__inx()
+                    marl.tag = AbsAddrTag(low)
                 else:
-                    # Address in low page and MARL already matches
-                    # But we still need to ensure MARH is 0 if coming from high page!
-                    if marh.tag and isinstance(marh.tag, AbsAddrTag):
-                        current_high = (marh.tag.addr >> 8) & 0xFF
-                        if current_high != 0:
-                            # MARH needs to be reset to 0
-                            logger.debug(f"MARL correct but MARH={current_high:02X}, resetting to 0")
-                            self.__build_const_in_reg(0, marh)
-                            try:
-                                marh.set_unknown_mode()
-                            except Exception:
-                                pass
-                            try:
-                                marh.tag = AbsAddrTag(address)
-                            except Exception:
-                                pass
-                            return self.__get_assembly_lines_len()
-                    logger.debug(f"MARL already set to 0x{low:02X}")
-                    return self.__get_assembly_lines_len()
+                    logger.debug(f"Using LDI to set MARL to 0x{low:02X} (more efficient than {inx_steps}x INX)")
+                    self.__build_const_in_reg(low, marl)
+                    marl.tag = AbsAddrTag(low)
+            else:
+                logger.debug(f"MARL is not known, updating to 0x{low:02X} (MAR=0x{address:04X})")
+                self.__build_const_in_reg(low, marl)
+                marl.tag = AbsAddrTag(low)
             
-            # MARL needs to be changed - check if INX is efficient
-            inx_steps = CSM.inc_steps_to_target(current_low, low)
-            logger.debug(f"MARL: 0x{current_low:02X} -> 0x{low:02X}, INX steps: {inx_steps}")
-            
-            if inx_steps == 1:
-                # Use INX (1 instruction)
-                logger.debug(f"Using 1x INX to reach 0x{low:02X}")
-                self.__inx()
-                # Update MARH if needed
-                if address > MAX_LOW_ADDRESS:
-                    if not (marh.tag and isinstance(marh.tag, AbsAddrTag) and ((marh.tag.addr >> 8) & 0xFF) == high):
-                        self.__build_const_in_reg(high, marh)
-                        try:
-                            marh.set_unknown_mode()
-                        except Exception:
-                            pass
-                        try:
-                            marh.tag = AbsAddrTag(address)
-                        except Exception:
-                            pass
-                return self.__get_assembly_lines_len()
-            
-            elif inx_steps == 2:
-                # Use 2x INX (2 instructions vs 2-3 for LDI+MOV)
-                logger.debug(f"Using 2x INX to reach 0x{low:02X}")
-                self.__inx()
-                self.__inx()
-                # Update MARH if needed
-                if address > MAX_LOW_ADDRESS:
-                    if not (marh.tag and isinstance(marh.tag, AbsAddrTag) and ((marh.tag.addr >> 8) & 0xFF) == high):
-                        self.__build_const_in_reg(high, marh)
-                        try:
-                            marh.set_unknown_mode()
-                        except Exception:
-                            pass
-                        try:
-                            marh.tag = AbsAddrTag(address)
-                        except Exception:
-                            pass
-                return self.__get_assembly_lines_len()
-            
-            # Otherwise fall through to normal LDI approach (3+ steps not worth it)
-
-        # Check if target value exists in any register
-        low_reg = self.register_manager.check_for_const(low)
-        if low_reg is not None:
-            # Reuse from register (1 instruction)
-            logger.debug(f"Reusing 0x{low:02X} from {low_reg.name} for MARL")
-            self.__mov(marl, low_reg)
-            try:
-                marl.set_unknown_mode()
-            except Exception:
-                pass
-            try:
-                marl.tag = AbsAddrTag(address)
-            except Exception:
-                pass
-            # Update MARH if needed
-            if address > MAX_LOW_ADDRESS:
-                if not (marh.tag and isinstance(marh.tag, AbsAddrTag) and ((marh.tag.addr >> 8) & 0xFF) == high):
-                    self.__build_const_in_reg(high, marh)
-                    try:
-                        marh.set_unknown_mode()
-                    except Exception:
-                        pass
-                    try:
-                        marh.tag = AbsAddrTag(address)
-                    except Exception:
-                        pass
-            return self.__get_assembly_lines_len()
-
-        # No optimization possible - use LDI approach
-        logger.debug(f"Setting MARL to 0x{low:02X} using LDI")
-        self.__build_const_in_reg(low, marl)
-        # Invalidate stale var binding and tag MARL
-        try:
-            marl.set_unknown_mode()
-        except Exception:
-            pass
-        try:
-            marl.tag = AbsAddrTag(address)
-        except Exception:
-            pass
-
-        # Set MARH if needed
-        if address > MAX_LOW_ADDRESS:
-            if not (marh.tag and isinstance(marh.tag, AbsAddrTag) and ((marh.tag.addr >> 8) & 0xFF) == high):
+        else:
+            logger.debug(f"MARL already set to 0x{low:02X}")
+        
+        if current_high == None or current_high != high:
+            # MARH needs to be changed
+            if current_high is not None:
+                logger.debug(f"Current MARH is 0x{current_high:02X}, needs to change to 0x{high:02X}")
                 self.__build_const_in_reg(high, marh)
-                try:
-                    marh.set_unknown_mode()
-                except Exception:
-                    pass
-                try:
-                    marh.tag = AbsAddrTag(address)
-                except Exception:
-                    pass
+                marh.tag = AbsAddrTag(high)
+            else:
+                logger.debug(f"MARH is not known, updating to 0x{high:02X} (MAR=0x{address:04X})")
+                self.__build_const_in_reg(high, marh)
+                marh.tag = AbsAddrTag(high)
+            pass
+        else:
+            logger.debug(f"MARH already set to 0x{high:02X}")
         
         return self.__get_assembly_lines_len()
 
@@ -1051,10 +945,12 @@ class Compiler:
         if marl.tag is not None and isinstance(marl.tag, AbsAddrTag):
             old_addr = marl.tag.addr
             # Increment low byte, wrapping at 0xFF
-            new_low = (old_addr + 1) & 0xFF
-            new_addr = (old_addr & 0xFF00) | new_low
-            marl.tag = AbsAddrTag(new_addr)
-            logger.debug(f"INX: MARL 0x{old_addr:04X} -> 0x{new_addr:04X}")
+            new_low = (old_addr + 1) & 0xFF 
+            if new_low > MAX_LOW_ADDRESS:
+                raise ValueError("INX would overflow into high page, which is unsupported.")
+        
+            marl.tag = AbsAddrTag(new_low)
+            logger.debug(f"INX: MARL 0x{old_addr:02X} -> 0x{new_low:02X}")
         else:
             # If no tag, invalidate mode
             try:
@@ -1302,29 +1198,23 @@ class Compiler:
     def __store_with_current_mar_abs(self, address: int, src: Register) -> int:
         """Store src to memory at address. Assumes MAR is already set to this address."""
         marl = self.register_manager.marl
-
-        logger.debug(f"MAR currently at 0x{marl.tag.addr:04X}" if marl.tag else "MAR tag unknown")
+        marh = self.register_manager.marh
+        low = address & 0xFF
+        high = (address >> 8) & 0xFF
+        logger.debug(f"MARL currently at 0x{marl.tag.addr:02X}" if marl.tag else "MAR tag unknown")
+        logger.debug(f"MARH currently at 0x{marh.tag.addr:02X}" if marh.tag else "MAR tag unknown")
         logger.debug(f"Storing to address 0x{address:04X} from {src.name}")
         
         # Verify MAR tag matches expected address
-        if marl.tag is not None and isinstance(marl.tag, AbsAddrTag):
-            if marl.tag.addr != address:
-                raise ValueError(f"MAR tag is 0x{marl.tag.addr:04X} but trying to store to 0x{address:04X}. Call __set_mar_abs first.")
+        if marl.tag is not None and isinstance(marl.tag, AbsAddrTag) and marh.tag is not None and isinstance(marh.tag, AbsAddrTag):
+            if marl.tag.addr != low or marh.tag.addr != high:
+                raise ValueError(f"MAR does not match target address 0x{address:04X} (MAR=0x{(marh.tag.addr<<8)|marl.tag.addr:04X})")
         
         self.__str(src)
         return self.__get_assembly_lines_len()
 
-    def __load_with_current_mar_abs(self, address:int, dst:Register) -> int:
-        self.__ldr(dst)
-        return self.__get_assembly_lines_len()
-
-    def __store_to_var(self, var: Variable, src: Register) -> int:
-        self.__set_mar(var)
-        self.__store_with_current_mar_abs(var.address, src)
-        return self.__get_assembly_lines_len()
-
     def __load_var_to_reg(self, var: Variable, dst: Register) -> int:
-        self.__set_mar(var)
+        self.__set_mar_abs(var.address)
         self.__ldr(dst)
         dst.set_variable(var, RegisterMode.VALUE)
         return self.__get_assembly_lines_len()
@@ -1949,10 +1839,12 @@ class Compiler:
                 raise ValueError(f"Right part of condition '{right}' is not a defined variable.")
             right_var = self.var_manager.get_variable(right)
             self.__set_reg_variable(rd, right_var)
-
         # Compare RD (A) with M (B) where M is LEFT
         # Set MAR to point to left variable, then compare RD with memory at MAR
-        self.__set_mar(left_var)
+        marl = self.register_manager.marl
+        marh = self.register_manager.marh
+        logger.debug(f"[XXXX] CURRENT MAR {marh.tag.addr:<02X} {marl.tag.addr:<02X} TARGET VAR '{left_var.name}' ADDR {left_var.address:04X}")
+        self.__set_mar_abs(left_var.address)
         # CMP instruction syntax: cmp m (where m is the value at current MAR address)
         self.__add_assembly_line("cmp m")
 
