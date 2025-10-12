@@ -1,0 +1,16 @@
+// Test: While loop with compile-time TRUE condition
+// Expected: Should be converted to infinite loop (no condition check)
+
+byte a;
+byte b;
+
+a = 10;
+b = 0;
+
+// This should become infinite loop (condition always true)
+while a > 5
+    b = b + 1;
+endwhile
+
+// This code is unreachable
+// Expected: Infinite loop with no condition checking

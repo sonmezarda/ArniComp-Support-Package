@@ -1,0 +1,22 @@
+// Comprehensive refactoring test
+// Tests: volatile, low-level helpers, expression evaluation
+
+// Test 1: Volatile variable initialization
+volatile byte sensor = 100;
+
+// Test 2: Regular variables
+byte counter = 0;
+byte result;
+
+// Test 3: Simple expression with volatile
+result = sensor + 50;
+
+// Test 4: ADDI optimization (counter = counter + 3)
+counter = counter + 3;
+
+// Test 5: Complex expression with volatile
+result = sensor + counter;
+
+// Test 6: AND operation
+byte mask = 0x0F;
+result = sensor & mask;

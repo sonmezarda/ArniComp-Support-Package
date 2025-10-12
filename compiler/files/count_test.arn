@@ -3,11 +3,11 @@
 #define BUTTON1_MASK 0b00000001
 #define BUTTON2_MASK 0b00000010
 
-byte c = 0;
-byte button;
-byte b1;
-byte b2;
-byte flag = 0;
+volatile byte c = 0;
+volatile byte button;
+volatile byte b1;
+volatile byte b2;
+volatile byte flag = 0;
 
 while 1
     button = *BUTTON_ADR;

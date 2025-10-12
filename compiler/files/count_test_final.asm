@@ -1,10 +1,6 @@
 ldi #0
 mov marl, ra
 mov m, ra
-ldi #4
-mov marl, ra
-ldi #0
-mov m, ra
 while_start_1:
 ldi #0
 mov marl, ra
@@ -48,11 +44,6 @@ mov marl, ra
 mov rd, m
 addi #1
 mov m, acc
-ldi #1
-mov rd, ra
-ldi #4
-mov marl, ra
-mov m, rd
 if_1:
 ldi @else_1
 mov prl, ra
@@ -80,20 +71,11 @@ mov rd, m
 ldi #1
 sub ra
 mov m, acc
-mov rd, ra
-ldi #4
-mov marl, ra
-mov m, rd
 if_2:
 ldi @else_1
 mov prl, ra
 jmp
 if_4:
-ldi #0
-mov rd, ra
-ldi #4
-mov marl, ra
-mov m, rd
 else_1:
 ldi #0
 mov marl, ra

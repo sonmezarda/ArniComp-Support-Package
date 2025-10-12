@@ -1,0 +1,5 @@
+// Test: Complex expression with nested operators
+byte a = 10;
+byte b = 20;
+volatile byte c;
+c = (a+b)*3 + 10;

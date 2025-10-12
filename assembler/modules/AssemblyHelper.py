@@ -9,7 +9,8 @@ import os
 from typing import Dict, List, Tuple, Optional
 
 # Load configuration
-config_path = "/home/ardac/projects/ArniComp-Support-Package/assembler/config/config.json"
+config_path = "../assembler/config/config.json"
+
 with open(config_path, 'r') as f:
     config = json.load(f)
 

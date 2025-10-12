@@ -1,0 +1,16 @@
+// Test: While loop with volatile condition (runtime)
+// Expected: Normal while loop with condition check, variables invalidated after
+
+volatile byte sensor;
+byte counter;
+
+sensor = *0x2000;  // Read from hardware
+counter = 0;
+
+// This must be runtime loop (sensor is volatile)
+while sensor < 10
+    counter = counter + 1;
+endwhile
+
+// counter is unknown after loop (modified in loop)
+// Expected: Full while loop with condition checking

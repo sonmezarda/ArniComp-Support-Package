@@ -1,0 +1,6 @@
+// Test: Mixed expression with known constants and unknown variables
+byte a = 10;
+byte b = 20;
+byte unknown;  // Not initialized, unknown value
+volatile byte result;
+result = (a + b) * unknown + 5;

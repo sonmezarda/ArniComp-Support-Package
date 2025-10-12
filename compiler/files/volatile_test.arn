@@ -1,0 +1,3 @@
+byte a = 10;
+byte c = 30;
+volatile byte b = 20;

@@ -1,0 +1,13 @@
+// Test: Runtime value tracking in if-else
+byte a = 10;
+byte b = 20;
+byte c = 30;
+
+if a > 10
+    b = 30;
+else
+    b = 40;
+endif
+
+volatile byte result;
+result = b + c;

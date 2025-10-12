@@ -1,0 +1,16 @@
+// Test: While loop with compile-time FALSE condition
+// Expected: Loop body should be completely skipped
+
+byte a;
+byte b;
+
+a = 10;
+b = 5;
+
+// This loop should be skipped entirely at compile-time
+while a < 5
+    b = b + 1;
+endwhile
+
+// b should still be 5 (compile-time known)
+// Expected: Only 2 LDI instructions (a=10, b=5), no loop code

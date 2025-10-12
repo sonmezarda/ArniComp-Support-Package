@@ -1,0 +1,16 @@
+// Test 5: Volatile array (memory-mapped I/O)
+// Expected: Code generation for all accesses
+
+volatile byte[4] io_ports;
+
+// Should generate code - write to volatile array
+io_ports[0] = 255;
+io_ports[1] = 128;
+
+// Should generate code - read from volatile array
+byte status;
+status = io_ports[0];
+
+// Should generate code - volatile array in expression
+byte combined;
+combined = io_ports[0] + io_ports[1];

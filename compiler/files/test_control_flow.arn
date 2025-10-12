@@ -1,0 +1,15 @@
+// Test 3: Control flow with proper syntax
+// Expected: Code generation after if (invalidates tracking)
+
+byte counter = 0;
+byte limit = 10;
+byte temp = 5;
+
+// After this if, counter is unknown (could be 0 or 5)
+if counter < limit
+    counter = temp;
+endif
+
+// This should generate code (counter is unknown after if)
+byte result;
+result = counter;

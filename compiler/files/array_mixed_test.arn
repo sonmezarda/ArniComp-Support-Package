@@ -1,0 +1,22 @@
+// Mixed test: compile-time + runtime code generation
+
+byte[5] data;
+volatile byte sensor;
+
+// These should be compile-time only
+data[0] = 10;
+data[1] = 20;
+
+byte a;
+a = data[0];  // Should be compile-time: a = 10
+
+// This should generate code (volatile read)
+byte b;
+b = sensor;
+
+// This should generate code (uses volatile value)
+byte result;
+result = a + b;  // a is known (10), but b is volatile
+
+// This should generate code (array write with known value but after volatile use)
+data[2] = result;

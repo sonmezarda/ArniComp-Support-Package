@@ -91,6 +91,7 @@ class VarDefCommand(Command):
         self.var_type: VarTypes = VarTypes.BYTE
         self.var_value: any = None
         self.array_length: int | None = None
+        self.is_volatile: bool = False
         self.parse_params()
     
     def parse_params(self):
@@ -129,7 +130,7 @@ class VarDefCommand(Command):
 
 class VarDefCommandWithoutValue(VarDefCommand):
     """Variable definition without initialization"""
-    REGEX = rf'''^\s*(?P<type>{types_pattern()})\s*(?:\[(?P<size>\d*)\])?\s+(?P<name>{VARIABLE_IDENT})\s*;?\s*$'''
+    REGEX = rf'''^\s*(?:(?P<volatile>(?i:volatile))\s+)?(?P<type>{types_pattern()})\s*(?:\[(?P<size>\d*)\])?\s+(?P<name>{VARIABLE_IDENT})\s*;?\s*$'''
     TYPE = CommandTypes.VARDEFWV
     
     def __init__(self, line: str):
@@ -137,6 +138,7 @@ class VarDefCommandWithoutValue(VarDefCommand):
         self.var_name: str = ""
         self.var_type: VarTypes = VarTypes.BYTE
         self.array_length: int | None = None
+        self.is_volatile: bool = False
         self.parse_params()
     
     def parse_params(self):
@@ -144,6 +146,8 @@ class VarDefCommandWithoutValue(VarDefCommand):
         if not match:
             raise ValueError(f"Invalid variable definition without value: {self.line}")
 
+        self.is_volatile = bool(match.group('volatile'))
+        
         base_type = match.group('type').upper()
         size_text = match.group('size')
         name = match.group('name')
@@ -159,6 +163,7 @@ class VarDefCommandWithoutValue(VarDefCommand):
             self.var_type = VarTypes[base_type]
 
         self.var_name = name
+        logger.debug(f"Variable definition (no value): '{self.var_name}' volatile={self.is_volatile} type={self.var_type}")
 
 class AssignCommand(Command):
     # Supports: a = 5;  arr[1] = 5;  (pointer forms reserved for future)

@@ -1,0 +1,12 @@
+// Test: Infinite loop with explicit while 1
+// Expected: No condition check, direct jump back
+
+byte counter;
+counter = 0;
+
+while 1
+    counter = counter + 1;
+    *0x1000 = counter;  // Output to display
+endwhile
+
+// Expected: Infinite loop without condition checking

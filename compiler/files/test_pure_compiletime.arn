@@ -1,0 +1,22 @@
+// Test 1: Pure compile-time evaluation
+// Expected: 0 instructions (everything compile-time)
+
+byte x;
+byte y;
+byte z;
+
+x = 10;
+y = 20;
+z = x + y;  // z = 30
+
+byte result;
+result = z + 5;  // result = 35
+
+// Array version
+byte[3] arr;
+arr[0] = 100;
+arr[1] = 50;
+arr[2] = arr[0] + arr[1];  // arr[2] = 150
+
+byte sum;
+sum = arr[0] + arr[1] + arr[2];  // sum = 300 (wraps to 44 in 8-bit)

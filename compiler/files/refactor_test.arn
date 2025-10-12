@@ -1,0 +1,10 @@
+// Test file for refactoring
+// Testing volatile and runtime value tracking
+
+volatile byte b = 20;
+byte a = 10;
+byte c;
+
+c = b + a;  // b is volatile, must read from memory
+            // a is known (10), but b must be read
+            // Result should be: load b, add 10, store to c

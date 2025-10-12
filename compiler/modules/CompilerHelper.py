@@ -8,13 +8,13 @@ from VariableManager import VarTypes, Variable, ByteVariable, VarManager
 from StackManager import StackManager
 from LabelManager import LabelManager
 from RegisterManager import RegisterManager, RegisterMode, Register
-from ConditionHelper import IfElseClause, Condition, WhileClause, DirectAssemblyClause, WhileTypes
+from ConditionHelper import IfElseClause, Condition, WhileClause, DirectAssemblyClause, WhileTypes, ConditionTypes
 import CompilerStaticMethods as CSM
 from MyEnums import ExpressionTypes
 from Commands import *
 from RegTags import AbsAddrTag
+from ExpressionHelper import simplify_expression, plan_compilation
 
-# Create logger for this module
 logger = logging.getLogger(__name__)
 
 MAX_LDI = 127  # 7-bit LDI instruction max value
@@ -33,7 +33,7 @@ class Compiler:
         self.stack_size = stack_size
         self.memory_size = memory_size
         self.assembly_lines = []
-
+        self.arithmetic_ops = ['+', '-', '&']
         self.var_manager = VarManager(variable_start_addr, variable_end_addr, memory_size)
         self.register_manager = RegisterManager()
         self.stack_manager = StackManager(stack_start_addr, memory_size)
@@ -46,8 +46,9 @@ class Compiler:
             self.lines = file.readlines()
     
     def break_commands(self) -> None:
-        """Process preprocessor directives and remove comments"""
+        """Process preprocessor directives and remove comments (// style)"""
         self.__preprocess_lines()
+        # Split on // for comment removal (not ; anymore)
         self.lines = [line.split(';')[0].strip() for line in self.lines 
                      if line.strip() and not line.startswith(self.comment_char)]
 
@@ -59,13 +60,6 @@ class Compiler:
     def is_variable_defined(self, var_name: str) -> bool:
         return self.var_manager.check_variable_exists(var_name)
 
-    def is_number(self, value: str) -> bool:
-        try:
-            int(value)
-            return True
-        except ValueError:
-            return False
-        
     def copy_compiler_as_context(self) -> Compiler:
         """Create a copy of compiler with shared managers for nested contexts"""
         new_compiler = Compiler(self.comment_char, 
@@ -131,53 +125,116 @@ class Compiler:
         new_var = self.var_manager.create_variable(
                     var_name=command.var_name, 
                     var_type=command.var_type, 
-                    var_value=command.var_value)
-        
+                    var_value=command.var_value,
+                    volatile=command.is_volatile
+                    )
+        logger.warning("S:"+str(command.is_volatile))
+        logger.debug(f"Created variable '{new_var.name}' of type {new_var.get_value_type()} at address 0x{new_var.address:04X} with initial value {new_var.value} (volatile:{new_var.volatile})")
         if command.var_type == VarTypes.BYTE:
             self.var_manager.set_variable_runtime_value(command.var_name, command.var_value & 0xFF)
-            
-            self.__set_mar_abs(new_var.address)
-            self.__set_ra_const(command.var_value)
-            self.register_manager.marl.set_variable(new_var, RegisterMode.ADDR)
-            self.__store_with_current_mar_abs(new_var.address, self.register_manager.ra)
-            
+            if new_var.volatile:
+                # For volatile variables, always initialize in memory
+                logger.debug(f"Variable definition: '{new_var.name}' at address 0x{new_var.address:04X} (volatile)")
+                self.__set_mar_abs(new_var.address)
+                self.__set_ra_const(command.var_value & 0xFF)
+                self.register_manager.marl.set_variable(new_var, RegisterMode.ADDR)
+                self.__store_with_current_mar_abs(new_var.address, self.register_manager.ra)
+            else:
+                pass
         else:
             raise ValueError(f"Unsupported variable type: {command.var_type}")
         
         return self.__get_assembly_lines_len()
 
     # === Unified assignment helpers ===
-    def __rhs_needs_memory(self, expr: str) -> bool:
-        """Check if evaluating expression requires memory loads"""
+    def __try_evaluate_compile_time(self, expr: str) -> int | None:
+        """Try to evaluate expression at compile-time if all operands are known.
+        Returns value if successful, None otherwise."""
         s = expr.strip()
-        if s.startswith('*'):
-            return True
-        # Check for numeric literal
+        
+        # 1. Pure constant
         try:
-            if CSM.convert_to_decimal(s) is not None:
-                return False
-        except Exception:
+            val = CSM.convert_to_decimal(s)
+            if val is not None:
+                return val & 0xFF
+        except:
             pass
-        # Check for array access
-        if re.search(r"[A-Za-z_][A-Za-z0-9_]*\s*\[", s):
-            return True
-        # Check for variables in expression
-        norm = self.__normalize_expression(s)
-        tokens = [t for t in norm.split(' ') if t and t not in ['+', '-']]
-        for t in tokens:
+        
+        # 2. Array access with known value
+        m = re.match(r'^([A-Za-z_][A-Za-z0-9_]*)\[(.+)\]$', s)
+        if m:
+            arr_name, idx_expr = m.group(1), m.group(2).strip()
             try:
-                if CSM.convert_to_decimal(t) is not None:
-                    continue
-            except Exception:
+                const_idx = CSM.convert_to_decimal(idx_expr)
+                if const_idx is not None:
+                    if self.var_manager.check_variable_exists(arr_name):
+                        arr_var = self.var_manager.get_variable(arr_name)
+                        if type(arr_var) == VarTypes.BYTE_ARRAY.value and not arr_var.volatile:
+                            element_addr = arr_var.address + const_idx
+                            runtime_val = self.var_manager.get_memory_runtime_value(element_addr)
+                            if runtime_val is not None:
+                                return runtime_val & 0xFF
+            except:
                 pass
-            if self.var_manager.check_variable_exists(t):
-                return True
-        return False
+        
+        # 3. Single variable with known value
+        if self.var_manager.check_variable_exists(s):
+            v = self.var_manager.get_variable(s)
+            if not v.volatile:
+                runtime_val = self.var_manager.get_variable_runtime_value(s)
+                if runtime_val is not None:
+                    return runtime_val & 0xFF
+        
+        # 4. Complex expressions: substitute known values and evaluate
+        if any(op in s for op in ['+', '-', '&', '*', '/', '<<', '>>']):
+            try:
+                # Substitute all known variables and array elements with their values
+                substituted = self._change_expression_with_var_values(s)
+                
+                # Check if all operands are now constants
+                tokens = self._tokenize_expression(substituted)
+                all_const = True
+                for t in tokens:
+                    if t.strip() not in ['+', '-', '&', '*', '/', '<<', '>>']:
+                        # Check if this token is a constant
+                        try:
+                            CSM.convert_to_decimal(t.strip())
+                        except:
+                            all_const = False
+                            break
+                
+                if all_const:
+                    # All operands are constants - try to evaluate
+                    try:
+                        # Use simplify_expression which can handle arithmetic
+                        simplified = self._simplify_expression(substituted)
+                        result = CSM.convert_to_decimal(simplified)
+                        if result is not None:
+                            logger.debug(f"Compile-time evaluation: '{s}' → '{substituted}' → {result}")
+                            return result & 0xFF
+                    except Exception as e:
+                        logger.debug(f"Failed to evaluate '{substituted}': {e}")
+            except Exception as e:
+                logger.debug(f"Expression substitution failed: {e}")
+        
+        return None
 
     def __compute_rhs(self, expr: str) -> Register:
-        """Compute RHS expression and return the register holding the result (RA/ACC/RD)."""
+        """
+        Compute RHS expression using ISA-aware ExpressionHelper.
+        Returns register holding the final result (ACC for expressions, RA for constants, RD for variables).
+        
+        Supports:
+        - Constants: 5, 0xFF, 0b1010
+        - Variables: x, volatile_var
+        - Arrays: arr[0], arr[idx]
+        - Dereference: *0x1234
+        - Expressions: a + b, x * 2, (a + b) * 3
+        - ISA-aware: MUL/DIV/SHIFT → ADD expansion
+        """
         s = expr.strip()
-        # Direct absolute memory dereference: *<number>
+        
+        # 1. Direct absolute memory dereference: *<address>
         if s.startswith('*'):
             inner = s[1:].strip()
             try:
@@ -189,7 +246,8 @@ class Compiler:
             self.__set_mar_abs(address)
             self.__ldr(self.register_manager.rd)
             return self.register_manager.rd
-        # Array read: name[idx]
+        
+        # 2. Array access: name[idx]
         m = re.match(r'^([A-Za-z_][A-Za-z0-9_]*)\[(.+)\]$', s)
         if m:
             arr_name, idx_expr = m.group(1), m.group(2).strip()
@@ -198,26 +256,195 @@ class Compiler:
             arr_var = self.var_manager.get_variable(arr_name)
             if type(arr_var) != VarTypes.BYTE_ARRAY.value:
                 raise ValueError(f"'{arr_name}' is not an array.")
+            
+            # Try to get constant index
+            try:
+                const_idx = CSM.convert_to_decimal(idx_expr)
+            except:
+                const_idx = None
+            
+            # Check if we know the runtime value (non-volatile array with constant index)
+            if const_idx is not None and not arr_var.volatile:
+                element_addr = arr_var.address + const_idx
+                runtime_val = self.var_manager.get_memory_runtime_value(element_addr)
+                if runtime_val is not None:
+                    logger.debug(f"Using tracked value {runtime_val} for {arr_name}[{const_idx}]")
+                    self.__set_ra_const(runtime_val)
+                    return self.register_manager.ra
+            
+            # Load from memory
             self.__set_mar_array_elem(arr_var, idx_expr)
             self.__ldr(self.register_manager.rd)
             return self.register_manager.rd
 
-        # Has operators? use existing expression evaluator into ACC
-        if ('+' in s) or ('-' in s) or ('&' in s):
-            norm = self.__normalize_expression(s)
-            self.__evaluate_expression(norm)  # leaves result in ACC
-            return self.register_manager.acc
+        # 3. Check for expression operators
+        if any(op in s for op in ['+', '-', '&', '*', '/', '<<', '>>','|','^','(']):
+            # Use ExpressionHelper for ISA-aware compilation
+            try:
+                # CRITICAL: First substitute all known variable values
+                # This enables compile-time evaluation: (a+b)*3+10 → (10+20)*3+10 → 100
+                substituted = self._change_expression_with_var_values(s)
+                logger.debug(f"Expression with substituted values: '{s}' → '{substituted}'")
+                
+                # Then simplify the expression (may reduce to constant)
+                simplified = self._simplify_expression(substituted)
+                logger.debug(f"Expression simplified: '{substituted}' → '{simplified}'")
+                
+                # Check if simplified to a constant
+                try:
+                    const_val = CSM.convert_to_decimal(simplified)
+                    if const_val is not None:
+                        self.__set_ra_const(const_val & 0xFF)
+                        return self.register_manager.ra
+                except:
+                    pass
+                
+                # Use plan_compilation for complex expressions (parentheses, mul, div, shifts)
+                # This gives us ISA-aware step-by-step execution plan
+                if any(op in simplified for op in ['*', '/', '<<', '>>', '(', '|', '^']):
+                    steps, final_result = self._plan_expression_compilation(simplified)
+                    logger.debug(f"Planned {len(steps)} compilation steps for '{simplified}'")
+                    
+                    # Execute each step in order
+                    # Key insight: We need to track which temp vars hold which registers
+                    # BUT we must load operands freshly each time because register modes change!
+                    temp_locations = {}  # Map temp var names to their current register location
+                    
+                    for step_idx, step in enumerate(steps):
+                        logger.debug(f"Executing step {step_idx+1}/{len(steps)}: {step}")
+                        
+                        # Helper: Load operand into target register
+                        def load_operand(operand_name: str, target_reg: Register) -> Register:
+                            """Load operand into target register, return the register."""
+                            if operand_name.startswith('_t'):
+                                # Previous temp result - it's already in a register
+                                src_reg = temp_locations.get(operand_name)
+                                if src_reg is None:
+                                    raise ValueError(f"Temp variable {operand_name} not found!")
+                                # Move to target if different
+                                if src_reg.name != target_reg.name:
+                                    self.__mov(target_reg, src_reg)
+                                return target_reg
+                            
+                            elif operand_name == '_prev':
+                                # Previous result in ACC
+                                if target_reg.name != 'acc':
+                                    self.__mov(target_reg, self.register_manager.acc)
+                                return target_reg
+                            
+                            elif CSM.is_decimal(operand_name):
+                                # Constant value
+                                val = CSM.convert_to_decimal(operand_name) & 0xFF
+                                self.__set_reg_const(target_reg, val)
+                                return target_reg
+                            
+                            elif self.var_manager.check_variable_exists(operand_name):
+                                # Variable - use __set_reg_variable which handles volatile/runtime
+                                var = self.var_manager.get_variable(operand_name)
+                                self.__set_reg_variable(target_reg, var)
+                                return target_reg
+                            
+                            else:
+                                # Fallback: try parsing as number
+                                try:
+                                    val = int(operand_name) & 0xFF
+                                    self.__set_reg_const(target_reg, val)
+                                    return target_reg
+                                except:
+                                    raise ValueError(f"Unknown operand: {operand_name}")
+                        
+                        # Load left operand into RD
+                        left_reg = load_operand(step.left, self.register_manager.rd)
+                        
+                        # Load right operand into RA
+                        right_reg = load_operand(step.right, self.register_manager.ra)
+                        
+                        # Execute operation (RD op RA -> ACC)
+                        if step.operation == '+':
+                            self.__add(right_reg)
+                        elif step.operation == '-':
+                            self.__sub(right_reg)
+                        elif step.operation == '&':
+                            self.__and(right_reg)
+                        elif step.operation == '^':
+                            self.__xor(right_reg)
+                        elif step.operation == '|':
+                            # Bitwise OR: A | B = NOT(NOT(A) AND NOT(B)) = De Morgan's Law
+                            # We have RD=A, RA=B
+                            # Step 1: NOT RD -> ACC
+                            self.__not()  # ACC = NOT(RD)
+                            self.__mov(self.register_manager.rc, self.register_manager.acc)  # Save NOT(A) in RC
+                            
+                            # Step 2: NOT RA -> ACC
+                            self.__mov(self.register_manager.rd, self.register_manager.ra)
+                            self.__not()  # ACC = NOT(RA)
+                            self.__mov(self.register_manager.ra, self.register_manager.acc)  # RA = NOT(B)
+                            
+                            # Step 3: RC AND RA -> ACC
+                            self.__mov(self.register_manager.rd, self.register_manager.rc)  # RD = NOT(A)
+                            self.__and(self.register_manager.ra)  # ACC = NOT(A) AND NOT(B)
+                            
+                            # Step 4: NOT ACC -> ACC
+                            self.__mov(self.register_manager.rd, self.register_manager.acc)
+                            self.__not()  # ACC = NOT(NOT(A) AND NOT(B)) = A | B
+                        elif step.operation == '*':
+                            # Variable-to-variable multiplication not supported by ISA
+                            # Can only do constant multiplication (expanded to repeated addition)
+                            raise NotImplementedError(
+                                f"Variable-to-variable multiplication not supported: {step.left} * {step.right}. "
+                                f"ArniComp ISA has no hardware MUL instruction. "
+                                f"Only constant multiplications like 'x * 5' are supported (expanded to repeated addition)."
+                            )
+                        elif step.operation == '/':
+                            # Division not supported
+                            raise NotImplementedError(
+                                f"Division not supported: {step.left} / {step.right}. "
+                                f"ArniComp ISA has no hardware DIV instruction."
+                            )
+                        elif step.operation in ['<<', '>>']:
+                            # Shift not directly supported
+                            raise NotImplementedError(
+                                f"Variable shift not supported: {step.left} {step.operation} {step.right}. "
+                                f"Only constant shifts are supported (expanded to multiplication/division)."
+                            )
+                        else:
+                            raise ValueError(f"Unsupported operation in plan: {step.operation}")
+                        
+                        # Store result location: this step's result is now in ACC
+                        temp_locations[step.result_temp] = self.register_manager.acc
+                        logger.debug(f"  Result {step.result_temp} stored in ACC")
+                    
+                    # Final result
+                    if final_result.startswith('_t'):
+                        # Result is in the temp variable's register (should be ACC after last step)
+                        return temp_locations[final_result]
+                    elif final_result == '0':
+                        self.__set_ra_const(0)
+                        return self.register_manager.ra
+                    else:
+                        # Direct result (shouldn't happen with plan_compilation)
+                        return self.register_manager.acc
+                
+                # Simple expression (only +, -, &): use existing evaluator
+                norm = self.__normalize_expression(simplified)
+                self.__evaluate_expression(norm)  # Result in ACC
+                return self.register_manager.acc
+            except Exception as e:
+                logger.warning(f"ExpressionHelper failed: {e}, falling back to simple evaluation")
+                norm = self.__normalize_expression(s)
+                self.__evaluate_expression(norm)
+                return self.register_manager.acc
 
-        # Pure literal
+        # 4. Pure constant
         try:
             val = CSM.convert_to_decimal(s)
             if val is not None:
-                self.__set_ra_const(val)
+                self.__set_ra_const(val & 0xFF)
                 return self.register_manager.ra
         except Exception:
             pass
 
-        # Single variable
+        # 5. Single variable
         if self.var_manager.check_variable_exists(s):
             v = self.var_manager.get_variable(s)
             self.__set_reg_variable(self.register_manager.rd, v)
@@ -261,8 +488,8 @@ class Compiler:
         # RA <- base_low
         self.__set_ra_const(base_low)
         # ACC <- RD + RA ; MARL <- ACC
-        self.__add_reg(self.register_manager.ra)
-        self.__add_assembly_line("mov marl, acc")
+        self.__add(self.register_manager.ra)
+        self.__mov(self.register_manager.marl, self.register_manager.acc)
         try:
             self.register_manager.marl.set_unknown_mode()
         except Exception:
@@ -270,19 +497,23 @@ class Compiler:
         return self.__get_assembly_lines_len()
 
     def __assign_store_to_abs(self, address: int, rhs_expr: str) -> int:
-        """Unified direct absolute store with smart MAR ordering."""
-        needs_mem = self.__rhs_needs_memory(rhs_expr)
-        src_reg: Register
-        if needs_mem:
-            # compute first, then set MAR
-            src_reg = self.__compute_rhs(rhs_expr)
-            self.__set_mar_abs(address)
-        else:
-            self.__set_mar_abs(address)
-            src_reg = self.__compute_rhs(rhs_expr)
-
+        """Store expression result to absolute address. Handles MAR conflicts automatically."""
+        # Compute RHS first (may use MAR internally)
+        src_reg = self.__compute_rhs(rhs_expr)
+        
+        # CRITICAL: If src_reg is RA, we must move it to another register before setting MAR
+        # because __set_mar_abs will clobber RA
+        if src_reg.name == 'ra':
+            self.__mov(self.register_manager.rd, src_reg)
+            src_reg = self.register_manager.rd
+        
+        # Now set MAR to target address
+        self.__set_mar_abs(address)
+        
+        # Store
         self.__str(src_reg)
         
+        # Update runtime tracking if applicable
         if address < self.var_manager.mem_end_addr and address >= self.var_manager.mem_start_addr:
             var_in_mem = self.var_manager.get_variable_from_address(address)
             if var_in_mem is not None:
@@ -290,6 +521,7 @@ class Compiler:
                 if reg_with_var is not None and reg_with_var.mode == RegisterMode.VALUE:
                     reg_with_var.set_unknown_mode()
                 
+                # Track constant values
                 try:
                     value = CSM.convert_to_decimal(rhs_expr.strip())
                     if value is not None:
@@ -300,50 +532,211 @@ class Compiler:
                     self.var_manager.invalidate_runtime_value(var_in_mem.name)
         
         return self.__get_assembly_lines_len()
+    
+
+    def _simplify_expression(self, expr: str) -> str:
+        """
+        Simplify an arithmetic expression to its most reduced form.
+        
+        Delegates to ExpressionHelper.simplify_expression for the actual work.
+        
+        Args:
+            expr: Expression string to simplify
+            
+        Returns:
+            Simplified expression string
+            
+        Examples:
+            >>> self._simplify_expression("a + b - a")
+            'b'
+            >>> self._simplify_expression("2 * 3 + 4")
+            '10'
+        """
+        return simplify_expression(expr)
+    
+    def _plan_expression_compilation(self, expr: str):
+        """
+        Plan compilation steps for expression with proper operator precedence.
+        
+        Returns list of steps that need to be executed in order.
+        Each step is a CompilationStep with operation, left, right, result_temp.
+        
+        Args:
+            expr: Expression string to plan
+            
+        Returns:
+            Tuple of (steps_list, final_result_temp)
+            
+        Examples:
+            >>> steps, result = self._plan_expression_compilation("a * b + 10")
+            >>> # steps[0]: _t0 = a * b
+            >>> # steps[1]: _t1 = _t0 + 10
+            >>> # result: "_t1"
+        """
+        return plan_compilation(expr)
+        
+    
+    def _change_expression_with_var_values(self, expr: str) -> str:
+        """Replace variables and array accesses with their compile-time known values.
+        
+        Uses ExpressionHelper's tokenizer to properly handle all operators and parentheses.
+        
+        Examples:
+            'a + b + 30' → '10 + 20 + 30' (if a=10, b=20)
+            '(a+b)*3' → '(10+20)*3' (if a=10, b=20)
+            'data[0] + data[1]' → '10 + 20' (if data[0]=10, data[1]=20)
+        """
+        # Import tokenizer from ExpressionHelper
+        from ExpressionHelper import ExpressionTokenizer
+        
+        # Use proper tokenizer that handles all operators and parentheses
+        tokens = ExpressionTokenizer.tokenize(expr)
+        new_tokens = []
+        
+        for t in tokens:
+            t_stripped = t.strip()
+            
+            # Skip operators and parentheses
+            if t_stripped in ['+', '-', '*', '/', '&', '|', '^', '<<', '>>', '(', ')']:
+                new_tokens.append(t_stripped)
+                continue
+            
+            # Check for array access: name[idx]
+            # Note: ExpressionTokenizer doesn't split arr[idx], it keeps it as one token
+            m = re.match(r'^([A-Za-z_][A-Za-z0-9_]*)\[(.+)\]$', t_stripped)
+            if m:
+                arr_name, idx_expr = m.group(1), m.group(2).strip()
+                # Try to get constant index and tracked value
+                try:
+                    const_idx = CSM.convert_to_decimal(idx_expr)
+                    if const_idx is not None and self.var_manager.check_variable_exists(arr_name):
+                        arr_var = self.var_manager.get_variable(arr_name)
+                        if type(arr_var) == VarTypes.BYTE_ARRAY.value and not arr_var.volatile:
+                            element_addr = arr_var.address + const_idx
+                            runtime_val = self.var_manager.get_memory_runtime_value(element_addr)
+                            if runtime_val is not None:
+                                new_tokens.append(str(runtime_val))
+                                logger.debug(f"Substituted {arr_name}[{const_idx}] with {runtime_val}")
+                                continue
+                except:
+                    pass
+                # If we couldn't substitute, keep original
+                new_tokens.append(t)
+                continue
+            
+            # Check for simple variable
+            if self.var_manager.check_variable_exists(t_stripped):
+                v = self.var_manager.get_variable(t_stripped)
+                if not v.volatile:
+                    rt_val = self.var_manager.get_variable_runtime_value(t_stripped)
+                    if rt_val is not None:
+                        new_tokens.append(str(rt_val))
+                        logger.debug(f"Substituted variable '{t_stripped}' with {rt_val}")
+                        continue
+            
+            # Keep token as-is (constant or unknown variable)
+            new_tokens.append(t)
+        
+        # Reconstruct expression with proper spacing
+        new_expr = ' '.join(new_tokens)
+        logger.debug(f"Expression value substitution: '{expr}' → '{new_expr}'")
+        return new_expr
+    
+    def _tokenize_expression(self, expr:str) -> list[str]:
+        """Tokenize expression into variables/constants and operators.
+        Handles array access syntax: arr[idx]"""
+        tokens = []
+        current = ''
+        bracket_depth = 0
+        
+        for char in expr:
+            if char == '[':
+                bracket_depth += 1
+                current += char
+            elif char == ']':
+                bracket_depth -= 1
+                current += char
+            elif char in self.arithmetic_ops and bracket_depth == 0:
+                if current:
+                    tokens.append(current.strip())
+                    current = ''
+                tokens.append(char)
+            else:
+                current += char
+        
+        if current:
+            tokens.append(current.strip())
+        return tokens
+
 
     def __compile_assign_var(self, var: Variable, rhs_expr: str) -> int:
-        """var = expr; Choose MAR ordering smartly based on RHS memory needs."""
+        """var = expr; Optimizes by skipping memory writes when value is compile-time known and not volatile."""
+
         if type(var) is VarTypes.BYTE.value:
-            # Check for "var = var + 1" pattern (ADDI optimization)
+            # Check for "var = var + x" pattern (ADDI optimization)
             import re
-            addi_pattern = rf'^{re.escape(var.name)}\s*\+\s*1$'
-            if re.match(addi_pattern, rhs_expr.strip()):
-                logger.debug(f"ADDI optimization: {var.name} = {var.name} + 1")
-                self.__set_mar_abs(var.address)
-                self.__ldr(self.register_manager.rd)
-                self.__add_assembly_line("addi #1")
-                self.__str(self.register_manager.acc)
-                
-                prev_value = self.var_manager.get_variable_runtime_value(var.name)
-                if prev_value is not None:
-                    new_value = (prev_value + 1) & 0xFF
-                    self.var_manager.set_variable_runtime_value(var.name, new_value)
-                    logger.debug(f"Runtime value tracked: {var.name} = {new_value}")
-                else:
-                    self.var_manager.invalidate_runtime_value(var.name)
-                
+            addi_pattern = rf'^{re.escape(var.name)}\s*\+\s*(0x[0-9A-Fa-f]+|0b[01]+|\d+)$'
+            m = re.match(addi_pattern, rhs_expr.strip())
+            if m:
+                imm_text = m.group(1)
+                try:
+                    imm = int(imm_text, 0)  # base=0 allows 0x and 0b
+                except ValueError:
+                    imm = None
+
+                if imm is not None and imm > 0:
+                    logger.debug(f"ADDI optimization attempt: {var.name} = {var.name} + {imm}")
+
+                    prev_value = self.var_manager.get_variable_runtime_value(var.name)
+
+                    # If imm fits in 3-bit immediate (1..7), emit single addi #imm
+                    if var.volatile or prev_value is None:
+                        # must load from memory then add immediate and store
+                        self.__set_mar_abs(var.address)
+                        self.__ldr(self.register_manager.rd)
+                        self.__addi(imm)
+                        self.__str(self.register_manager.acc)
+                        # runtime value unknown (we loaded from memory), invalidate tracking
+                        self.var_manager.invalidate_runtime_value(var.name)
+                    else:
+                        # we know runtime value and variable not volatile -> update tracking only
+                        new_value = (prev_value + imm) & 0xFF
+                        self.var_manager.set_variable_runtime_value(var.name, new_value)
+                        logger.debug(f"Compile-time only: {var.name} = {new_value} (no memory write)")
+                        return self.__get_assembly_lines_len()
+
+                    return self.__get_assembly_lines_len()
+            
+            # Try to evaluate RHS at compile-time
+            rhs_value = self.__try_evaluate_compile_time(rhs_expr)
+            
+            # Optimization: If variable is not volatile and we have a compile-time constant,
+            # just track it without generating code
+            if not var.volatile and rhs_value is not None:
+                self.var_manager.set_variable_runtime_value(var.name, rhs_value & 0xFF)
+                logger.debug(f"Compile-time only: {var.name} = {rhs_value & 0xFF} (no memory write)")
                 return self.__get_assembly_lines_len()
             
-            # Normal assignment path
-            needs_mem = self.__rhs_needs_memory(rhs_expr)
-            src_reg: Register
-            if needs_mem:
-                src_reg = self.__compute_rhs(rhs_expr)
-                self.__set_mar_abs(var.address)
-            else:
-                self.__set_mar_abs(var.address)
-                src_reg = self.__compute_rhs(rhs_expr)
-            # store (var is byte for now)
-            self.__store_with_current_mar_abs(var.address, src_reg)
+            # Normal code generation path
+            # Compute RHS first (handles MAR internally)
+            src_reg = self.__compute_rhs(rhs_expr)
             
-            # Try to track runtime value for simple constants
+            # CRITICAL: If src_reg is RA, we must move it to another register before setting MAR
+            # because __set_mar_abs will clobber RA
+            if src_reg.name == 'ra':
+                self.__mov(self.register_manager.rd, src_reg)
+                src_reg = self.register_manager.rd
+            
+            # Set MAR to target variable
+            self.__set_mar_abs(var.address)
+            
+            # Store
+            self.__str(src_reg)
+            
+            # Try to track runtime value
             try:
-                if '+' not in rhs_expr and '-' not in rhs_expr and '&' not in rhs_expr:
-                    value = CSM.convert_to_decimal(rhs_expr.strip())
-                    if value is not None:
-                        self.var_manager.set_variable_runtime_value(var.name, value & 0xFF)
-                    else:
-                        self.var_manager.invalidate_runtime_value(var.name)
+                if rhs_value is not None:
+                    self.var_manager.set_variable_runtime_value(var.name, rhs_value & 0xFF)
                 else:
                     self.var_manager.invalidate_runtime_value(var.name)
             except:
@@ -351,16 +744,12 @@ class Compiler:
             
             return self.__get_assembly_lines_len()
         elif type(var) is VarTypes.UINT16.value:
-            needs_mem = self.__rhs_needs_memory(rhs_expr)
-            src_reg: Register
-            if needs_mem:
-                src_reg = self.__compute_rhs(rhs_expr)
-                self.__set_mar_abs(var.address)
-            else:
-                self.__set_mar_abs(var.address)
-                src_reg = self.__compute_rhs(rhs_expr)
-            # store (var is byte for now)
-            self.__store_with_current_mar_abs(var.address, src_reg)
+            # Compute RHS first
+            src_reg = self.__compute_rhs(rhs_expr)
+            
+            # Set MAR and store
+            self.__set_mar_abs(var.address)
+            self.__str(src_reg)
             return self.__get_assembly_lines_len()
         elif type(var) is VarTypes.UINT16.value:
             exp_type = CSM.get_expression_type(rhs_expr)
@@ -382,11 +771,11 @@ class Compiler:
                 logger.debug(f"Variable definition: {var.name} at address 0x{var.address:04X}")
                 self.__set_mar_abs(var.address)
                 self.__set_ra_const(rhs_bytes[0])
-                self.__store_with_current_mar_abs(var.address, self.register_manager.ra)
+                self.__str(self.register_manager.ra)
 
                 self.__set_mar_abs(var.address+1)
                 self.__set_ra_const(rhs_bytes[1])
-                self.__store_with_current_mar_abs(var.address+1, self.register_manager.ra)
+                self.__str(self.register_manager.ra)
                 
                 return self.__get_assembly_lines_len()
                 
@@ -398,30 +787,79 @@ class Compiler:
 
 
     def __compile_assign_array(self, arr_var: Variable, index_expr: str, rhs_expr: str) -> int:
-        """arr[idx] = expr; Set MAR to element, compute RHS with smart ordering, then store."""
-        # Decide ordering: if RHS needs memory, compute first; else set target first
-        needs_mem = self.__rhs_needs_memory(rhs_expr)
-        src_reg: Register
-        if needs_mem:
-            src_reg = self.__compute_rhs(rhs_expr)
-            self.__set_mar_array_elem(arr_var, index_expr)
-        else:
-            self.__set_mar_array_elem(arr_var, index_expr)
-            src_reg = self.__compute_rhs(rhs_expr)
+        """arr[idx] = expr; Optimizes by skipping memory writes when value is compile-time known and not volatile.
+        Tracks array element runtime values for constant indices."""
         
+        # Try to get constant index for tracking
+        try:
+            const_idx = CSM.convert_to_decimal(index_expr.strip())
+        except:
+            const_idx = None
+        
+        # Try to evaluate RHS at compile-time
+        rhs_value = self.__try_evaluate_compile_time(rhs_expr)
+        
+        # Optimization: If array is not volatile, index is constant, and RHS is compile-time known,
+        # just track it without generating code
+        if const_idx is not None and not arr_var.volatile and rhs_value is not None:
+            element_addr = arr_var.address + const_idx
+            self.var_manager.set_memory_runtime_value(element_addr, rhs_value & 0xFF)
+            logger.debug(f"Compile-time only: {arr_var.name}[{const_idx}] = {rhs_value & 0xFF} (no memory write)")
+            return self.__get_assembly_lines_len()
+        
+        # Normal code generation path
+        # Compute RHS first (may use MAR)
+        src_reg = self.__compute_rhs(rhs_expr)
+        
+        # CRITICAL: If src_reg is RA, we must move it to another register before setting MAR
+        # because __set_mar_array_elem may clobber RA
+        if src_reg.name == 'ra':
+            self.__mov(self.register_manager.rd, src_reg)
+            src_reg = self.register_manager.rd
+        
+        # Now set MAR to array element
+        self.__set_mar_array_elem(arr_var, index_expr)
+        
+        # Store
         self.__str(src_reg)
+        
+        # Track runtime value for non-volatile arrays with constant index
+        if const_idx is not None and not arr_var.volatile:
+            element_addr = arr_var.address + const_idx
+            try:
+                if rhs_value is not None:
+                    self.var_manager.set_memory_runtime_value(element_addr, rhs_value & 0xFF)
+                    logger.debug(f"Tracked array element: {arr_var.name}[{const_idx}] = {rhs_value & 0xFF} (addr 0x{element_addr:04X})")
+                else:
+                    self.var_manager.invalidate_memory_runtime_value(element_addr)
+            except:
+                self.var_manager.invalidate_memory_runtime_value(element_addr)
+        
         return self.__get_assembly_lines_len()
 
-    def __create_var(self, command:VarDefCommandWithoutValue)-> int:
+    def __create_var(self, command: VarDefCommandWithoutValue) -> int:
+        """Create variable without initial value. Supports volatile arrays."""
         if command.var_type == VarTypes.BYTE_ARRAY:
             if command.array_length is None:
                 raise ValueError("Array length must be specified for BYTE_ARRAY.")
-            new_var:Variable = self.var_manager.create_array_variable(var_name=command.var_name, var_type=command.var_type, array_len=command.array_length, var_value=[0]*command.array_length)
+            new_var: Variable = self.var_manager.create_array_variable(
+                var_name=command.var_name, 
+                var_type=command.var_type, 
+                array_len=command.array_length, 
+                var_value=[0] * command.array_length,
+                volatile=command.is_volatile
+            )
+            logger.debug(f"Created array '{new_var.name}' of size {command.array_length} at address 0x{new_var.address:04X} (volatile:{command.is_volatile})")
         else:
-            new_var:Variable = self.var_manager.create_variable(var_name=command.var_name, var_type=command.var_type, var_value=0)
-            # Track initial runtime value for non-array variables
-            if command.var_type == VarTypes.BYTE:
-                self.var_manager.set_variable_runtime_value(command.var_name, 0)
+            new_var: Variable = self.var_manager.create_variable(
+                var_name=command.var_name, 
+                var_type=command.var_type, 
+                var_value=0,
+                volatile=command.is_volatile
+            )
+            # DON'T track runtime value for uninitialized variables - value is unknown!
+            # Only explicit initializations (VarDefCommand) should track values
+            logger.debug(f"Created variable '{new_var.name}' at address 0x{new_var.address:04X} (volatile:{command.is_volatile}) [uninitialized]")
         return self.__get_assembly_lines_len()
     
     def __free_variable(self, command:FreeCommand) -> int:
@@ -477,6 +915,22 @@ class Compiler:
                     return self.__get_assembly_lines_len()
                 else:
                     # Address in low page and MARL already matches
+                    # But we still need to ensure MARH is 0 if coming from high page!
+                    if marh.tag and isinstance(marh.tag, AbsAddrTag):
+                        current_high = (marh.tag.addr >> 8) & 0xFF
+                        if current_high != 0:
+                            # MARH needs to be reset to 0
+                            logger.debug(f"MARL correct but MARH={current_high:02X}, resetting to 0")
+                            self.__build_const_in_reg(0, marh)
+                            try:
+                                marh.set_unknown_mode()
+                            except Exception:
+                                pass
+                            try:
+                                marh.tag = AbsAddrTag(address)
+                            except Exception:
+                                pass
+                            return self.__get_assembly_lines_len()
                     logger.debug(f"MARL already set to 0x{low:02X}")
                     return self.__get_assembly_lines_len()
             
@@ -580,7 +1034,8 @@ class Compiler:
         return self.__get_assembly_lines_len()
 
 ## LOW LEVEL ASSEMBLY HELPERS
-    def __ldi(self, value:int) -> int:
+    def __ldi(self, value: int) -> int:
+        """LDI instruction: RA <- immediate (0-127). Updates RA register state."""
         if value > MAX_LDI:
             raise ValueError(f"Value {value} exceeds maximum LDI value of {MAX_LDI}.")
         self.__add_assembly_line(f"ldi #{value}")
@@ -588,7 +1043,7 @@ class Compiler:
         return self.__get_assembly_lines_len()
     
     def __inx(self) -> int:
-        """Increment MARL by 1 (wraps at 0xFF to 0x00). Updates MARL tag accordingly."""
+        """INX instruction: MARL <- MARL + 1 (wraps at 0xFF). Updates MARL tag if tracked."""
         self.__add_assembly_line("inx")
         marl = self.register_manager.marl
         
@@ -609,33 +1064,195 @@ class Compiler:
         
         return self.__get_assembly_lines_len()
     
+    def __addi(self, value: int) -> int:
+        """ADDI instruction: ACC <- RD + immediate (1-7). Tracks result if RD is known."""
+        if not (1 <= value <= 7):
+            raise ValueError(f"ADDI immediate must be in range 1-7, got {value}")
+        
+        self.__add_assembly_line(f"addi #{value}")
+        
+        rd = self.register_manager.rd
+        acc = self.register_manager.acc
+        
+        # Try to compute constant result if RD is known
+        if rd.mode == RegisterMode.CONST:
+            new_val = (rd.value + value) & 0xFF
+            acc.set_mode(RegisterMode.CONST, new_val)
+        else:
+            acc.set_unknown_mode()
+        
+        return self.__get_assembly_lines_len()
+    
     def __ldr(self, dst: Register) -> int:
-        """Load from memory at MAR into dst register. Uses mov dst, m."""
+        """Load from memory at MAR into dst register. Uses MOV dst, M. Result is unknown."""
         self.__add_assembly_line(f"mov {dst.name}, m")
         dst.set_unknown_mode()
         return self.__get_assembly_lines_len()
     
     def __str(self, src: Register) -> int:
-        """Store src register to memory at MAR. Uses mov m, src."""
+        """Store src register to memory at MAR. Uses MOV M, src."""
         self.__add_assembly_line(f"mov m, {src.name}")
         return self.__get_assembly_lines_len()
     
-    def __mov(self, dst:Register, src:Register) -> int:
+    def __mov(self, dst: Register, src: Register) -> int:
+        """MOV instruction: dst <- src. Tracks register state propagation."""
         if dst.name == src.name:
             return self.__get_assembly_lines_len()
         if not src.outable:
             raise ValueError(f"Source register {src.name} is not outable.")
-        
         if not dst.writable:
             raise ValueError(f"Destination register {dst.name} is not writable.")
         
         self.__add_assembly_line(f"mov {dst.name}, {src.name}")
+        
+        # Propagate register state
         if src.mode == RegisterMode.UNKNOWN:
             dst.set_unknown_mode()
         elif src.mode == RegisterMode.CONST:
             dst.set_mode(RegisterMode.CONST, src.value)
+        elif src.mode == RegisterMode.VALUE and src.variable is not None:
+            # Propagate variable binding
+            dst.set_variable(src.variable, RegisterMode.VALUE)
+        elif src.mode == RegisterMode.ADDR and src.variable is not None:
+            # Propagate address binding
+            dst.set_variable(src.variable, RegisterMode.ADDR)
         else:
-            dst.set_mode(src.mode, src.value, src.variable)
+            # Unknown mode or unsupported state
+            dst.set_unknown_mode()
+        return self.__get_assembly_lines_len()
+    
+    def __add(self, src: Register) -> int:
+        """ADD instruction: ACC <- RD + src. Tracks result in ACC."""
+        self.__add_assembly_line(f"add {src.name}")
+        
+        acc = self.register_manager.acc
+        rd = self.register_manager.rd
+        
+        # Try to compute constant result if both are known
+        if rd.mode == RegisterMode.CONST and src.mode == RegisterMode.CONST:
+            result = (rd.value + src.value) & 0xFF
+            acc.set_mode(RegisterMode.CONST, result)
+        else:
+            acc.set_unknown_mode()
+        
+        return self.__get_assembly_lines_len()
+    
+    def __sub(self, src: Register) -> int:
+        """SUB instruction: ACC <- RD - src. Tracks result in ACC."""
+        self.__add_assembly_line(f"sub {src.name}")
+        
+        acc = self.register_manager.acc
+        rd = self.register_manager.rd
+        
+        # Try to compute constant result if both are known
+        if rd.mode == RegisterMode.CONST and src.mode == RegisterMode.CONST:
+            result = (rd.value - src.value) & 0xFF
+            acc.set_mode(RegisterMode.CONST, result)
+        else:
+            acc.set_unknown_mode()
+        
+        return self.__get_assembly_lines_len()
+    
+    def __and(self, src: Register) -> int:
+        """AND instruction: ACC <- RD & src. Tracks result in ACC."""
+        self.__add_assembly_line(f"and {src.name}")
+        
+        acc = self.register_manager.acc
+        rd = self.register_manager.rd
+        
+        # Try to compute constant result if both are known
+        if rd.mode == RegisterMode.CONST and src.mode == RegisterMode.CONST:
+            result = (rd.value & src.value) & 0xFF
+            acc.set_mode(RegisterMode.CONST, result)
+        else:
+            acc.set_unknown_mode()
+        
+        return self.__get_assembly_lines_len()
+    
+    def __xor(self, src: Register) -> int:
+        """XOR instruction: ACC <- RD ^ src. Tracks result in ACC."""
+        self.__add_assembly_line(f"xor {src.name}")
+        
+        acc = self.register_manager.acc
+        rd = self.register_manager.rd
+        
+        # Try to compute constant result if both are known
+        if rd.mode == RegisterMode.CONST and src.mode == RegisterMode.CONST:
+            result = (rd.value ^ src.value) & 0xFF
+            acc.set_mode(RegisterMode.CONST, result)
+        else:
+            acc.set_unknown_mode()
+        
+        return self.__get_assembly_lines_len()
+    
+    def __not(self, src: Register) -> int:
+        """NOT instruction: ACC <- ~src. Tracks result in ACC."""
+        self.__add_assembly_line(f"not {src.name}")
+        
+        acc = self.register_manager.acc
+        
+        # Try to compute constant result if source is known
+        if src.mode == RegisterMode.CONST:
+            result = (~src.value) & 0xFF
+            acc.set_mode(RegisterMode.CONST, result)
+        else:
+            acc.set_unknown_mode()
+        
+        return self.__get_assembly_lines_len()
+    
+    def __cmp(self, src: Register) -> int:
+        """CMP instruction: Compare RD with src, sets flags. Note: src must be RA, M, or ACC."""
+        # CMP has restrictions: only RA, M, ACC allowed
+        if src.name not in ['ra', 'm', 'acc']:
+            raise ValueError(f"CMP only supports RA, M, ACC as source, got {src.name}")
+        
+        self.__add_assembly_line(f"cmp {src.name}")
+        # CMP doesn't modify registers, only sets flags
+        return self.__get_assembly_lines_len()
+    
+    def __subi(self, value: int) -> int:
+        """SUBI instruction: ACC <- ACC - immediate (0-7)."""
+        if not (0 <= value <= 7):
+            raise ValueError(f"SUBI immediate must be in range 0-7, got {value}")
+        
+        self.__add_assembly_line(f"subi #{value}")
+        
+        acc = self.register_manager.acc
+        
+        # Try to compute constant result if ACC is known
+        if acc.mode == RegisterMode.CONST:
+            result = (acc.value - value) & 0xFF
+            acc.set_mode(RegisterMode.CONST, result)
+        else:
+            acc.set_unknown_mode()
+        
+        return self.__get_assembly_lines_len()
+    
+    def __adc(self, src: Register) -> int:
+        """ADC instruction: ACC <- RD + src + carry. Result unknown (carry flag not tracked)."""
+        self.__add_assembly_line(f"adc {src.name}")
+        self.register_manager.acc.set_unknown_mode()
+        return self.__get_assembly_lines_len()
+    
+    def __sbc(self, src: Register) -> int:
+        """SBC instruction: ACC <- RD - src - carry. Result unknown (carry flag not tracked)."""
+        self.__add_assembly_line(f"sbc {src.name}")
+        self.register_manager.acc.set_unknown_mode()
+        return self.__get_assembly_lines_len()
+    
+    def __nop(self) -> int:
+        """NOP instruction: No operation."""
+        self.__add_assembly_line("nop")
+        return self.__get_assembly_lines_len()
+    
+    def __hlt(self) -> int:
+        """HLT instruction: Halt processor."""
+        self.__add_assembly_line("hlt")
+        return self.__get_assembly_lines_len()
+    
+    def __jmp(self) -> int:
+        """JMP instruction: Unconditional jump to address in PRL."""
+        self.__add_assembly_line("jmp")
         return self.__get_assembly_lines_len()
 ## END LOW LEVEL ASSEMBLY HELPERS
 
@@ -682,13 +1299,18 @@ class Compiler:
             self.__mov(target_reg, ra)
         return self.__get_assembly_lines_len()
 
-    def __store_with_current_mar_abs(self, address:int, src:Register) -> int:
+    def __store_with_current_mar_abs(self, address: int, src: Register) -> int:
+        """Store src to memory at address. Assumes MAR is already set to this address."""
         marl = self.register_manager.marl
 
         logger.debug(f"MAR currently at 0x{marl.tag.addr:04X}" if marl.tag else "MAR tag unknown")
         logger.debug(f"Storing to address 0x{address:04X} from {src.name}")
-        if marl.variable is not None and marl.variable.address != address:
-            raise ValueError(f"MAR points to variable '{marl.variable.name}' at address 0x{marl.variable.address:04X}, cannot store to different address 0x{address:04X} without resetting MAR.")
+        
+        # Verify MAR tag matches expected address
+        if marl.tag is not None and isinstance(marl.tag, AbsAddrTag):
+            if marl.tag.addr != address:
+                raise ValueError(f"MAR tag is 0x{marl.tag.addr:04X} but trying to store to 0x{address:04X}. Call __set_mar_abs first.")
+        
         self.__str(src)
         return self.__get_assembly_lines_len()
 
@@ -712,18 +1334,31 @@ class Compiler:
         self.__build_const_in_reg(value, ra)
         return self.__get_assembly_lines_len()
  
-    def __set_reg_variable(self, reg:Register, variable:Variable) ->int:
-        pre_assembly_lines = []
-        reg_with_var:Register = self.register_manager.check_for_variable(variable)
+    def __set_reg_variable(self, reg: Register, variable: Variable) -> int:
+        """Load variable into register. Uses runtime value if known and variable is not volatile."""
         
+        # Check if variable is volatile - must always read from memory
+        if variable.volatile:
+            self.__load_var_to_reg(variable, reg)
+            return self.__get_assembly_lines_len()
+        
+        # Check if variable has known runtime value
+        runtime_val = self.var_manager.get_variable_runtime_value(variable.name)
+        if runtime_val is not None:
+            # Use compile-time known value directly
+            logger.debug(f"Using runtime value {runtime_val} for variable '{variable.name}'")
+            self.__set_reg_const(reg, runtime_val)
+            return self.__get_assembly_lines_len()
+        
+        # Check if variable is already in a register
+        reg_with_var: Register = self.register_manager.check_for_variable(variable)
         if reg_with_var is not None:
             if reg_with_var.name == reg.name:
                 return self.__get_assembly_lines_len()
-            self.__add_assembly_line(f"mov {reg.name}, {reg_with_var.name}")
-            reg.set_variable(variable, RegisterMode.VALUE)
+            self.__mov(reg, reg_with_var)
             return self.__get_assembly_lines_len()
         
-        # Use MAR-aware load
+        # Fall back to memory load
         self.__load_var_to_reg(variable, reg)
         return self.__get_assembly_lines_len()
     
@@ -755,9 +1390,32 @@ class Compiler:
         
         is_contains_else = if_else_clause.is_contains_else()
         is_contains_elif = if_else_clause.is_contains_elif()
+        
+        # Try to evaluate condition at compile-time
+        first_condition = if_else_clause.get_if().condition
+        compile_time_condition = self.__try_evaluate_condition_compile_time(first_condition)
+        
+        logger.debug(f"IF-ELSE compile-time condition evaluation: {compile_time_condition}")
 
         # Case 1: simple IF without else/elif
         if (not is_contains_else) and (not is_contains_elif):
+            # If condition is compile-time known, we can optimize
+            if compile_time_condition is not None:
+                if compile_time_condition:
+                    # Condition is TRUE: only compile IF body
+                    logger.debug("Compile-time: IF branch will execute, skipping condition check")
+                    if_comp = self.create_context_compiler()
+                    if_comp.grouped_lines = if_else_clause.get_if().get_lines()
+                    if_comp.compile_lines()
+                    self.__add_assembly_line(if_comp.assembly_lines)
+                    # Runtime values from IF branch are preserved
+                    return self.__get_assembly_lines_len()
+                else:
+                    # Condition is FALSE: skip entire IF (no code generated)
+                    logger.debug("Compile-time: IF condition is false, skipping entire block")
+                    return self.__get_assembly_lines_len()
+            
+            # Runtime condition: generate normal IF with jump
             self.__compile_condition(if_else_clause.get_if().condition)
 
             self.register_manager.reset_change_detector()
@@ -771,11 +1429,52 @@ class Compiler:
             self.__add_assembly_line(CSM.get_inverted_jump_str(if_else_clause.get_if().condition.type))
             self.__add_assembly_line(if_comp.assembly_lines)
             self.register_manager.set_changed_registers_as_unknown()
+            
+            # CRITICAL: Invalidate runtime values for all variables modified in IF body
+            self.__invalidate_modified_variables(if_comp.grouped_lines)
+            
             self.label_manager.update_label_position(skip_label, self.__get_assembly_lines_len())
             self.__add_assembly_line(f"{skip_label}:")
             return self.__get_assembly_lines_len()
 
         # Case 2: IF with optional ELIFs and optional ELSE
+        # Check if we can evaluate at compile-time
+        if compile_time_condition is not None:
+            # Compile-time known: find which branch to execute
+            if compile_time_condition:
+                # IF branch executes
+                logger.debug("Compile-time: IF branch will execute (skipping ELIF/ELSE)")
+                if_comp = self.create_context_compiler()
+                if_comp.grouped_lines = if_else_clause.get_if().get_lines()
+                if_comp.compile_lines()
+                self.__add_assembly_line(if_comp.assembly_lines)
+                return self.__get_assembly_lines_len()
+            else:
+                # Check ELIF conditions
+                for elif_clause in if_else_clause.get_elif():
+                    elif_condition_result = self.__try_evaluate_condition_compile_time(elif_clause.condition)
+                    if elif_condition_result is not None and elif_condition_result:
+                        logger.debug(f"Compile-time: ELIF branch will execute")
+                        elif_comp = self.create_context_compiler()
+                        elif_comp.grouped_lines = elif_clause.get_lines()
+                        elif_comp.compile_lines()
+                        self.__add_assembly_line(elif_comp.assembly_lines)
+                        return self.__get_assembly_lines_len()
+                
+                # No ELIF matched, check ELSE
+                if is_contains_else:
+                    logger.debug("Compile-time: ELSE branch will execute")
+                    else_comp = self.create_context_compiler()
+                    else_comp.grouped_lines = if_else_clause.get_else().get_lines()
+                    else_comp.compile_lines()
+                    self.__add_assembly_line(else_comp.assembly_lines)
+                    return self.__get_assembly_lines_len()
+                else:
+                    # No branch executes
+                    logger.debug("Compile-time: No branch executes")
+                    return self.__get_assembly_lines_len()
+        
+        # Runtime branching: compile all branches and invalidate modified variables
         branches: list[tuple[Condition, Compiler]] = []
         first_if = if_else_clause.get_if()
         # Precompile IF body
@@ -804,6 +1503,13 @@ class Compiler:
             end_est += else_comp.__get_assembly_lines_len()
         end_label, _ = self.label_manager.create_else_label(end_est)
 
+        # Collect all variables modified in any branch
+        all_modified_vars = set()
+        for _, comp in branches:
+            all_modified_vars.update(self.__get_modified_variables(comp.grouped_lines))
+        if else_comp is not None:
+            all_modified_vars.update(self.__get_modified_variables(else_comp.grouped_lines))
+        
         # Emit the chain: for each branch, jump over if false, run body, then jump to END
         for cond, comp in branches:
             # Evaluate and set PRL to skip label
@@ -820,7 +1526,7 @@ class Compiler:
 
             # Jump to END after executing this branch
             self.__set_prl_as_label(end_label, self.label_manager.get_label(end_label))
-            self.__add_assembly_line("jmp")
+            self.__jmp()
 
             # Place skip label for next branch
             self.label_manager.update_label_position(skip_label, self.__get_assembly_lines_len())
@@ -834,6 +1540,13 @@ class Compiler:
         # Place END label
         self.label_manager.update_label_position(end_label, self.__get_assembly_lines_len())
         self.__add_assembly_line(f"{end_label}:")
+        
+        # CRITICAL: Invalidate all variables that were modified in any branch
+        for var_name in all_modified_vars:
+            if self.var_manager.check_variable_exists(var_name):
+                self.var_manager.invalidate_runtime_value(var_name)
+                logger.debug(f"Invalidated runtime value for '{var_name}' (modified in if-else branch)")
+        
         return self.__get_assembly_lines_len()
 
     def __handle_while(self, command: Command) -> int:
@@ -844,6 +1557,53 @@ class Compiler:
         if while_clause.type == WhileTypes.BYPASS:
             return self.__get_assembly_lines_len()
         elif while_clause.type == WhileTypes.CONDITIONAL:
+            # Try compile-time evaluation
+            cond_result = self.__try_evaluate_condition_compile_time(while_clause.condition)
+            
+            if cond_result is False:
+                # Condition is always false -> skip entire loop
+                logger.debug(f"While loop condition always FALSE at compile-time, skipping loop body")
+                
+                # Invalidate all variables modified in loop body (they won't execute, but for safety)
+                modified_vars = self.__get_modified_variables(while_clause.get_lines())
+                for var_name in modified_vars:
+                    if var_name in self.var_manager.variables:
+                        self.var_manager.invalidate_runtime_value(var_name)
+                        logger.debug(f"Variable '{var_name}' invalidated (skipped loop)")
+                
+                return self.__get_assembly_lines_len()
+            
+            elif cond_result is True:
+                # Condition is always true -> infinite loop (no condition check needed)
+                logger.debug(f"While loop condition always TRUE at compile-time, converting to infinite loop")
+                
+                # Preheader: detect MAR invariance across the loop body and hoist MAR setup if safe
+                body_cmds = while_clause.get_lines()
+                invariant_addr = self.__analyze_loop_mar_invariance(body_cmds)
+
+                start_label_name, _ = self.label_manager.create_while_start_label(self.__get_assembly_lines_len())
+                if invariant_addr is not None:
+                    # Seed MAR to invariant address before entering loop
+                    self.__set_mar_abs(invariant_addr)
+                self.__add_assembly_line(f"{start_label_name}:")
+
+                body_comp = self.create_context_compiler()
+                body_comp.grouped_lines = while_clause.get_lines()
+                
+                # Invalidate all runtime values when entering infinite loop
+                for var_name in self.var_manager.variables.keys():
+                    if self.var_manager.get_variable_runtime_value(var_name) is not None:
+                        self.var_manager.invalidate_runtime_value(var_name)
+                        logger.debug(f"Invalidated '{var_name}' runtime value (entering infinite loop)")
+                
+                body_comp.compile_lines()
+                
+                self.__add_assembly_line(body_comp.assembly_lines)
+                self.__set_prl_as_label(start_label_name, self.label_manager.get_label(start_label_name))
+                self.__jmp()
+                return self.__get_assembly_lines_len()
+            
+            # Runtime condition - normal while loop
             start_label_name, _ = self.label_manager.create_while_start_label(self.__get_assembly_lines_len())
             self.__add_assembly_line(f"{start_label_name}:")
             self.__compile_condition(while_clause.condition)
@@ -851,6 +1611,10 @@ class Compiler:
             body_comp = self.create_context_compiler()
             body_comp.grouped_lines = while_clause.get_lines()
             
+            # Track which variables are modified in the loop
+            modified_vars = self.__get_modified_variables(while_clause.get_lines())
+            
+            # Invalidate all variables before entering loop (they may be read/written in loop)
             for var_name in self.var_manager.variables.keys():
                 if self.var_manager.get_variable_runtime_value(var_name) is not None:
                     self.var_manager.invalidate_runtime_value(var_name)
@@ -867,10 +1631,17 @@ class Compiler:
             self.register_manager.set_changed_registers_as_unknown()
 
             self.__set_prl_as_label(start_label_name, self.label_manager.get_label(start_label_name))
-            self.__add_assembly_line("jmp")
+            self.__jmp()
 
             self.label_manager.update_label_position(end_label, self.__get_assembly_lines_len())
             self.__add_assembly_line(f"{end_label}:")
+            
+            # After loop completes, invalidate all modified variables (unknown iteration count)
+            for var_name in modified_vars:
+                if var_name in self.var_manager.variables:
+                    self.var_manager.invalidate_runtime_value(var_name)
+                    logger.debug(f"Variable '{var_name}' invalidated after while loop (modified in loop)")
+            
             return self.__get_assembly_lines_len()
         elif while_clause.type == WhileTypes.INFINITE:
             # Preheader: detect MAR invariance across the loop body and hoist MAR setup if safe
@@ -896,7 +1667,7 @@ class Compiler:
             
             self.__add_assembly_line(body_comp.assembly_lines)
             self.__set_prl_as_label(start_label_name, self.label_manager.get_label(start_label_name))
-            self.__add_assembly_line("jmp")
+            self.__jmp()
             #self.register_manager.set_changed_registers_as_unknown()
             pass
         else:
@@ -1068,7 +1839,7 @@ class Compiler:
             except ValueError:
                 return False
 
-        # 2) İlk terimi RD'ye yükle
+        # 2) Load first term into RD
         rd = self.register_manager.rd
         ra = self.register_manager.ra
         acc = self.register_manager.acc
@@ -1084,11 +1855,13 @@ class Compiler:
             if not self.var_manager.check_variable_exists(first):
                 raise ValueError(f"Unknown variable in expression: '{first}'")
             var0 = self.var_manager.get_variable(first)
+            
+            # Use __set_reg_variable which handles volatile and runtime values
             self.__set_reg_variable(rd, var0)
 
         idx += 1
 
-        # 3) (+/- & term)* döngüsü
+        # 3) Process (+/- & term)* chain
         while idx < len(tokens):
             op = tokens[idx]
             if not is_op(op):
@@ -1102,57 +1875,60 @@ class Compiler:
             if CSM.is_decimal(term):
                 self.__set_reg_const(ra, CSM.convert_to_decimal(term))
                 if op == '+':
-                    self.__add_reg(ra)     # ACC = RD + RA
+                    self.__add(ra)     # ACC = RD + RA
                 elif op == '&':
-                    self.__and_reg(ra)
+                    self.__and(ra)     # ACC = RD & RA
                 else:
-                    self.__add_assembly_line(f"sub {ra.name}")  # ACC = RD - RA
+                    self.__sub(ra)     # ACC = RD - RA
                 # Move ACC back to RD only if more operations follow
                 if idx + 1 < len(tokens):
-                    self.__add_assembly_line("mov rd, acc")
-                    self.register_manager.rd.set_unknown_mode()
+                    self.__mov(rd, acc)
             else:
                 if not self.var_manager.check_variable_exists(term):
                     raise ValueError(f"Unknown variable in expression: '{term}'")
                 v = self.var_manager.get_variable(term)
-                self.__set_mar(v)
-                if op == '+':
-                    self.__add_ml()        # ACC = RD + [MAR]
-                elif op == '&':
-                    self.__and_ml()        # ACC = RD & [MAR]
+                
+                # Check if we know the runtime value
+                runtime_val = self.var_manager.get_variable_runtime_value(v.name) if not v.volatile else None
+                
+                if runtime_val is not None:
+                    # Use known constant value
+                    self.__set_reg_const(ra, runtime_val)
+                    if op == '+':
+                        self.__add(ra)
+                    elif op == '&':
+                        self.__and(ra)
+                    else:
+                        self.__sub(ra)
+                elif v.volatile:
+                    # Volatile: must read from memory
+                    self.__set_mar_abs(v.address)
+                    if op == '+':
+                        self.__add_assembly_line("add m")  # ACC = RD + [MAR]
+                    elif op == '&':
+                        self.__add_assembly_line("and m")  # ACC = RD & [MAR]
+                    else:
+                        self.__add_assembly_line("sub m")  # ACC = RD - [MAR]
+                    acc.set_unknown_mode()
                 else:
-                    self.__add_assembly_line("sub m")  # ACC = RD - [MAR]
+                    # Non-volatile, runtime unknown: read from memory
+                    self.__set_mar_abs(v.address)
+                    if op == '+':
+                        self.__add_assembly_line("add m")  # ACC = RD + [MAR]
+                    elif op == '&':
+                        self.__add_assembly_line("and m")  # ACC = RD & [MAR]
+                    else:
+                        self.__add_assembly_line("sub m")  # ACC = RD - [MAR]
+                    acc.set_unknown_mode()
+                
                 if idx + 1 < len(tokens):
-                    self.__add_assembly_line("mov rd, acc")
-                    self.register_manager.rd.set_unknown_mode()
+                    self.__mov(rd, acc)
 
             idx += 1
 
-        # 5) ACC'nin ifade tuttuğunu işaretle
+        # 5) Mark ACC as holding the expression result
         self.register_manager.acc.set_temp_var_mode(expr)
 
-        return self.__get_assembly_lines_len()
-
-    def __add_reg(self, register:Register) -> int:
-        pre_assembly_lines = []
-        rd = self.register_manager.rd
-        self.__add_assembly_line(f"add {register.name}")
-        self.register_manager.acc.set_temp_var_mode(f"{rd.name} + {register.name}")
-        return self.__get_assembly_lines_len()
-    
-    def __and_reg(self, register:Register) -> int:
-        pre_assembly_lines = []
-        rd = self.register_manager.rd
-        self.__add_assembly_line(f"and {register.name}")
-        self.register_manager.acc.set_temp_var_mode(f"{rd.name} & {register.name}")
-        return self.__get_assembly_lines_len()
-    
-    def __add_ml(self) -> int:     
-        self.assembly_lines.append("add m")
-        return self.__get_assembly_lines_len()
-
-    def __and_ml(self) -> int:
-        self.assembly_lines.append("and m")
         return self.__get_assembly_lines_len()
 
     def __compile_condition(self, condition: Condition) -> int:
@@ -1175,10 +1951,98 @@ class Compiler:
             self.__set_reg_variable(rd, right_var)
 
         # Compare RD (A) with M (B) where M is LEFT
-        self.__set_marl(left_var)
+        # Set MAR to point to left variable, then compare RD with memory at MAR
+        self.__set_mar(left_var)
+        # CMP instruction syntax: cmp m (where m is the value at current MAR address)
         self.__add_assembly_line("cmp m")
 
         return self.__get_assembly_lines_len()
+    
+    def __try_evaluate_condition_compile_time(self, condition: Condition) -> bool | None:
+        """Try to evaluate condition at compile-time. Returns True/False if known, None if runtime-dependent."""
+        try:
+            left, right = condition.parts
+            
+            # Get left value (variable)
+            if not self.var_manager.check_variable_exists(left):
+                return None
+            left_var = self.var_manager.get_variable(left)
+            if left_var.volatile:
+                return None  # Volatile variable, can't evaluate at compile-time
+            left_value = self.var_manager.get_variable_runtime_value(left)
+            if left_value is None:
+                return None  # Unknown value
+            
+            # Get right value (constant or variable)
+            if CSM.is_decimal(right):
+                right_value = CSM.convert_to_decimal(right)
+            elif self.var_manager.check_variable_exists(right):
+                right_var = self.var_manager.get_variable(right)
+                if right_var.volatile:
+                    return None
+                right_value = self.var_manager.get_variable_runtime_value(right)
+                if right_value is None:
+                    return None
+            else:
+                return None
+            
+            # Evaluate condition
+            if condition.type == ConditionTypes.GREATER_THAN:
+                return left_value > right_value
+            elif condition.type == ConditionTypes.LESS_THAN:
+                return left_value < right_value
+            elif condition.type == ConditionTypes.EQUAL:
+                return left_value == right_value
+            elif condition.type == ConditionTypes.NOT_EQUAL:
+                return left_value != right_value
+            elif condition.type == ConditionTypes.GREATER_EQUAL:
+                return left_value >= right_value
+            elif condition.type == ConditionTypes.LESS_EQUAL:
+                return left_value <= right_value
+            else:
+                return None
+        except Exception as e:
+            logger.debug(f"Failed to evaluate condition at compile-time: {e}")
+            return None
+    
+    def __get_modified_variables(self, grouped_lines: list[Command]) -> set[str]:
+        """Extract list of variable names that were modified in given command list."""
+        modified = set()
+        
+        # Recursively check all commands including nested if-else and while blocks
+        for cmd in grouped_lines:
+            # Direct assignment
+            if isinstance(cmd, AssignCommand):
+                modified.add(cmd.var_name)
+                logger.debug(f"Detected modification of variable '{cmd.var_name}'")
+            
+            # Nested if-else blocks
+            elif hasattr(cmd, 'command_type') and cmd.command_type == CommandTypes.IF:
+                if isinstance(cmd.line, IfElseClause):
+                    clause = cmd.line
+                    # Check if branch
+                    if clause.get_if() is not None:
+                        modified.update(self.__get_modified_variables(clause.get_if().get_lines()))
+                    # Check elif branches
+                    for elif_clause in clause.get_elif():
+                        modified.update(self.__get_modified_variables(elif_clause.get_lines()))
+                    # Check else branch
+                    if clause.get_else() is not None:
+                        modified.update(self.__get_modified_variables(clause.get_else().get_lines()))
+            
+            # Nested while loops
+            elif hasattr(cmd, 'command_type') and cmd.command_type == CommandTypes.WHILE:
+                if isinstance(cmd.line, WhileClause):
+                    modified.update(self.__get_modified_variables(cmd.line.get_lines()))
+        
+        return modified
+    
+    def __invalidate_modified_variables(self, grouped_lines: list[Command]) -> None:
+        """Invalidate runtime values for variables modified in given command list."""
+        for var_name in self.__get_modified_variables(grouped_lines):
+            if self.var_manager.check_variable_exists(var_name):
+                self.var_manager.invalidate_runtime_value(var_name)
+                logger.debug(f"Invalidated runtime value for '{var_name}' (modified in conditional block)")
 
     def __set_reg_const(self, reg: Register, value: int) -> int:
         """Build constant into register, reusing existing const registers if possible."""
@@ -1388,6 +2252,57 @@ class Compiler:
         """Get all assembly lines."""
         return self.assembly_lines
     
+    def __peephole_optimize(self, lines: list[str]) -> list[str]:
+        """Apply peephole optimizations to assembly code.
+        
+        Optimizations:
+        1. Remove dead LDI: ldi #X followed by ldi #Y → ldi #Y
+        2. Remove redundant MOV: mov X, X → (removed)
+        3. Remove dead stores before immediate overwrite
+        """
+        if not lines:
+            return lines
+        
+        optimized = []
+        i = 0
+        
+        while i < len(lines):
+            current = lines[i].strip()
+            
+            # Skip labels and empty lines
+            if not current or current.endswith(':'):
+                optimized.append(lines[i])
+                i += 1
+                continue
+            
+            # Look ahead for optimization opportunities
+            if i + 1 < len(lines):
+                next_line = lines[i + 1].strip()
+                
+                # Pattern 1: ldi #X followed by ldi #Y (dead LDI)
+                if current.startswith('ldi #') and next_line.startswith('ldi #'):
+                    logger.debug(f"Peephole: Removing dead LDI: '{current}' (overwritten by '{next_line}')")
+                    i += 1  # Skip current, keep next
+                    continue
+                
+                # Pattern 2: Load to register followed by immediate overwrite
+                # Example: mov rd, m followed by ldi #X; mov rd, ra
+                if current.startswith('mov rd, m') and i + 2 < len(lines):
+                    line2 = lines[i + 1].strip()
+                    line3 = lines[i + 2].strip() if i + 2 < len(lines) else ""
+                    
+                    if line2.startswith('ldi #') and line3 == 'mov rd, ra':
+                        # RD loaded from memory but immediately overwritten
+                        logger.debug(f"Peephole: Removing dead load sequence: '{current}', '{line2}', '{line3}'")
+                        # Skip the load, keep the LDI sequence
+                        i += 1
+                        continue
+            
+            optimized.append(lines[i])
+            i += 1
+        
+        return optimized
+    
     @staticmethod
     def __determine_command_type(line:str) -> str:
         if re.match(r'^\w+\s*=\s*.+$', line):
@@ -1399,21 +2314,24 @@ def create_default_compiler() -> Compiler:
     return Compiler(comment_char='//', variable_start_addr=0x0000, 
                     variable_end_addr=0x0200, memory_size=65536)
 
-if __name__ == "__main__":
+
+def main():
     # Setup logging for test execution
     logging.basicConfig(level=logging.DEBUG, format='%(levelname)s: %(message)s')
     
     compiler = create_default_compiler()
     
-    compiler.load_lines('files/count_test.arn')
+    compiler.load_lines('files/volatile_test.arn')
     compiler.break_commands()
     compiler.clean_lines()
     compiler.group_commands()
     logger.info(f"Grouped {len(compiler.grouped_lines)} commands")
     compiler.compile_lines()
-    
+    new_exp = compiler._change_expression_with_var_values("a + 5 -b + 3")
+    compiler._simplify_expression(new_exp)
+
     logger.info(f"Generated {len(compiler.assembly_lines)} assembly lines")
     for line in compiler.assembly_lines:
         print(line)
-
-
+if __name__ == "__main__":
+    main()

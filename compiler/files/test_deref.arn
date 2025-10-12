@@ -1,0 +1,4 @@
+// Simple dereference test
+volatile byte sensor;
+sensor = *0x2000;
+*0x1000 = sensor;

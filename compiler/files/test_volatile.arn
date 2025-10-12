@@ -1,0 +1,22 @@
+// Test 2: Volatile variable usage
+// Expected: Code generation for volatile reads/writes
+
+volatile byte sensor_port;
+volatile byte output_port;
+
+// Should generate code - volatile read
+byte reading;
+reading = sensor_port;
+
+// Should generate code - volatile write
+output_port = 42;
+
+// Mixed: one known, one volatile
+byte known;
+known = 10;
+
+byte mixed;
+mixed = known + sensor_port;  // Should generate: load 10, load sensor, add
+
+// Volatile write
+output_port = mixed;

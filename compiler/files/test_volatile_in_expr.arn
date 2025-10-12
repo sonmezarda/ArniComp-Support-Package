@@ -1,0 +1,5 @@
+// Test: Expression with volatile variable
+byte a = 10;
+volatile byte sensor;
+volatile byte result;
+result = (a + sensor) * 2;

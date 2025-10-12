@@ -1,0 +1,24 @@
+// Array runtime value tracking test
+// Test if array elements can be tracked at compile time
+
+byte[5] data;
+
+// Test 1: Write known values to array
+data[0] = 10;
+data[1] = 20;
+data[2] = 30;
+
+// Test 2: Read from array with known index
+byte a;
+a = data[0];  // Should read value 10
+
+byte b;
+b = data[1];  // Should read value 20
+
+byte c;
+c = data[2];  // Should read value 30
+
+// Test 3: Use read values in expressions
+byte result;
+result = a + b;  // a=10, b=20 → result=30 (if a,b tracked)
+

@@ -53,8 +53,8 @@ class ByteVariable(Variable):
         return 1
 
 class ByteArrayVariable(Variable):
-    def __init__(self, name:str, address:int, size:int, value:list[int] = None):
-        super().__init__(size=size, value_type=list, name=name, address=address, value=value)
+    def __init__(self, name: str, address: int, size: int, value: list[int] = None, volatile: bool = False):
+        super().__init__(size=size, value_type=list, name=name, address=address, value=value, volatile=volatile)
         if value is None:
             self.value = [0] * size
         if not (0 < size <= 256):
@@ -92,15 +92,18 @@ class IntTypes(IntEnum):
     HEX = 2
 
 class VarManager():
-    def __init__(self, mem_start_addr:int, mem_end_addr:int, memory_size:int = 65536):
+    def __init__(self, mem_start_addr: int, mem_end_addr: int, memory_size: int = 65536):
         self.memory_size = memory_size
         self.mem_start_addr = mem_start_addr
         self.mem_end_addr = mem_end_addr
-        self.variables = {}
-        self.addresses = {}
+        self.variables: dict[str, Variable] = {}
+        self.addresses: dict[int, Variable] = {}
         self.mem_var_size = self.mem_start_addr - self.mem_end_addr
-    
-    def create_variable(self, var_name:str, var_type:VarTypes, var_value)-> Variable:
+        # Memory-based runtime value tracking (address -> value)
+        # This allows array elements to have runtime values too
+        self.runtime_memory: dict[int, int] = {}
+
+    def create_variable(self, var_name:str, var_type:VarTypes, var_value:int|None = None, volatile:bool = False) -> Variable:
         if var_type not in VarTypes:
             raise ValueError(f"Unsupported variable type: {var_type}")
         
@@ -114,24 +117,25 @@ class VarManager():
         if proper_address is None:
             raise MemoryError(f"Not enough memory to create variable '{var_name}' of type '{var_type.name}'")
 
-        new_var = var_type.value(name=var_name, address=proper_address, value=var_value)
+        new_var = var_type.value(name=var_name, address=proper_address, value=var_value, volatile=volatile)
         self.variables[var_name] = new_var
         self.addresses[proper_address] = new_var
 
         return new_var
 
-    def create_array_variable(self, var_name:str, var_type:VarTypes, array_len:int, var_value:list[int]) -> Variable:
+    def create_array_variable(self, var_name: str, var_type: VarTypes, array_len: int, var_value: list[int], volatile: bool = False) -> Variable:
+        """Create array variable with optional volatile flag."""
         if not self.__validate_variable_name(var_name):
             raise ValueError(f"Invalid variable name: {var_name}")
 
         if self.check_variable_exists(var_name):
             raise ValueError(f"Variable '{var_name}' already exists.")
 
-        proper_address = self.__find_free_address(array_len*var_type.value.get_size())
+        proper_address = self.__find_free_address(array_len * var_type.value.get_size())
         if proper_address is None:
             raise MemoryError(f"Not enough memory to create variable '{var_name}' of type '{var_type.name}'")
 
-        new_var = var_type.value(name=var_name, address=proper_address, size=array_len, value=var_value)
+        new_var = var_type.value(name=var_name, address=proper_address, size=array_len, value=var_value, volatile=volatile)
         self.variables[var_name] = new_var
         for offset in range(array_len):
             self.addresses[proper_address + offset] = new_var
@@ -190,23 +194,78 @@ class VarManager():
         return var_name in self.variables
     
     def set_variable_runtime_value(self, var_name: str, value: int | None) -> None:
-        """Set the runtime tracked value of a variable (for optimization)"""
+        """
+        Set the runtime tracked value of a variable (for optimization).
+        Uses memory-based tracking, so works for arrays too.
+        """
         if var_name not in self.variables:
             raise ValueError(f"Variable '{var_name}' does not exist.")
-        self.variables[var_name].runtime_value = value
-        logger.debug(f"Variable '{var_name}' runtime value set to {value}")
+        
+        var = self.variables[var_name]
+        if var.volatile:
+            logger.debug(f"Variable '{var_name}' is volatile, not tracking runtime value")
+            return
+        
+        # Set runtime value for the variable's memory location
+        if value is not None:
+            self.runtime_memory[var.address] = value & 0xFF
+            logger.debug(f"Variable '{var_name}' at 0x{var.address:04X} runtime value set to {value}")
+        else:
+            self.runtime_memory.pop(var.address, None)
+            logger.debug(f"Variable '{var_name}' at 0x{var.address:04X} runtime value cleared")
     
     def get_variable_runtime_value(self, var_name: str) -> int | None:
         """Get the runtime tracked value of a variable"""
         if var_name not in self.variables:
             return None
-        return self.variables[var_name].runtime_value
+        
+        var = self.variables[var_name]
+        if var.volatile:
+            return None
+        
+        return self.runtime_memory.get(var.address, None)
+    
+    def set_memory_runtime_value(self, address: int, value: int | None) -> None:
+        """
+        Set runtime value for a specific memory address.
+        Useful for array elements: arr[5] = 10
+        """
+        # Check if this address belongs to a volatile variable
+        var = self.addresses.get(address, None)
+        if var and var.volatile:
+            logger.debug(f"Address 0x{address:04X} belongs to volatile variable '{var.name}', not tracking")
+            return
+        
+        if value is not None:
+            self.runtime_memory[address] = value & 0xFF
+            logger.debug(f"Memory 0x{address:04X} runtime value set to {value}")
+        else:
+            self.runtime_memory.pop(address, None)
+            logger.debug(f"Memory 0x{address:04X} runtime value cleared")
+    
+    def get_memory_runtime_value(self, address: int) -> int | None:
+        """
+        Get runtime value for a specific memory address.
+        Returns None if value is unknown or belongs to volatile variable.
+        """
+        # Check if this address belongs to a volatile variable
+        var = self.addresses.get(address, None)
+        if var and var.volatile:
+            return None
+        
+        return self.runtime_memory.get(address, None)
     
     def invalidate_runtime_value(self, var_name: str) -> None:
         """Mark variable's runtime value as unknown"""
         if var_name in self.variables:
-            self.variables[var_name].runtime_value = None
+            var = self.variables[var_name]
+            self.runtime_memory.pop(var.address, None)
             logger.debug(f"Variable '{var_name}' runtime value invalidated")
+    
+    def invalidate_memory_runtime_value(self, address: int) -> None:
+        """Mark memory address runtime value as unknown"""
+        self.runtime_memory.pop(address, None)
+        logger.debug(f"Memory 0x{address:04X} runtime value invalidated")
     
     def __validate_variable_name(self, var_name:str) -> bool:
         return var_name.isidentifier()

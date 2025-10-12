@@ -1,0 +1,5 @@
+// Test: Multiplication of two volatile variables
+volatile byte a = 10;
+volatile byte b = 2;
+volatile byte c;
+c = a * b;

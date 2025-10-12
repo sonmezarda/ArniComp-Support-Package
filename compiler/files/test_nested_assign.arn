@@ -1,0 +1,11 @@
+
+volatile byte c = 0;
+byte flag = 0;
+volatile byte b1;
+
+if b1 == 1
+    if flag == 0
+        c = c + 1;
+        flag = 1;
+    endif
+endif

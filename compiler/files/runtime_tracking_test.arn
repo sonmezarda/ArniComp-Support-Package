@@ -1,0 +1,35 @@
+// Runtime value tracking test
+// Tests compile-time constant propagation and optimization
+
+// Test 1: Simple constant tracking
+byte a = 10;
+byte b = 20;
+byte c;
+
+// c = 30 should be computed at compile time
+c = a + b;  // Compiler should know: a=10, b=20 → c=30
+
+// Test 2: Sequential updates with known values
+byte counter = 0;
+counter = counter + 5;  // counter = 5 (tracked)
+counter = counter + 3;  // counter = 8 (tracked)
+counter = counter + 2;  // counter = 10 (tracked)
+
+// Test 3: Known value invalidation after memory store
+byte x = 15;
+byte y;
+y = x;  // y = 15 (x is known)
+
+// After this point, if x is used again, compiler should still know x=15
+byte z;
+z = x + 5;  // Should be optimized: z = 15 + 5 = 20
+
+// Test 4: ADDI optimization with runtime tracking
+byte fast = 0;
+fast = fast + 1;  // ADDI optimization: fast tracked as 1
+fast = fast + 2;  // ADDI optimization: fast tracked as 3
+fast = fast + 4;  // ADDI optimization: fast tracked as 7
+
+// Test 5: Runtime value with expressions
+byte computed;
+computed = a + fast;  // a=10 (initial), fast=7 → result depends on tracking

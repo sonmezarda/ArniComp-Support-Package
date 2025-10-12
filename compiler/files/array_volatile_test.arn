@@ -1,0 +1,24 @@
+// Array element volatile test
+// Tests volatile array handling and element tracking
+
+// Test 1: Regular array
+byte[5] buffer;
+
+// Test 2: Volatile array (memory-mapped I/O)
+volatile byte[4] io_ports;
+
+// Test 3: Write to volatile array
+io_ports[0] = 100;
+io_ports[1] = 200;
+
+// Test 4: Read from volatile array (should always read from memory)
+byte status;
+status = io_ports[0];  // Must read from memory every time
+
+// Test 5: Read from regular array
+buffer[0] = 50;
+byte temp;
+temp = buffer[0];  // Can be optimized if tracking is implemented
+
+// Test 6: Write constant to regular array
+buffer[2] = 77;

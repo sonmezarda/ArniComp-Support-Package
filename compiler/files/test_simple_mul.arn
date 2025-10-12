@@ -1,0 +1,4 @@
+// Simple multiplication test
+byte a = 10;
+volatile byte result;
+result = a * 3;
