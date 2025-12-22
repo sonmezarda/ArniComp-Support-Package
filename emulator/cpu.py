@@ -255,12 +255,11 @@ class CPU:
 
         # ADD (00001xxx): 0 0 0 0 1 S2 S1 S0
         if bits.startswith('00001'):
+            # XOR RA: 00001100 (special case inside ADD family)
+            if instruction == 0b00001100:
+                return 'XOR', ['RA']
             src = bits[5:8]
             return 'ADD', [self._decode_src_reg(src)]
-
-        # XOR RA: 00001100
-        if instruction == 0b00001100:
-            return 'XOR', ['RA']
 
         # SUB (00010xxx): 0 0 0 1 0 S2 S1 S0
         if bits.startswith('00010'):
@@ -284,14 +283,6 @@ class CPU:
             # Check for special XOR M: 00100100
             if instruction == 0b00100100:
                 return 'XOR', ['M']
-            # Check for JMP family: 00100xxx where xxx = condition
-            if bits[2:5] == '100':  # Confirm it's 001 00 xxx
-                cond = bits[5:8]
-                cond_map = {
-                    '000': 'JMP', '001': 'JEQ', '010': 'JGT', '011': 'JLT',
-                    '100': 'JGE', '101': 'JLE', '110': 'JNE', '111': 'JC'
-                }
-                return cond_map.get(cond, 'UNKNOWN'), []
             return 'SBC', [self._decode_src_reg(src)]
 
         # AND (00101xxx): 0 0 1 0 1 S2 S1 S0
@@ -311,6 +302,15 @@ class CPU:
         if bits.startswith('00111'):
             imm = instruction & 0x07
             return 'SUBI', [imm]
+
+        # Jump instructions (01100xxx): 0 1 1 0 0 JS2 JS1 JS0
+        if bits.startswith('01100'):
+            cond = bits[5:8]
+            cond_map = {
+                '000': 'JMP', '001': 'JEQ', '010': 'JGT', '011': 'JLT',
+                '100': 'JGE', '101': 'JLE', '110': 'JNE', '111': 'JC'
+            }
+            return cond_map.get(cond, 'UNKNOWN'), []
 
         # MOV (01xxxxxx): 0 1 [source 3-bit] [dest 3-bit]
         if bits.startswith('01'):
