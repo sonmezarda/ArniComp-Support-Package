@@ -5,6 +5,7 @@ Rather than focusing on a single component, this repository brings together all 
 
 This repository is **no longer in active development**.  
 All major components except the compiler are complete. The compiler effort has been moved to a **separate repository** and restarted from scratch with a cleaner design.
+
 ---
 ## Breadboard Computer (ISA Version 2)
 <img width="1536" height="2048" alt="image" src="https://github.com/user-attachments/assets/0b65c46d-36dc-4746-bf03-d5ff110acf0a" />
