@@ -7,6 +7,13 @@ This repository is **no longer in active development**.
 All major components except the compiler are complete. The compiler effort has been moved to a **separate repository** and restarted from scratch with a cleaner design.
 
 ---
+## Breadboard Computer (ISA Version 2)
+<img width="1536" height="2048" alt="image" src="https://github.com/user-attachments/assets/0b65c46d-36dc-4746-bf03-d5ff110acf0a" />
+<img width="1536" height="2048" alt="image" src="https://github.com/user-attachments/assets/8fc7ed4a-29ec-4153-b5ca-6e0e7b6d5184" />
+
+
+
+---
 ## Digital Circuit Simulation Design
 <img width="643" height="904" alt="Layout of internal architecture" src="https://github.com/user-attachments/assets/afdabe26-a776-4f26-8def-c8c8c2e29895" />
 
