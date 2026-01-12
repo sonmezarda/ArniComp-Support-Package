@@ -6,6 +6,7 @@ Handles assembly language parsing, validation, and binary code generation
 from __future__ import annotations
 import json
 import os
+import re
 from typing import Dict, List, Tuple, Optional
 
 # Load configuration
@@ -355,12 +356,10 @@ class AssemblyHelper:
         for line in lines:
             # Replace all label references (case-insensitive)
             for label_name, label_addr in labels.items():
-                # Try both uppercase and lowercase variants
-                for ref_name in [label_name, label_name.lower()]:
-                    label_ref = self.label_prefix + ref_name
-                    if label_ref in line:
-                        # Replace @label with #address (add # prefix)
-                        line = line.replace(label_ref, f"{self.number_prefix}{label_addr}")
+                # Use regex for true case-insensitive replacement
+                # Escape special regex characters in label_name (like the dot in .Lelse0)
+                pattern = re.escape(self.label_prefix + label_name)
+                line = re.sub(pattern, f"{self.number_prefix}{label_addr}", line, flags=re.IGNORECASE)
             
             resolved.append(line)
         
@@ -455,7 +454,7 @@ class AssemblyHelper:
         
         # Step 3: Extract labels
         labels, lines = self.extract_labels(lines)
-        
+        print("[X] Labels found:", labels)
         # Step 4: Resolve constants
         lines = self.resolve_constants(lines, constants)
         
