@@ -26,17 +26,17 @@ class EepromLoader:
         ser = self.serial
         with open(bin_path, "rb") as f:
             data = f.read()
-            print("Yükleme başlatılıyor...")
+            print("Uploading...")
             ser.write(b'L')
             ser.flush()
-            time.sleep(0.1)  # pico hazır olsun
+            time.sleep(0.1)  # pico ready
             ser.write(data)
             ser.flush()
-            print("Yükleme tamamlandı. Cihaza yazılıyor...")
+            print("Upload complete. Writing to device...")
 
         """
-        # Serial'den logları oku
-        timeout = time.time() + 2  # max 2 saniye log bekle
+        # Read logs from serial
+        timeout = time.time() + 2  # max 2 seconds to wait for logs
         while True:
             if ser.in_waiting:
                 line = ser.readline().decode(errors="ignore").strip()

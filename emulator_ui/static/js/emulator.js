@@ -126,42 +126,36 @@ class ArniCompEmulator {
     }
 
     loadSampleCode() {
-        const sampleCode = `; ArniComp Sample Program
-; This program demonstrates basic functionality
+        const sampleCode = `
+; Simple Counter Program
+; Counts from 0 to 10 and halts
 
-const x = 5
-const y = 10
+equ MAX 10
 
-ldi @main
-mov prl, ra
+start:
+    LDI #0              ; Initialize counter to 0
+    MOV RD, RA          ; Store in RD
 
-ldi #0
-mov rd, ra
+; Set PRL (Program Register Low) as loop address
+LDI @loop
+MOV PRL, RA
 
-main:
-    ldi $x      ; Load constant x into RA
-    add ra      ; Add RA to ACC (ACC = RD + RA)
+loop:
+    ; Increment counter
+    ADDI #1             ; Add 1 to ACC
+    MOV RD, ACC         ; Update RD with new value
     
-    ldi $y      ; Load constant y into RA  
-    add ra      ; Add RA to ACC (ACC = ACC + RA)
+    ; Check if we reached MAX
+    LDI $MAX
+    CMP RA              ; Compare RA (MAX) with RD
+    JLT                 ; Jump if RD < MAX
     
-    ; Store result in memory
-    ldi #0
-    mov marl, ra
-    strl acc
+    ; If we reach here, counter >= MAX, so halt
+    HLT
     
-    ; Output result
-    out acc
-    
-    ; Simple loop
-    mov rd, acc
-    ldi #15
-    add ra      ; Compare RD with 15
-    
-    jne         ; Jump back if not equal
+    ; Jump back to loop (this code is reached via JLT)
+    JMP
 
-; End of program
-ldi #0b11111111
 `;
         this.editor.setValue(sampleCode, -1);
     }

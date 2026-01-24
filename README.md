@@ -1,57 +1,160 @@
-# Assembler-Arnicomp
+# Arnicomp Support Package
 
-This repository is currently under development.
+**Arnicomp Support Package** is a collection of software tools built to support **Arnicomp**, a custom-designed 8-bit breadboard computer.  
+Rather than focusing on a single component, this repository brings together all auxiliary tooling required to assemble, simulate, debug, and work with the Arnicomp architecture.
 
-Assembler-Arnicomp is an assembler project designed for a breadboard computer that I have built. The assembler translates assembly code into machine code that runs on the custom hardware. In addition to the assembler, this project will eventually include an emulator and a compiler, both of which are still in progress.
+This repository is **no longer in active development**.  
+All major components except the compiler are complete. The compiler effort has been moved to a **separate repository** and restarted from scratch with a cleaner design.
 
-## Digital.exe Simulation Model
-<img width="804" height="830" alt="image" src="https://github.com/user-attachments/assets/b10fd851-3feb-4a6f-80e6-096f6f67534e" />
+---
+## Breadboard Computer (ISA Version 2)
+<img width="1536" height="2048" alt="image" src="https://github.com/user-attachments/assets/0b65c46d-36dc-4746-bf03-d5ff110acf0a" />
+<img width="1536" height="2048" alt="image" src="https://github.com/user-attachments/assets/8fc7ed4a-29ec-4153-b5ca-6e0e7b6d5184" />
 
-## Project Overview
 
-- **Assembler:** ✅ Fully functional. Converts assembly instructions for the Arnicomp breadboard computer into executable machine code.
-- **Emulator:** ✅ Complete and tested. Simulates the ArniComp 8-bit CPU with Harvard Architecture, allowing you to test programs without physical hardware.
-- **Compiler:** 🚧 Under development. Will allow higher-level code to be compiled down to Arnicomp assembly.
 
-## Status
+---
+## Digital Circuit Simulation Design
+<img width="643" height="904" alt="Layout of internal architecture" src="https://github.com/user-attachments/assets/afdabe26-a776-4f26-8def-c8c8c2e29895" />
 
-- ✅ **Assembler**: Complete with label resolution, constant support, and full instruction set
-- ✅ **Emulator**: Complete with interactive debugger, step-by-step execution, and hardware-accurate simulation
-- 🚧 **Compiler**: Expression parsing implemented, full compiler in progress
+<img width="1069" height="913" alt="Basic test circuit with seven segment display and buttons" src="https://github.com/user-attachments/assets/7350a02a-0452-49e5-8a74-cb2c2d1478dd" />
 
-## Getting Started
+---
+## Repository Contents
 
-Documentation and usage examples will be added as the project progresses.
+### 📁 `/digital-sim`
+- **Digital.exe simulation models**
+- Logic-level simulation files used to validate the Arnicomp hardware design
+- Allows inspection of signal flow, control logic, and timing behavior
+
+---
+
+### 📁 `/assembler`
+- **Fully functional Arnicomp assembler**
+- Converts Arnicomp assembly language into executable machine code
+- Features:
+  - Label resolution
+  - Constant definitions
+  - Complete support for the latest ISA
+- This directory contains the **current and stable** assembler implementation
+
+#### Instruction Set:
+- Current (Newest ISA :) )
+<img width="1287" height="624" alt="Newest ISA Complete" src="https://github.com/user-attachments/assets/38aed79a-826f-40c1-82c9-23932f265917" />
+<img width="531" height="198" alt="Newest ISA Select Bits" src="https://github.com/user-attachments/assets/a5eacc60-ad09-4d24-bd98-8c8f25a2df01" />
+
+- Old ISA
+<img width="903" height="295" alt="Old ISA " src="https://github.com/user-attachments/assets/8401d026-5592-43dc-8bdc-46becc4a0fec" />
+
+---
+
+### 📁 `/emulator`
+- **Arnicomp CPU emulator**
+- Emulates the processor cycle-by-cycle with hardware-accurate behavior
+- Executes assembled machine code exactly as the physical CPU would
+- Primarily used for:
+  - Debugging programs
+  - Verifying instruction semantics
+  - Testing assembler output without physical hardware
+
+---
+
+### 📁 `/emulator_ui`
+- **Graphical user interface for the emulator**
+- Designed to work directly with `/emulator`
+- Enables:
+  - Loading and editing assembly files
+  - Step-by-step execution
+  - Breakpoints
+  - Register and flag inspection
+- The UI was largely **AI-assisted**, as frontend development is not the primary focus of the project
+
+---
+
+### 📁 `/compiler`
+- **Incomplete compiler prototype**
+- Not finished in this repository
+- Compiler development has continued in a **separate repository**, restarted from scratch
+- This directory remains for historical reference only
+
+---
+
+### 📁 `/vscode-arnicomp`
+- **Visual Studio Code extension**
+- Provides syntax highlighting for the Arnicomp assembly language
+- Makes writing and reading assembly code significantly easier
+
+---
+
+## Development Notes
+
+- The project went through **two major instruction set and architecture revisions** during development
+- As a result, some directory structure and legacy files may appear inconsistent
+- Older designs were intentionally preserved to:
+  - Track architectural evolution
+  - Avoid breaking working tooling
+  - Serve as reference during ISA redesigns
+
+---
+
+## AI Usage Disclaimer
+
+- Except for the **emulator UI**, AI-generated code usage is minimal
+- Core components such as:
+  - Assembler
+  - Emulator
+  - ISA design
+  
+  were written and verified manually
+- AI assistance was mainly used for:
+  - UI layout generation
+  - Boilerplate frontend code
+  - Minor refactors and documentation drafts
+
+---
 
 ## ISA Evolution (2025 Redesign)
 
-During ongoing development the original opcode/argcode table driven instruction set (separate 4-bit opcode + 3-bit argcode, plus legacy LDR/STR and OUT/IN forms) was replaced with a new leading‑zero class based encoding (Rev 2). This redesign:
+During development, the original opcode/argcode-based instruction format was replaced with a new **leading-zero classified encoding (Rev 2)**.
 
-- Uses the count of leading zero bits to classify instruction families.
-- Introduces combined MOV field encoding (01 ddd sss) instead of source-in-opcode/dest-in-argcode mapping.
-- Collapses separate load/store instructions into MOV semantics for memory (ML/MH pseudo registers) and device bus I/O.
-- Adds arithmetic family (ADD/SUB/ADC/SBC) and short immediates (ADDI imm3, SUBI imm2).
-- Adds logical AND, dual NOP encodings, and a JC (jump on carry) condition.
-- Introduces a carry flag (C) with standard add overflow / no‑borrow semantics, while keeping comparator flags EQ/LT/GT.
+Key changes include:
+- Instruction families determined by leading zero count
+- Unified `MOV` encoding (`01 ddd sss`)
+- Memory access via `ML` / `MH` pseudo-registers
+- Integrated arithmetic (`ADD`, `SUB`, `ADC`, `SBC`)
+- Short immediate forms (`ADDI`, `SUBI`)
+- Logical operations (`AND`)
+- Dual `NOP` encodings
+- Conditional jump on carry (`JC`)
+- Introduction of a carry flag with proper overflow/borrow semantics
 
-Legacy docs persisted in `arnicomp_details.txt` were superseded; that file now records the new layout alongside remnants of earlier reference material for historical context.
+Legacy documentation remains in `arnicomp_details.txt` for historical context.
 
-## AI-Assisted Migration
+---
 
-Porting from the legacy ISA to the new encoding was partially automated using an AI coding assistant. The assistant helped to:
+## Current Status
 
-- Rewrite emulator decode/execute logic to match the new instruction classification.
-- Update disassembly utilities and create new test suites (encoding, negative cases, carry & jump behavior).
-- Draft and update documentation for the revised ISA.
+| Component        | Status        |
+|------------------|--------------|
+| Assembler        | ✅ Complete |
+| Emulator         | ✅ Complete |
+| Emulator UI      | ✅ Complete |
+| VS Code Extension| ✅ Complete |
+| Compiler         | 🚧 Continued in separate repo |
 
-Human review followed each automated change—especially around subtle semantics (e.g., CRA behavior, carry vs borrow, and MOV side‑effects on ML/MH memory operations). Any remaining inconsistencies are tracked for iterative refinement.
+---
 
-If you examine commit history you may see clustered larger diffs corresponding to these assisted refactors; they're intentionally scoped to keep manual verification practical.
+## License & Contributions
 
-## Next Steps
+This project is primarily intended for **educational, experimental, and personal hardware development** purposes.
 
-- Expand compiler to exploit new short immediate forms more aggressively.
-- Add more exhaustive emulator tests (SBC borrow chains, stress patterns for MOV+memory).
-- Provide a migration guide for old assembly source (mapping obsolete mnemonics like STRL/LDRL to new MOV forms).
+Feedback on:
+- ISA design
+- Emulator accuracy
+- Tooling structure
 
-Contributions and feedback on the new encoding or further tooling are welcome.
+is always welcome.
+
+---
+
+> Arnicomp is a long-term exploration of CPU design, tooling, and low-level software — not just a single assembler.

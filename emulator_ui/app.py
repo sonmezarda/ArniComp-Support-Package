@@ -95,7 +95,7 @@ def decode_instruction(instruction_byte: int):
             if b == 0b00001100:
                 return 'XOR RA'
             src = bits[5:8]
-            src_map = {'000':'RA', '001':'RD', '010':'RB', '011':'ACC', '100':'PCL', '101':'PCH', '110':'M'}
+            src_map = {'000':'RA', '001':'RD', '010':'RB', '011':'ACC', '100':'PCL', '101':'PCH', '110':'M', '111':'M'}
             return f"ADD {src_map.get(src,'?')}"
         
         # SUB family
@@ -103,7 +103,7 @@ def decode_instruction(instruction_byte: int):
             if b == 0b00010100:
                 return 'XOR RB'
             src = bits[5:8]
-            src_map = {'000':'RA', '001':'RD', '010':'RB', '011':'ACC', '100':'PCL', '101':'PCH', '110':'M'}
+            src_map = {'000':'RA', '001':'RD', '010':'RB', '011':'ACC', '100':'PCL', '101':'PCH', '110':'M', '111':'M'}
             return f"SUB {src_map.get(src,'?')}"
         
         # ADC family
@@ -111,21 +111,15 @@ def decode_instruction(instruction_byte: int):
             if b == 0b00011010:
                 return 'XOR ACC'
             src = bits[5:8]
-            src_map = {'000':'RA', '001':'RD', '010':'RB', '011':'ACC', '100':'PCL', '101':'PCH', '110':'M'}
+            src_map = {'000':'RA', '001':'RD', '010':'RB', '011':'ACC', '100':'PCL', '101':'PCH', '110':'M', '111':'M'}
             return f"ADC {src_map.get(src,'?')}"
         
-        # SBC/JMP family
+        # SBC family
         if bits.startswith('00100'):
             if b == 0b00100100:
                 return 'XOR M'
-            # Check for JMP
-            if bits[2:5] == '100':
-                cond = bits[5:8]
-                jm = {'000':'JMP', '001':'JEQ', '010':'JGT', '011':'JLT',
-                      '100':'JGE', '101':'JLE', '110':'JNE', '111':'JC'}
-                return jm.get(cond, 'J?')
             src = bits[5:8]
-            src_map = {'000':'RA', '001':'RD', '010':'RB', '011':'ACC', '100':'PCL', '101':'PCH', '110':'M'}
+            src_map = {'000':'RA', '001':'RD', '010':'RB', '011':'ACC', '100':'PCL', '101':'PCH', '110':'M', '111':'M'}
             return f"SBC {src_map.get(src,'?')}"
         
         # AND family
@@ -133,7 +127,7 @@ def decode_instruction(instruction_byte: int):
             if b == 0b00101100:
                 return 'XOR RD'
             src = bits[5:8]
-            src_map = {'000':'RA', '001':'RD', '010':'RB', '011':'ACC', '100':'PCL', '101':'PCH', '110':'M'}
+            src_map = {'000':'RA', '001':'RD', '010':'RB', '011':'ACC', '100':'PCL', '101':'PCH', '110':'M', '111':'M'}
             return f"AND {src_map.get(src,'?')}"
         
         # ADDI
@@ -143,6 +137,13 @@ def decode_instruction(instruction_byte: int):
         # SUBI
         if bits.startswith('00111'):
             return f"SUBI #{b & 0x07}"
+
+        # Jump family (01100ccc)
+        if bits.startswith('01100'):
+            cond = bits[5:8]
+            jm = {'000':'JMP', '001':'JEQ', '010':'JGT', '011':'JLT',
+                  '100':'JGE', '101':'JLE', '110':'JNE', '111':'JC'}
+            return jm.get(cond, 'J?')
         
         # MOV/NOT family
         if bits.startswith('01'):
@@ -162,7 +163,7 @@ def decode_instruction(instruction_byte: int):
             dest_map = {'000':'RA', '001':'RD', '010':'RB', '011':'MARL',
                        '100':'MARH', '101':'PRL', '110':'PRH', '111':'M'}
             src_map = {'000':'RA', '001':'RD', '010':'RB', '011':'ACC',
-                      '100':'PCL', '101':'PCH', '110':'M'}
+                      '100':'PCL', '101':'PCH', '110':'M', '111':'M'}
             return f"MOV {dest_map.get(dest_bits,'?')}, {src_map.get(src_bits,'?')}"
         
         return f"??? {bits}"

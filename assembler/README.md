@@ -156,12 +156,12 @@ start:
 loop:
     ADDI #1
     MOV RD, ACC
-    LDI #$MAX
+    LDI $MAX
     CMP RA
     JLT
     HLT
     
-    LDI #@loop
+    LDI @loop
     MOV PRL, RA
     JMP
 ```
