@@ -13,6 +13,7 @@ env/
 
 
 build/
+verilog/obj_dir/
 
 .vscode/
 .vs/
