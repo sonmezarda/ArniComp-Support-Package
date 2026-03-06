@@ -905,9 +905,9 @@ class Compiler:
                     marl.tag = AbsAddrTag(low)
             else:
                 logger.debug(f"MARL is not known, updating to 0x{low:02X} (MAR=0x{address:04X})")
-                self.__build_const_in_reg(low, marl)
+                self.__build_const_in_reg(low, marl) 
                 marl.tag = AbsAddrTag(low)
-            
+
         else:
             logger.debug(f"MARL already set to 0x{low:02X}")
         

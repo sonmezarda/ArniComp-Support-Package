@@ -3,8 +3,8 @@
 
 #define BUTTON1_MASK 0b1
 
-volatile byte button;
-volatile byte masked;
+volatile byte button; // adr = 0
+volatile byte masked; // adr = 1
 
 
 

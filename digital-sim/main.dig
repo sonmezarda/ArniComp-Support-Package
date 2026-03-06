@@ -44,6 +44,7 @@
     </visualElement>
     <visualElement>
       <elementName>Clock</elementName>
+
       <elementAttributes>
         <entry>
           <string>runRealTime</string>
