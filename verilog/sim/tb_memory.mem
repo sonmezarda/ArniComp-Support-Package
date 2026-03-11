@@ -1,0 +1,33 @@
+// Memory operation test program
+// Tests: MOV M,src (write to memory), MOV dst,M (read from memory)
+//
+// Test 1: Write 0x55 to memory[0x10], read back to RB
+// Test 2: Write 0xAA to memory[0x11], read back to RD
+//
+// MOV encoding: 0x40 | (src << 3) | dst
+// MOV M,RA  = 0x40 | (0<<3) | 7 = 0x47
+// MOV M,ACC = 0x40 | (3<<3) | 7 = 0x5F
+// MOV RB,M  = 0x40 | (7<<3) | 2 = 0x7A
+// MOV RD,M  = 0x40 | (7<<3) | 1 = 0x79
+//
+// Expected: RB=0x55, RD=0xAA
+@0
+// Set memory address to 0x0010
+90    // LDI 0x10 -> RA=0x10
+43    // MOV MARL,RA -> MARL=0x10
+80    // LDI 0 -> RA=0
+44    // MOV MARH,RA -> MARH=0
+// Write 0x55 to memory[0x10]
+D5    // LDI 0x55 -> RA=0x55
+47    // MOV M,RA -> memory[0x0010]=0x55
+// Read from memory[0x10] to RB
+7A    // MOV RB,M -> RB=memory[0x0010]=0x55
+// Increment address to 0x11
+03    // INX -> MARL=0x11
+// Write 0xAA to memory[0x11] (use NOT to get 0xAA from 0x55)
+D5    // LDI 0x55 -> RA=0x55
+40    // NOT RA -> ACC=~0x55=0xAA
+5F    // MOV M,ACC -> memory[0x0011]=0xAA (was 0x57, wrong!)
+// Read from memory[0x11] to RD
+79    // MOV RD,M -> RD=memory[0x0011]=0xAA
+01    // HLT

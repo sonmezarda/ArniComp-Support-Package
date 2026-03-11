@@ -32,7 +32,7 @@ module alu(
                 end
             2'b01: sum = a & b;
             2'b10: sum = a ^ b;
-            2'b11: sum = ~a;
+            2'b11: sum = ~b;  // NOT uses b input (source on bus)
         endcase
     end
 

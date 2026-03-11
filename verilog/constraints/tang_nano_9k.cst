@@ -1,0 +1,44 @@
+//Copyright (C)2014-2024 Gowin Semiconductor Corporation.
+//All rights reserved.
+//File Title: Physical Constraints file for Tang Nano 9K
+//GOWIN Version: 1.9.9
+//Part Number: GW1NR-LV9QN88PC6/I5
+//Device: GW1NR-9C
+//Created Time: 2026
+
+// Clock - 27MHz oscillator (directly from crystal)
+IO_LOC "clk" 52;
+IO_PORT "clk" PULL_MODE=NONE IO_TYPE=LVCMOS33;
+
+// Reset button (active low) - Button S1 (directly active low onboard)
+// Bank 3 = 1.8V, use LVCMOS18
+IO_LOC "rst_n" 3;
+IO_PORT "rst_n" PULL_MODE=UP IO_TYPE=LVCMOS18;
+
+// Run/Halt button - Button S2
+IO_LOC "btn_run" 4;
+IO_PORT "btn_run" PULL_MODE=UP IO_TYPE=LVCMOS18;
+
+// Onboard LEDs (active low) - Bank 3 = 1.8V
+IO_LOC "led[0]" 10;
+IO_LOC "led[1]" 11;
+IO_LOC "led[2]" 13;
+IO_LOC "led[3]" 14;
+IO_LOC "led[4]" 15;
+IO_LOC "led[5]" 16;
+IO_PORT "led[0]" PULL_MODE=NONE DRIVE=8 IO_TYPE=LVCMOS18;
+IO_PORT "led[1]" PULL_MODE=NONE DRIVE=8 IO_TYPE=LVCMOS18;
+IO_PORT "led[2]" PULL_MODE=NONE DRIVE=8 IO_TYPE=LVCMOS18;
+IO_PORT "led[3]" PULL_MODE=NONE DRIVE=8 IO_TYPE=LVCMOS18;
+IO_PORT "led[4]" PULL_MODE=NONE DRIVE=8 IO_TYPE=LVCMOS18;
+IO_PORT "led[5]" PULL_MODE=NONE DRIVE=8 IO_TYPE=LVCMOS18;
+
+// UART TX/RX (optional - for debug output) - Bank 3 = 1.8V
+IO_LOC "uart_tx" 17;
+IO_LOC "uart_rx" 18;
+IO_PORT "uart_tx" PULL_MODE=NONE DRIVE=8 IO_TYPE=LVCMOS18;
+IO_PORT "uart_rx" PULL_MODE=UP IO_TYPE=LVCMOS18;
+
+// GPIO pins for expansion (directly connected to PMOD header)
+// You can connect external program ROM, debug signals, etc.
+// PMOD connector pins: 25, 26, 27, 28, 29, 30, 31, 32

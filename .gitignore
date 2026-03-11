@@ -13,7 +13,6 @@ env/
 
 
 build/
-verilog/obj_dir/
 
 .vscode/
 .vs/
@@ -29,3 +28,15 @@ assembler/**/__pycache__/
 assemblerV2_python/**/__pycache__/
 emulator/**/__pycache__/
 emulator_ui/**/__pycache__/
+
+# Verilog simulation outputs
+verilog/obj_dir/
+verilog/*.vcd
+verilog/wave*.vcd
+
+# Gowin IDE outputs
+verilog/impl/
+verilog/*.gprj.user
+verilog/*.fs
+verilog/*.gao
+verilog/*.rao

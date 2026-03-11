@@ -7,41 +7,41 @@ module arnicomp_top #(
 
 import control_pkg::*;
 
-logic jump_taken = 1'b0;
-logic [2:0] jmp_select = 3'b000;
+logic jump_taken;
+logic [2:0] jmp_select;
 
 logic [7:0] inst_q;
 
-logic less_flag    = 1'b0;
-logic equal_flag   = 1'b0;
-logic greater_flag = 1'b0;
-logic carry_flag   = 1'b0;
+logic less_flag;
+logic equal_flag;
+logic greater_flag;
+logic carry_flag;
 
 logic lf_reg_out;
 logic eq_reg_out;
 logic gt_reg_out;
 logic c_reg_out;
 
-logic [7:0] alu_out   = '0;
-logic [7:0] reg_a_out = '0;
-logic [7:0] reg_b_out = '0;
-logic [7:0] reg_d_out = '0;
-logic [7:0] acc_out   = '0;
-logic [7:0] marl_out  = '0;
-logic [7:0] marh_out  = '0;
-logic [7:0] prl_out   = '0;
-logic [7:0] prh_out   = '0;
+logic [7:0] alu_out;
+logic [7:0] reg_a_out;
+logic [7:0] reg_b_out;
+logic [7:0] reg_d_out;
+logic [7:0] acc_out;
+logic [7:0] marl_out;
+logic [7:0] marh_out;
+logic [7:0] prl_out;
+logic [7:0] prh_out;
 logic [15:0] pc_addr;
 
-logic reg_a_we = '0;
-logic reg_b_we = '0;
-logic reg_d_we = '0;
-logic acc_we   = '0;
-logic marl_we  = '0;
-logic marh_we  = '0;
-logic prl_we   = '0;
-logic prh_we   = '0;
-logic mem_we   = '0;
+logic reg_a_we;
+logic reg_b_we;
+logic reg_d_we;
+logic acc_we;
+logic marl_we;
+logic marh_we;
+logic prl_we;
+logic prh_we;
+logic mem_we;
 
 logic [7:0] bus;
 logic [7:0] mem_data_out;
@@ -50,9 +50,7 @@ assign mar_addr = {marh_out, marl_out};
 
 control_pkg::ctrl_t control_pins;
 
-// ============================================
 // Memory Subsystem
-// ============================================
 
 program_memory #(
     .MEM_FILE(PROG_MEM_FILE)
@@ -70,9 +68,7 @@ data_memory data_mem (
     .data_out(mem_data_out)
 );
 
-// ============================================
-// Bus Selector with Immediate Support
-// ============================================
+// Bus Selector 
 
 logic [7:0] bus_sel_out;
 
@@ -89,7 +85,7 @@ bus_selector bus_selector_i(
 );
 
 // Im7: Use 7-bit immediate from instruction byte
-// Im3: Use 3-bit immediate from instruction byte (sign-extended or zero-extended)
+// Im3: Use 3-bit immediate from instruction byte 
 assign bus = control_pins.im7 ? {1'b0, inst_q[6:0]} :
              control_pins.im3 ? {{5{1'b0}}, inst_q[2:0]} :
              bus_sel_out;
@@ -217,12 +213,16 @@ control_decoder instruction_decoder(
 
 logic alu_carry_out;
 
+// ALU carry input
+logic alu_carry_in;
+assign alu_carry_in = control_pins.sc ? c_reg_out : control_pins.sn;
+
 alu alu_i(
     .a(reg_d_out),     // RD is always the first operand
     .b(bus),           // Source register or immediate (from bus)
     .ops(control_pins.ops),
     .negative(control_pins.sn),
-    .c_in(c_reg_out),
+    .c_in(alu_carry_in),
     .result(alu_out),
     .carry_flag(alu_carry_out)
 );

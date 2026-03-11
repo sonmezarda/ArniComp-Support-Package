@@ -12,7 +12,9 @@ module control_rom #(
     logic [CTRL_W-1:0] rom [0:255];
 
     initial begin
+        `ifndef SYNTHESIS
         $display("Loading control ROM from %s", ROM_FILE);
+        `endif
         $readmemh(ROM_FILE, rom);
     end
 

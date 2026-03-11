@@ -1,0 +1,29 @@
+// ArniComp Demo Program for Tang Nano 9K
+// Counts up from 0 to 63 (visible on 6 LEDs)
+// Then halts
+//
+// LEDs show ACC[5:0] inverted (active low)
+//
+// MOV encoding: 0x40 | (src << 3) | dst
+// ADDI encoding: 0x30 | imm3
+// JLT encoding: 0x63
+@0
+80    // 0x00: LDI 0 -> RA=0 (counter)
+41    // 0x01: MOV RD,RA -> RD=0
+// Loop start (address 0x02)
+31    // 0x02: ADDI 1 -> ACC=RD+1
+58    // 0x03: MOV RA,ACC -> RA=ACC
+41    // 0x04: MOV RD,RA -> RD=RA (save counter)
+// Setup jump target (back to loop at 0x02)
+82    // 0x05: LDI 0x02 -> RA=2
+45    // 0x06: MOV PRL,RA -> PRL=2
+80    // 0x07: LDI 0 -> RA=0
+46    // 0x08: MOV PRH,RA -> PRH=0
+// Compare counter with 64
+48    // 0x09: MOV RA,RD -> RA=counter value
+41    // 0x0A: MOV RD,RA -> RD=counter (restore)
+C0    // 0x0B: LDI 64 (0x40) -> RA=64
+05    // 0x0C: CMP RA -> compare RD(counter) with RA(64)
+63    // 0x0D: JLT -> jump to 0x02 if counter < 64
+// Exit: counter reached 64
+01    // 0x0E: HLT

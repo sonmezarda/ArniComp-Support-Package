@@ -1,0 +1,13 @@
+// XOR and NOT test program
+// Test: XOR result = 0x7F ^ 0x0F = 0x70 -> RB
+// Test: NOT result = ~0x55 = 0xAA -> RA
+@0
+FF    // LDI 0x7F (only 7-bit immediate, so 0x7F max)
+41    // MOV RD,RA -> RD = 0x7F
+8F    // LDI 0x0F -> RA = 0x0F
+0C    // XOR RA -> ACC = RD ^ RA = 0x7F ^ 0x0F = 0x70
+5A    // MOV RB,ACC -> RB = 0x70
+D5    // LDI 0x55 -> RA = 0x55
+40    // NOT RA -> ACC = ~RA = 0xAA
+58    // MOV RA,ACC -> RA = 0xAA
+01    // HLT

@@ -3,7 +3,7 @@
 module program_memory #(
     parameter int ADDR_WIDTH = 16,
     parameter int DATA_WIDTH = 8,
-    parameter int MEM_SIZE   = 65536,
+    parameter int MEM_SIZE   = 256,  // Small for FPGA demo
     parameter string MEM_FILE = ""
 )(
     input  logic                    clk,
@@ -11,24 +11,18 @@ module program_memory #(
     output logic [DATA_WIDTH-1:0]   data
 );
 
+    // 256 bytes program memory - fits in BSRAM
     logic [DATA_WIDTH-1:0] mem [0:MEM_SIZE-1];
 
     initial begin
-        // Initialize memory to NOP (0x00)
-        for (int i = 0; i < MEM_SIZE; i++) begin
-            mem[i] = 8'h00;
-        end
-        
-        // Load program if file specified
         if (MEM_FILE != "") begin
-            $display("Loading program memory from %s", MEM_FILE);
             $readmemh(MEM_FILE, mem);
         end
     end
 
-    // Synchronous read
+    // Synchronous read for BSRAM inference
     always_ff @(posedge clk) begin
-        data <= mem[addr];
+        data <= mem[addr[7:0]];
     end
 
 endmodule
