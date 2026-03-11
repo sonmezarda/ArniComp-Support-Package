@@ -1,12 +1,12 @@
 `timescale 1ns/1ps
 
 module jump_logic(
-    input logic jmp_en,
-    input logic carry_flag,
-    input logic equal_flag,
-    input logic greater_flag,
-    input logic less_flag,
-    input logic [2:0] jmp_cond,
+    input  logic jmp_en,
+    input  logic carry_flag,
+    input  logic equal_flag,
+    input  logic greater_flag,
+    input  logic less_flag,
+    input  logic [2:0] jmp_cond,
     output logic jmp_taken
 );
 

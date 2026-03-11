@@ -4,14 +4,14 @@ module alu(
     input  logic [7:0] a,
     input  logic [7:0] b,
     input  logic [1:0] ops,
-    input  logic negative,
-    input  logic c_in, // carry in
+    input  logic       negative,
+    input  logic       c_in, // carry in
     output logic [7:0] result,
-    output logic carry_flag
+    output logic       carry_flag
 );
 
     logic [7:0] sum;
-    logic carry_out;
+    logic       carry_out;
     logic [8:0] arith_tmp;
 
     always_comb begin

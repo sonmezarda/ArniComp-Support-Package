@@ -4,11 +4,11 @@ module reg_cell #(
     parameter int W = 8,
     parameter logic [W-1:0] RESET_VALUE = '0
 )(
-    input logic clk,
-    input logic rst_n,
-    input logic we,
-    input logic oe,
-    input logic [W-1:0] d,
+    input  logic clk,
+    input  logic rst_n,
+    input  logic we,
+    input  logic oe,
+    input  logic [W-1:0] d,
     output logic [W-1:0] out
 );
 
