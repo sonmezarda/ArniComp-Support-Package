@@ -71,8 +71,10 @@ data_memory data_mem (
 );
 
 // ============================================
-// Bus Selector
+// Bus Selector with Immediate Support
 // ============================================
+
+logic [7:0] bus_sel_out;
 
 bus_selector bus_selector_i(
     .sel(control_pins.ssel),
@@ -83,14 +85,20 @@ bus_selector bus_selector_i(
     .pcl(pc_addr[7:0]),
     .pch(pc_addr[15:8]),
     .m(mem_data_out),
-    .out(bus)
+    .out(bus_sel_out)
 );
 
-reg_cell #(.W(8)) reg_a(
+// Im7: Use 7-bit immediate from instruction byte
+// Im3: Use 3-bit immediate from instruction byte (sign-extended or zero-extended)
+assign bus = control_pins.im7 ? {1'b0, inst_q[6:0]} :
+             control_pins.im3 ? {{5{1'b0}}, inst_q[2:0]} :
+             bus_sel_out;
+
+reg_a reg_a_i(
     .clk(clk),
     .rst_n(rst_n),
     .we(reg_a_we),
-    .oe(1'b1),
+    .smsbra(control_pins.smsbra),
     .d(bus),
     .out(reg_a_out)
 );
@@ -122,11 +130,11 @@ reg_cell #(.W(8)) acc(
     .out(acc_out)
 );
 
-reg_cell #(.W(8)) marl(
+reg_marl marl_i(
     .clk(clk),
     .rst_n(rst_n),
     .we(marl_we),
-    .oe(1'b1),
+    .inc(control_pins.inc),
     .d(bus),
     .out(marl_out)
 );
@@ -210,20 +218,20 @@ control_decoder instruction_decoder(
 logic alu_carry_out;
 
 alu alu_i(
-    .a(reg_d_out),
-    .b(bus),
+    .a(reg_d_out),     // RD is always the first operand
+    .b(bus),           // Source register or immediate (from bus)
     .ops(control_pins.ops),
     .negative(control_pins.sn),
     .c_in(c_reg_out),
     .result(alu_out),
-    .carry_flag(c_reg_out)
+    .carry_flag(alu_carry_out)
 );
 
 assign carry_flag = alu_carry_out;
 
 jump_logic jump_decoder(
     .jmp_en(control_pins.jmp),
-    .carry_flag(control_pins.sc),
+    .carry_flag(c_reg_out),
     .equal_flag(eq_reg_out),
     .greater_flag(gt_reg_out),
     .less_flag(lf_reg_out),

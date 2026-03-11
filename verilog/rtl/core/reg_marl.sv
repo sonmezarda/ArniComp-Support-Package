@@ -1,12 +1,12 @@
 `timescale 1ns/1ps
 
-// RA Register with SMSBRA support
-// SMSBRA instruction sets MSB of RA to 1
-module reg_a (
+// MARL Register with INX (increment) support
+// INX instruction increments MARL by 1
+module reg_marl (
     input  logic       clk,
     input  logic       rst_n,
     input  logic       we,
-    input  logic       smsbra,
+    input  logic       inc,
     input  logic [7:0] d,
     output logic [7:0] out
 );
@@ -14,8 +14,8 @@ module reg_a (
     logic [7:0] data_in;
     
     always_comb begin
-        if (smsbra)
-            data_in = out | 8'h80;  // Set MSB
+        if (inc)
+            data_in = out + 8'd1;  // Increment
         else
             data_in = d;
     end
@@ -23,10 +23,10 @@ module reg_a (
     reg_cell #(
         .W(8),
         .RESET_VALUE(8'h00)
-    ) ra_cell (
+    ) marl_cell (
         .clk(clk),
         .rst_n(rst_n),
-        .we(we | smsbra),
+        .we(we | inc),
         .oe(1'b1),
         .d(data_in),
         .out(out)

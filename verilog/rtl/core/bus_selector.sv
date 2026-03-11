@@ -13,16 +13,18 @@ module bus_selector(
 );
 
 logic [7:0] out_sel;
+// Source register encoding (from assembler):
+// 000: RA, 001: RD, 010: RB, 011: ACC, 100: PCL, 101: PCH, 111: M
 always_comb begin
     case(sel)
-        3'b000: out_sel = a;
-        3'b001: out_sel = d;
-        3'b010: out_sel = b;
-        3'b011: out_sel = acc; 
-        3'b100: out_sel = 8'h00;
-        3'b101: out_sel = pcl;
-        3'b110: out_sel = pch;
-        3'b111: out_sel = m;
+        3'b000: out_sel = a;      // RA
+        3'b001: out_sel = d;      // RD
+        3'b010: out_sel = b;      // RB
+        3'b011: out_sel = acc;    // ACC
+        3'b100: out_sel = pcl;    // PCL
+        3'b101: out_sel = pch;    // PCH
+        3'b110: out_sel = 8'h00;  // (unused)
+        3'b111: out_sel = m;      // M
         default: out_sel = 8'h00;
     endcase
 end

@@ -18,10 +18,8 @@ control_rom control_rom_i(
     .ctrl(ctrl_pkg_out)
 );
 
-// Extract jump select from instruction
 assign jmp_sel = instr_in[2:0];
 
-// ACC write enable from control word
 assign acc_we = ctrl_pkg_out.accw;
 
 always_comb begin

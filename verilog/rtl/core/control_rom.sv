@@ -1,6 +1,6 @@
 `timescale 1ns/1ps
 module control_rom #(
-    parameter string ROM_FILE = "control_rom.hex"
+    parameter string ROM_FILE = "rom/control_rom.mem"
 )(
     input  logic [7:0] instr,
     output control_pkg::ctrl_t ctrl
@@ -8,20 +8,14 @@ module control_rom #(
 
     import control_pkg::*;
 
-    logic [7:0] rom0 [0:255];
-    logic [7:0] rom1 [0:255];
-    logic [7:0] rom2 [0:255];
+    // Single 24-bit ROM (256 entries)
+    logic [CTRL_W-1:0] rom [0:255];
 
     initial begin
-        $display("Loading control ROM...");
-        $readmemh("rom/rom0.mem", rom0);
-        $readmemh("rom/rom1.mem", rom1);
-        $readmemh("rom/rom2.mem", rom2);
+        $display("Loading control ROM from %s", ROM_FILE);
+        $readmemh(ROM_FILE, rom);
     end
 
-    logic [CTRL_W-1:0] ctrl_raw;
-
-    assign ctrl_raw = {rom2[instr], rom1[instr], rom0[instr]};
-    assign ctrl = ctrl_t'(ctrl_raw);
+    assign ctrl = ctrl_t'(rom[instr]);
 
 endmodule
