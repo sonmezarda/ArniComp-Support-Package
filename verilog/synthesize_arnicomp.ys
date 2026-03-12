@@ -1,0 +1,43 @@
+# Yosys Synthesis Script for ArniComp CPU
+# Usage: yosys synthesize_arnicomp.ys
+
+# Read converted Verilog files in dependency order
+read_verilog ../rtl_converted/alu.v
+read_verilog ../rtl_converted/comparator.v
+read_verilog ../rtl_converted/program_counter.v
+read_verilog ../rtl_converted/reg_cell.v
+read_verilog ../rtl_converted/control_rom.v
+read_verilog ../rtl_converted/reg_a.v
+read_verilog ../rtl_converted/reg_marl.v
+read_verilog ../rtl_converted/flag_reg.v
+read_verilog ../rtl_converted/jump_logic.v
+read_verilog ../rtl_converted/bus_selector.v
+read_verilog ../rtl_converted/control_decoder.v
+read_verilog ../rtl_converted/program_memory.v
+read_verilog ../rtl_converted/data_memory.v
+read_verilog ../rtl_converted/arnicomp_top.v
+
+# Set top module
+hierarchy -top arnicomp_top
+
+# Basic synthesis flow
+proc; opt; fsm; opt; memory; opt
+
+# Technology mapping for generic cells
+techmap; opt
+
+# Generate statistics
+stat
+
+# Write various output formats
+write_verilog -noattr synthesized_arnicomp.v
+write_json arnicomp.json
+
+# Generate graphviz visualization
+show -format dot -prefix arnicomp_circuit arnicomp_top
+
+# Generate detailed hierarchy graph
+show -format svg -prefix arnicomp_hierarchy -stretch arnicomp_top
+
+# Clean up and exit
+clean

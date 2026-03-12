@@ -27,3 +27,6 @@ C0    // 0x0B: LDI 64 (0x40) -> RA=64
 63    // 0x0D: JLT -> jump to 0x02 if counter < 64
 // Exit: counter reached 64
 01    // 0x0E: HLT
+01    // 0x0F: HLT (backup)
+01    // 0x10: HLT (backup)
+01    // 0x11: HLT (backup)

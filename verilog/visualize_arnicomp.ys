@@ -1,0 +1,34 @@
+# Quick visualization script for ArniComp architecture
+# Usage: yosys visualize_arnicomp.ys
+
+# Read converted Verilog files
+read_verilog ../rtl_converted/alu.v
+read_verilog ../rtl_converted/comparator.v
+read_verilog ../rtl_converted/program_counter.v
+read_verilog ../rtl_converted/reg_cell.v
+read_verilog ../rtl_converted/control_rom.v
+read_verilog ../rtl_converted/reg_a.v
+read_verilog ../rtl_converted/reg_marl.v
+read_verilog ../rtl_converted/flag_reg.v
+read_verilog ../rtl_converted/jump_logic.v
+read_verilog ../rtl_converted/bus_selector.v
+read_verilog ../rtl_converted/control_decoder.v
+read_verilog ../rtl_converted/program_memory.v
+read_verilog ../rtl_converted/data_memory.v
+read_verilog ../rtl_converted/arnicomp_top.v
+
+# Set hierarchy
+hierarchy -top arnicomp_top
+
+# Generate block diagram BEFORE any optimization (preserves sub-module instances)
+show -format svg -prefix arnicomp_blocks -stretch -width arnicomp_top
+
+# Generate detailed connection view
+show -format dot -prefix arnicomp_detailed arnicomp_top
+
+# Basic processing to resolve connections
+proc; opt;
+
+# Generate hierarchy visualization
+hierarchy -check -purge_lib
+stat -top arnicomp_top
