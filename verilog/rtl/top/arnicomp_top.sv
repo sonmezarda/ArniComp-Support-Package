@@ -2,7 +2,13 @@ module arnicomp_top #(
     parameter string PROG_MEM_FILE = ""
 )(
     input logic       clk,
-    input logic       rst_n
+    input logic       rst_n,
+    input logic [7:0] mem_rdata,
+
+    output logic [15:0] mem_addr,
+    output logic [7:0] mem_wdata,
+    output logic [7:0] mem_wen
+
 );
 
 import control_pkg::*;
@@ -46,7 +52,10 @@ logic mem_we;
 logic [7:0] bus;
 logic [7:0] mem_data_out;
 logic [15:0] mar_addr;
-assign mar_addr = {marh_out, marl_out};
+
+assign mem_addr = {marh_out, marl_out};
+assign mem_wdata = bus;
+assign mem_wen = mem_we;
 
 control_pkg::ctrl_t control_pins;
 
@@ -60,13 +69,7 @@ program_memory #(
     .data(inst_q)
 );
 
-data_memory data_mem (
-    .clk(clk),
-    .we(mem_we),
-    .addr(mar_addr),
-    .data_in(bus),
-    .data_out(mem_data_out)
-);
+
 
 // Bus Selector 
 

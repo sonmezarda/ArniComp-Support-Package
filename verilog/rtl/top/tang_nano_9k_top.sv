@@ -13,9 +13,7 @@ module tang_nano_9k_top (
     input  logic       clk,        // 27MHz system clock
     input  logic       rst_n,      // Reset button (active low)
     input  logic       btn_run,    // Run/single-step button (active low)
-    output logic [5:0] led,        // Onboard LEDs (active low)
-    output logic       uart_tx,    // UART TX (optional)
-    input  logic       uart_rx     // UART RX (optional)
+    output logic [5:0] led        // Onboard LEDs (active low)
 );
 
     // ========================================
@@ -76,11 +74,29 @@ module tang_nano_9k_top (
     end
 
     // The program is loaded from rom/program.mem at synthesis time
+    
+    logic [16:0] mem_addr;
+    logic [7:0]  mem_rdata;
+    logic [7:0]  mem_wdata;
+    logic mem_we;
+
     arnicomp_top #(
         .PROG_MEM_FILE("rom/program.mem")
     ) cpu (
         .clk(cpu_clk),
-        .rst_n(rst_n_debounced)
+        .rst_n(rst_n_debounced),
+        .mem_rdata(mem_rdata),
+        .mem_addr(mem_addr),
+        .mem_wdata(mem_wdata),
+        .mem_wen(mem_we)
+    );
+
+    data_memory data_mem (
+        .clk(clk),
+        .we(mem_we),
+        .addr(mem_addr),
+        .data_in(mem_wdata),
+        .data_out(mem_rdata)
     );
     
     // LED Output (active low)
