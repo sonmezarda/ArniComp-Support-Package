@@ -75,10 +75,26 @@ module tang_nano_9k_top (
 
     // The program is loaded from rom/program.mem at synthesis time
     
-    logic [16:0] mem_addr;
+    logic [15:0] mem_addr;
     logic [7:0]  mem_rdata;
     logic [7:0]  mem_wdata;
     logic mem_we;
+
+    logic [7:0] data_mem_dout;
+    logic [7:0] led_reg_dout;
+    logic data_mem_sel;
+    logic led_reg_sel;
+    logic data_mem_we;
+    logic led_reg_we;
+
+    assign data_mem_sel = (mem_addr[15:8] == 8'h00);
+    assign led_reg_sel  = (mem_addr[15:8] == 8'h01);
+    assign data_mem_we  = mem_we && data_mem_sel;
+    assign led_reg_we   = mem_we && led_reg_sel;
+
+    assign mem_rdata = data_mem_sel ? data_mem_dout :
+                       led_reg_sel  ? led_reg_dout :
+                       8'h00;
 
     arnicomp_top #(
         .PROG_MEM_FILE("rom/program.mem")
@@ -91,17 +107,27 @@ module tang_nano_9k_top (
         .mem_wen(mem_we)
     );
 
-    data_memory data_mem (
-        .clk(clk),
-        .we(mem_we),
+    data_memory #(.MEM_SIZE(256)) data_mem (
+        .clk(cpu_clk),
+        .we(data_mem_we),
         .addr(mem_addr),
         .data_in(mem_wdata),
-        .data_out(mem_rdata)
+        .data_out(data_mem_dout)
+    );
+
+    reg_cell led_reg(
+        .clk(cpu_clk),
+        .rst_n(rst_n_debounced),
+        .we(led_reg_we),
+        .oe(1'b1),
+        .d(mem_wdata),
+        .out(led_reg_dout)
+
     );
     
     // LED Output (active low)
 
-    assign led = ~cpu.acc_out[5:0];
+    assign led = ~led_reg_dout[5:0];
     
 
 endmodule

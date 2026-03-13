@@ -7,7 +7,7 @@ module arnicomp_top #(
 
     output logic [15:0] mem_addr,
     output logic [7:0] mem_wdata,
-    output logic [7:0] mem_wen
+    output logic mem_wen
 
 );
 
@@ -50,7 +50,6 @@ logic prh_we;
 logic mem_we;
 
 logic [7:0] bus;
-logic [7:0] mem_data_out;
 logic [15:0] mar_addr;
 
 assign mem_addr = {marh_out, marl_out};
@@ -83,7 +82,7 @@ bus_selector bus_selector_i(
     .acc(acc_out),
     .pcl(pc_addr[7:0]),
     .pch(pc_addr[15:8]),
-    .m(mem_data_out),
+    .m(mem_rdata),
     .out(bus_sel_out)
 );
 
