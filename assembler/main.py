@@ -18,8 +18,6 @@ import argparse
 from typing import Optional
 
 from modules.AssemblyHelper import AssemblyHelper
-from modules.EepromLoader import EepromLoader
-from modules.HexConverter import save_intelHexFile
 
 
 class AssemblerCLI:
@@ -164,6 +162,7 @@ class AssemblerCLI:
     
     def create_ihex(self, input_file: str, output_file: Optional[str] = None) -> None:
         """Convert assembly file to Intel HEX format for Digital circuit simulator"""
+        from modules.HexConverter import save_intelHexFile
         # Determine output file
         if output_file is None:
             base_name = os.path.splitext(input_file)[0]
@@ -198,9 +197,51 @@ class AssemblerCLI:
         except Exception as e:
             print(f"Error creating Intel HEX file: {e}")
             sys.exit(1)
+
+    def create_svhex(self, input_file: str, output_file: Optional[str] = None) -> None:
+        """Convert assembly file to HEX format for SystemVerilog Program Mem"""
+        # Determine output file
+        if output_file is None:
+            base_name = os.path.splitext(input_file)[0]
+            output_file = f"{base_name}.mem"
+        
+        # Read input file
+        try:
+            with open(input_file, 'r') as f:
+                raw_lines = f.readlines()
+        except FileNotFoundError:
+            print(f"Error: Input file '{input_file}' not found")
+            sys.exit(1)
+        
+        # Assemble and convert to Intel HEX
+        try:
+            binary_lines, labels, constants = self.helper.convert_to_machine_code(raw_lines)
+            
+            with open(output_file, 'w') as f:
+                f.write("@0\n")
+                for binline in binary_lines:
+                    hexLine = hex(int(binline, 2) &0xFF)[2:]
+                    f.write(f"{hexLine:>02}\n")
+
+            
+            print(f"HEX file created successfully!")
+            print(f"  Input: {input_file}")
+            print(f"  Output: {output_file}")
+            print(f"  Instructions: {len(binary_lines)}")
+            print(f"  Format: HEX (for SystemVerilog)")
+            
+            if labels:
+                print(f"  Labels: {len(labels)}")
+            if constants:
+                print(f"  Constants: {len(constants)}")
+            
+        except Exception as e:
+            print(f"Error creating SystemVerilog HEX file: {e}")
+            sys.exit(1)
     
     def load_to_eeprom(self, bin_file: str) -> None:
         """Load a binary file to EEPROM"""
+        from modules.EepromLoader import EepromLoader
         try:
             eeprom_loader = EepromLoader(self.comport)
             print(f"Loading {bin_file} to EEPROM via {self.comport}...")
@@ -242,6 +283,7 @@ class AssemblerCLI:
     
     def verify_file(self, bin_file: str, bytes_to_check: int = 16) -> None:
         """Verify EEPROM contents against a binary file"""
+        from modules.EepromLoader import EepromLoader
         try:
             eeprom_loader = EepromLoader(self.comport)
             data = eeprom_loader.check_file(bin_file, bytes_to_check)
@@ -253,6 +295,7 @@ class AssemblerCLI:
     
     def check_serial(self) -> None:
         """Check serial connection"""
+        from modules.EepromLoader import EepromLoader
         try:
             eeprom_loader = EepromLoader(self.comport)
             eeprom_loader.check_serial()
@@ -411,7 +454,16 @@ def main():
         input_file = sys.argv[2]
         output_file = sys.argv[3] if len(sys.argv) >= 4 else None
         cli.create_ihex(input_file, output_file)
-    
+
+    elif command == "createsvhex":
+        if len(sys.argv) < 3:
+            print("Error: Input file required")
+            print("Usage: python main.py createihex <input.asm> [output.hex]")
+            sys.exit(1)
+        input_file = sys.argv[2]
+        output_file = sys.argv[3] if len(sys.argv) >= 4 else None
+        cli.create_svhex(input_file, output_file)
+
     elif command == "load":
         if len(sys.argv) < 3:
             print("Error: Binary file required")
