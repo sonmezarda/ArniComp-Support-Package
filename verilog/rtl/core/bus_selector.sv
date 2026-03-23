@@ -4,7 +4,7 @@ module bus_selector(
     input  logic [7:0] d,
     input  logic [7:0] b,
     input  logic [7:0] acc,
-    
+    input  logic       out_en, 
     input  logic [7:0] pcl,
     input  logic [7:0] pch,
     input  logic [7:0] m,
@@ -29,5 +29,5 @@ always_comb begin
     endcase
 end
 
-assign out = out_sel;
+assign out = out_en ? out_sel : 8'd0;
 endmodule

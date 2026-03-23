@@ -43,3 +43,5 @@ verilog/*.rao
 
 verilog/sv2v-Linux
 verilog/synthesis_output
+
+/obj_dir

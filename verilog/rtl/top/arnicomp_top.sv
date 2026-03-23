@@ -76,6 +76,7 @@ logic [7:0] bus_sel_out;
 
 bus_selector bus_selector_i(
     .sel(control_pins.ssel),
+    .out_en(control_pins.oe),
     .a(reg_a_out),
     .d(reg_d_out),
     .b(reg_b_out),

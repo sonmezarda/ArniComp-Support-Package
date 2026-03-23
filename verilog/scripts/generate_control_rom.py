@@ -151,13 +151,13 @@ def generate_control_rom():
     rom[0x04] = make_ctrl(ce=1, ops=ALU_NOT, accw=1, ssel=SRC_RB)
     
     # 0x05: CMP RA - compare RA with RD, set flags
-    rom[0x05] = make_ctrl(ce=1, sf=1, ssel=SRC_RA)
-    
+    rom[0x05] = make_ctrl(ce=1, sf=1, ssel=SRC_RA, oe=1)
+
     # 0x06: CMP M - compare M with RD, set flags
-    rom[0x06] = make_ctrl(ce=1, sf=1, ssel=SRC_M)
-    
+    rom[0x06] = make_ctrl(ce=1, sf=1, ssel=SRC_M, oe=1)
+
     # 0x07: CMP ACC - compare ACC with RD, set flags
-    rom[0x07] = make_ctrl(ce=1, sf=1, ssel=SRC_ACC)
+    rom[0x07] = make_ctrl(ce=1, sf=1, ssel=SRC_ACC, oe=1)
     
     # ========================================
     # ADD Instructions (0x08-0x0F): ACC = ACC + src
