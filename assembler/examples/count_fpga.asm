@@ -1,4 +1,4 @@
-equ LEDADDR_H #0x01
+equ LEDADDR_H #0x0C
 equ LEDADDR_L #0x00
 
 LDI #0

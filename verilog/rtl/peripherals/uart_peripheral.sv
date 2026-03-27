@@ -1,5 +1,6 @@
 module uart_peripheral(
-    input  logic       clk,
+    input  logic       cpu_clk,
+    input  logic       uart_clk,
     input  logic       rst_n,
     input  logic       sel,
     input  logic       we,
@@ -11,69 +12,6 @@ module uart_peripheral(
     output logic [7:0] rdata,
     output logic       uart_tx
 );
-    
-    /*
-        UART MMIO Register Map
-        Base address is assigned by the system memory map.
-        The peripheral only decodes the local 8-bit page offset.
-
-        RX register block
-        0x00 - RX_DATA        (read)    Returns the current received byte.
-                                        Reading this register consumes one RX entry.
-        0x01 - RX_VALID       (read)    Returns 0x00 or 0x01.
-                                        0x01 means RX_DATA contains a valid byte.
-        0x02 - RX_BUSY        (read)    Returns 0x00 or 0x01.
-                                        0x01 means the receiver is currently sampling a frame.
-        0x03 - FRAMING_ERROR  (read)    Returns 0x00 or 0x01.
-                                        Sticky error flag. Cleared by CLEAR_ERROR.
-        0x04 - RX_OVERFLOW    (read)    Returns 0x00 or 0x01.
-                                        Sticky overflow flag. Cleared by CLEAR_ERROR.
-
-        TX register block
-        0x10 - TX_DATA   (write)        Writes one byte into the TX FIFO or transmit path.
-                                        Data is accepted only when TX_READY is 0x01.
-        0x11 - TX_READY  (read)         Returns 0x00 or 0x01.
-                                        0x01 means the transmit side can accept a new byte.
-                                        This is typically the inverse of TX FIFO full.
-        0x12 - TX_BUSY   (read)         Returns 0x00 or 0x01.
-                                        0x01 means the transmitter is currently sending a frame.
-        0x13 - TX_EMPTY  (read)         Returns 0x00 or 0x01.
-                                        0x01 means the entire TX path is empty.
-
-        Baud-rate control
-        0x20 - BAUD_SEL       (read/write)
-                                        Baud-rate selection register.
-                                        Only wdata[2:0] is used.
-
-        Packed status view
-        0x30 - STATUS         (read)
-                                        Bit[0] = RX_VALID
-                                        Bit[1] = RX_BUSY
-                                        Bit[2] = FRAMING_ERROR
-                                        Bit[3] = TX_READY
-                                        Bit[4] = TX_BUSY
-                                        Bit[5] = TX_EMPTY
-                                        Bit[6] = RX_OVERFLOW
-                                        Bit[7] = 0
-
-        Control register block
-        0x40 - CONTROL        (read/write)   Writes the full control register.
-        0x41 - UART_EN        (read/write)   Writes wdata[0] into CONTROL[0].
-        0x42 - RX_EN          (read/write)   Writes wdata[0] into CONTROL[1].
-        0x43 - TX_EN          (read/write)   Writes wdata[0] into CONTROL[2].
-
-        Command register block
-        0x44 - CLEAR_RX       (write)   Writing wdata[0] = 1 requests RX buffer clear.
-                                        This is a command/strobe, not a persistent register bit.
-        0x45 - CLEAR_ERROR    (write)   Writing wdata[0] = 1 clears sticky error flags.
-                                        This is a command/strobe, not a persistent register bit.
-
-        CONTROL register bit definitions
-        CONTROL[0] = UART_EN  Global UART enable
-        CONTROL[1] = RX_EN    Receiver enable
-        CONTROL[2] = TX_EN    Transmitter enable
-        CONTROL[7:3] = 0      Reserved
-    */
 
     localparam logic [7:0] RX_DATA_ADDR       = 8'h00;
     localparam logic [7:0] RX_VALID_ADDR      = 8'h01;
@@ -108,64 +46,83 @@ module uart_peripheral(
     localparam int CTRL_RX_EN_BIT             = 1;
     localparam int CTRL_TX_EN_BIT             = 2;
 
+    logic [7:0] control_reg_q;
+    logic [7:0] baud_sel_reg_q;
     logic [7:0] selected_output;
-    logic [7:0] control_reg_out;
-    logic [7:0] control_reg_in;
-    logic       control_reg_we;
-    logic       baud_sel_reg_we;
-    logic       tx_write_pulse;
-    logic       clear_rx_pulse;
-    logic       clear_error_pulse;
+    logic [7:0] uart_status;
+
+    logic       tx_fifo_wr_en_cpu;
+    logic       tx_fifo_full_cpu;
+    logic       tx_fifo_empty_uart;
+    logic [7:0] tx_fifo_rdata_uart;
+    logic       tx_fifo_rd_en_uart;
+
+    logic       rx_fifo_wr_en_uart;
+    logic       rx_fifo_full_uart;
+    logic       rx_fifo_empty_cpu;
+    logic [7:0] rx_fifo_rdata_cpu;
+    logic       rx_fifo_rd_en_cpu;
+
+    logic       uart_tx_busy_uart;
+    logic       uart_tx_empty_uart;
+    logic       uart_rx_busy_uart;
+    logic       uart_rx_empty_uart;
+    logic [7:0] uart_rx_rdata_uart;
+    logic       uart_rx_read_uart;
+    logic       uart_tx_write_uart;
+    logic [7:0] uart_tx_wdata_uart;
+    logic       uart_framing_error_pulse_uart;
+    logic       uart_rx_overflow_pulse_uart;
+
+    logic       uart_rx_busy_sync_1_cpu, uart_rx_busy_sync_2_cpu;
+    logic       uart_tx_busy_sync_1_cpu, uart_tx_busy_sync_2_cpu;
+    logic       uart_tx_empty_sync_1_cpu, uart_tx_empty_sync_2_cpu;
+
+    logic       clear_rx_active_cpu;
     logic       framing_error_flag;
     logic       rx_overflow_flag;
-    logic       rx_clear_active;
-    logic       mmio_rx_read;
+    logic       framing_error_evt_toggle_uart;
+    logic       rx_overflow_evt_toggle_uart;
+    logic       framing_error_evt_sync_1_cpu, framing_error_evt_sync_2_cpu, framing_error_evt_seen_cpu;
+    logic       rx_overflow_evt_sync_1_cpu, rx_overflow_evt_sync_2_cpu, rx_overflow_evt_seen_cpu;
 
-    logic [7:0] uart_rx_rdata;
-    logic       uart_rx_full;
-    logic       uart_rx_empty;
-    logic       uart_rx_busy; 
-    logic       uart_rx_overflow;
-    logic       uart_framing_error;
-    logic       uart_tx_full;
-    logic       uart_tx_empty;
-    logic       uart_tx_busy;
+    logic [2:0] baud_sel_sync_1_uart, baud_sel_sync_2_uart;
+    logic [2:0] baud_sel_uart;
 
-    
-    logic       uart_rx_read;
-    logic       uart_tx_write;
-    logic [7:0] uart_tx_wdata;
-    
-    logic [7:0] uart_status;
+    logic       cpu_uart_en;
+    logic       cpu_rx_en;
+    logic       cpu_tx_en;
+    logic       uart_en_sync_1_uart, uart_en_sync_2_uart;
+    logic       rx_en_sync_1_uart, rx_en_sync_2_uart;
+    logic       tx_en_sync_1_uart, tx_en_sync_2_uart;
+
+    assign cpu_uart_en = control_reg_q[CTRL_UART_EN_BIT];
+    assign cpu_rx_en   = control_reg_q[CTRL_RX_EN_BIT];
+    assign cpu_tx_en   = control_reg_q[CTRL_TX_EN_BIT];
+
+    assign tx_fifo_wr_en_cpu = sel && we && (offset == TX_DATA_ADDR) &&
+                               cpu_uart_en && cpu_tx_en && !tx_fifo_full_cpu;
+
+    assign rx_fifo_rd_en_cpu = ((sel && re && (offset == RX_DATA_ADDR) &&
+                                cpu_uart_en && cpu_rx_en && !rx_fifo_empty_cpu) ||
+                                (clear_rx_active_cpu && !rx_fifo_empty_cpu));
+
     assign uart_status = {
-        1'b0,                                                       // [7]   reserved
-        rx_overflow_flag,                                           // [6]   RX_OVERFLOW
-        control_reg_out[CTRL_UART_EN_BIT] && control_reg_out[CTRL_TX_EN_BIT] && uart_tx_empty,  // [5] TX_EMPTY
-        control_reg_out[CTRL_UART_EN_BIT] && control_reg_out[CTRL_TX_EN_BIT] && uart_tx_busy,   // [4] TX_BUSY
-        control_reg_out[CTRL_UART_EN_BIT] && control_reg_out[CTRL_TX_EN_BIT] && ~uart_tx_full,  // [3] TX_READY
-        framing_error_flag,                                          // [2]   FRAMING_ERROR
-        control_reg_out[CTRL_UART_EN_BIT] && control_reg_out[CTRL_RX_EN_BIT] && uart_rx_busy,   // [1] RX_BUSY
-        control_reg_out[CTRL_UART_EN_BIT] && control_reg_out[CTRL_RX_EN_BIT] && ~uart_rx_empty  // [0] RX_VALID
+        1'b0,
+        rx_overflow_flag,
+        cpu_uart_en && cpu_tx_en && uart_tx_empty_sync_2_cpu,
+        cpu_uart_en && cpu_tx_en && uart_tx_busy_sync_2_cpu,
+        cpu_uart_en && cpu_tx_en && !tx_fifo_full_cpu,
+        framing_error_flag,
+        cpu_uart_en && cpu_rx_en && uart_rx_busy_sync_2_cpu,
+        cpu_uart_en && cpu_rx_en && !rx_fifo_empty_cpu
     };
 
-
-    assign uart_tx_write = tx_write_pulse 
-                            && control_reg_out[CTRL_UART_EN_BIT] 
-                            && control_reg_out[CTRL_TX_EN_BIT];
-
-    assign mmio_rx_read = sel && re && (offset == RX_DATA_ADDR)
-                            && control_reg_out[CTRL_UART_EN_BIT]
-                            && control_reg_out[CTRL_RX_EN_BIT];
-
-    assign uart_rx_read = mmio_rx_read || (rx_clear_active && !mmio_rx_read && !uart_rx_empty);
-
-    assign uart_tx_wdata = wdata;
-
-    always_comb begin : output_selector
+    always_comb begin
         selected_output = 8'h00;
 
         case (offset)
-            RX_DATA_ADDR:       selected_output = uart_rx_empty ? 8'h00 : uart_rx_rdata;
+            RX_DATA_ADDR:       selected_output = rx_fifo_empty_cpu ? 8'h00 : rx_fifo_rdata_cpu;
             RX_VALID_ADDR:      selected_output = {7'b0, uart_status[STAT_RX_VALID_BIT]};
             RX_BUSY_ADDR:       selected_output = {7'b0, uart_status[STAT_RX_BUSY_BIT]};
             FRAMING_ERROR_ADDR: selected_output = {7'b0, uart_status[STAT_FRAMING_ERROR_BIT]};
@@ -175,148 +132,199 @@ module uart_peripheral(
             TX_BUSY_ADDR:       selected_output = {7'b0, uart_status[STAT_TX_BUSY_BIT]};
             TX_EMPTY_ADDR:      selected_output = {7'b0, uart_status[STAT_TX_EMPTY_BIT]};
 
-            BAUD_SEL_ADDR:      selected_output = baud_sel_reg_out;
-
+            BAUD_SEL_ADDR:      selected_output = baud_sel_reg_q;
             STATUS_ADDR:        selected_output = uart_status;
-
-            CONTROL_ADDR:       selected_output = control_reg_out;
-            UART_EN_ADDR:       selected_output = {7'b0, control_reg_out[CTRL_UART_EN_BIT]};
-            RX_EN_ADDR:         selected_output = {7'b0, control_reg_out[CTRL_RX_EN_BIT]};
-            TX_EN_ADDR:         selected_output = {7'b0, control_reg_out[CTRL_TX_EN_BIT]};
+            CONTROL_ADDR:       selected_output = control_reg_q;
+            UART_EN_ADDR:       selected_output = {7'b0, control_reg_q[CTRL_UART_EN_BIT]};
+            RX_EN_ADDR:         selected_output = {7'b0, control_reg_q[CTRL_RX_EN_BIT]};
+            TX_EN_ADDR:         selected_output = {7'b0, control_reg_q[CTRL_TX_EN_BIT]};
 
             default:            selected_output = 8'h00;
         endcase
 
-
-        rdata = (re && sel) ? selected_output : 8'h00;
+        rdata = (sel && re) ? selected_output : 8'h00;
     end
 
-    always_comb begin : write_decoder
-        control_reg_in    = control_reg_out;
-        control_reg_we    = 1'b0;
-        baud_sel_reg_we   = 1'b0;
-        tx_write_pulse    = 1'b0;
-        clear_rx_pulse    = 1'b0;
-        clear_error_pulse = 1'b0;
-
-        if (sel && we) begin
-            case (offset)
-                TX_DATA_ADDR: begin
-                    tx_write_pulse = 1'b1;
-                end
-
-                BAUD_SEL_ADDR: begin
-                    baud_sel_reg_we = 1'b1;
-                end
-
-                CONTROL_ADDR: begin
-                    control_reg_we = 1'b1;
-                    control_reg_in = wdata;
-                end
-
-                UART_EN_ADDR: begin
-                    control_reg_we = 1'b1;
-                    control_reg_in[CTRL_UART_EN_BIT] = wdata[0];
-                end
-
-                RX_EN_ADDR: begin
-                    control_reg_we = 1'b1;
-                    control_reg_in[CTRL_RX_EN_BIT] = wdata[0];
-                end
-
-                TX_EN_ADDR: begin
-                    control_reg_we = 1'b1;
-                    control_reg_in[CTRL_TX_EN_BIT] = wdata[0];
-                end
-
-                CLEAR_RX_ADDR: begin
-                    clear_rx_pulse = wdata[0];
-                end
-
-                CLEAR_ERROR_ADDR: begin
-                    clear_error_pulse = wdata[0];
-                end
-
-                default: begin
-                    // No MMIO write action for unmapped offsets.
-                end
-            endcase
-        end
-    end
-
-    always_ff @(posedge clk or negedge rst_n) begin : sticky_flags_and_commands
+    always_ff @(posedge cpu_clk or negedge rst_n) begin
         if (!rst_n) begin
+            control_reg_q <= 8'h00;
+            baud_sel_reg_q <= 8'h00;
+            clear_rx_active_cpu <= 1'b0;
             framing_error_flag <= 1'b0;
-            rx_overflow_flag   <= 1'b0;
-            rx_clear_active    <= 1'b0;
+            rx_overflow_flag <= 1'b0;
+            framing_error_evt_sync_1_cpu <= 1'b0;
+            framing_error_evt_sync_2_cpu <= 1'b0;
+            framing_error_evt_seen_cpu <= 1'b0;
+            rx_overflow_evt_sync_1_cpu <= 1'b0;
+            rx_overflow_evt_sync_2_cpu <= 1'b0;
+            rx_overflow_evt_seen_cpu <= 1'b0;
+            uart_rx_busy_sync_1_cpu <= 1'b0;
+            uart_rx_busy_sync_2_cpu <= 1'b0;
+            uart_tx_busy_sync_1_cpu <= 1'b0;
+            uart_tx_busy_sync_2_cpu <= 1'b0;
+            uart_tx_empty_sync_1_cpu <= 1'b0;
+            uart_tx_empty_sync_2_cpu <= 1'b0;
         end else begin
-            if (clear_error_pulse) begin
-                framing_error_flag <= 1'b0;
-                rx_overflow_flag   <= 1'b0;
-            end else if (uart_framing_error) begin
+            framing_error_evt_sync_1_cpu <= framing_error_evt_toggle_uart;
+            framing_error_evt_sync_2_cpu <= framing_error_evt_sync_1_cpu;
+            rx_overflow_evt_sync_1_cpu <= rx_overflow_evt_toggle_uart;
+            rx_overflow_evt_sync_2_cpu <= rx_overflow_evt_sync_1_cpu;
+
+            uart_rx_busy_sync_1_cpu <= uart_rx_busy_uart;
+            uart_rx_busy_sync_2_cpu <= uart_rx_busy_sync_1_cpu;
+            uart_tx_busy_sync_1_cpu <= uart_tx_busy_uart;
+            uart_tx_busy_sync_2_cpu <= uart_tx_busy_sync_1_cpu;
+            uart_tx_empty_sync_1_cpu <= uart_tx_empty_uart;
+            uart_tx_empty_sync_2_cpu <= uart_tx_empty_sync_1_cpu;
+
+            if (framing_error_evt_sync_2_cpu != framing_error_evt_seen_cpu) begin
+                framing_error_evt_seen_cpu <= framing_error_evt_sync_2_cpu;
                 framing_error_flag <= 1'b1;
             end
 
-            if (uart_rx_overflow) begin
+            if (rx_overflow_evt_sync_2_cpu != rx_overflow_evt_seen_cpu) begin
+                rx_overflow_evt_seen_cpu <= rx_overflow_evt_sync_2_cpu;
                 rx_overflow_flag <= 1'b1;
             end
 
-            if (clear_rx_pulse) begin
-                rx_clear_active <= 1'b1;
-            end else if (rx_clear_active && uart_rx_empty) begin
-                rx_clear_active <= 1'b0;
+            if (sel && we) begin
+                case (offset)
+                    BAUD_SEL_ADDR: baud_sel_reg_q <= {5'b0, wdata[2:0]};
+                    CONTROL_ADDR:  control_reg_q <= wdata;
+                    UART_EN_ADDR:  control_reg_q[CTRL_UART_EN_BIT] <= wdata[0];
+                    RX_EN_ADDR:    control_reg_q[CTRL_RX_EN_BIT] <= wdata[0];
+                    TX_EN_ADDR:    control_reg_q[CTRL_TX_EN_BIT] <= wdata[0];
+                    CLEAR_RX_ADDR: if (wdata[0]) clear_rx_active_cpu <= 1'b1;
+                    CLEAR_ERROR_ADDR: begin
+                        if (wdata[0]) begin
+                            framing_error_flag <= 1'b0;
+                            rx_overflow_flag <= 1'b0;
+                        end
+                    end
+                    default: begin
+                    end
+                endcase
+            end
+
+            if (clear_rx_active_cpu && rx_fifo_empty_cpu) begin
+                clear_rx_active_cpu <= 1'b0;
             end
         end
     end
 
-    logic [7:0] baud_sel_reg_out;
-    reg_cell #(.W(8)) baud_sel_reg(
-        .clk(clk),
-        .rst_n(rst_n),
-        .we(baud_sel_reg_we),
-        .oe(1'b1),
-        .d({5'b0, wdata[2:0]}),
-        .out(baud_sel_reg_out)
+    always_ff @(posedge uart_clk or negedge rst_n) begin
+        if (!rst_n) begin
+            baud_sel_sync_1_uart <= 3'b000;
+            baud_sel_sync_2_uart <= 3'b000;
+            uart_en_sync_1_uart <= 1'b0;
+            uart_en_sync_2_uart <= 1'b0;
+            rx_en_sync_1_uart <= 1'b0;
+            rx_en_sync_2_uart <= 1'b0;
+            tx_en_sync_1_uart <= 1'b0;
+            tx_en_sync_2_uart <= 1'b0;
+            framing_error_evt_toggle_uart <= 1'b0;
+            rx_overflow_evt_toggle_uart <= 1'b0;
+        end else begin
+            baud_sel_sync_1_uart <= baud_sel_reg_q[2:0];
+            baud_sel_sync_2_uart <= baud_sel_sync_1_uart;
+            uart_en_sync_1_uart <= cpu_uart_en;
+            uart_en_sync_2_uart <= uart_en_sync_1_uart;
+            rx_en_sync_1_uart <= cpu_rx_en;
+            rx_en_sync_2_uart <= rx_en_sync_1_uart;
+            tx_en_sync_1_uart <= cpu_tx_en;
+            tx_en_sync_2_uart <= tx_en_sync_1_uart;
+
+            if (uart_framing_error_pulse_uart) begin
+                framing_error_evt_toggle_uart <= ~framing_error_evt_toggle_uart;
+            end
+
+            if (uart_rx_overflow_pulse_uart) begin
+                rx_overflow_evt_toggle_uart <= ~rx_overflow_evt_toggle_uart;
+            end
+        end
+    end
+
+    assign baud_sel_uart = baud_sel_sync_2_uart;
+
+    assign tx_fifo_rd_en_uart = uart_en_sync_2_uart &&
+                                tx_en_sync_2_uart &&
+                                !uart_tx_busy_uart &&
+                                !tx_fifo_empty_uart;
+
+    assign uart_tx_write_uart = tx_fifo_rd_en_uart;
+    assign uart_tx_wdata_uart = tx_fifo_rdata_uart;
+
+    assign rx_fifo_wr_en_uart = uart_en_sync_2_uart &&
+                                rx_en_sync_2_uart &&
+                                !uart_rx_empty_uart &&
+                                !rx_fifo_full_uart;
+
+    assign uart_rx_read_uart = uart_en_sync_2_uart &&
+                               rx_en_sync_2_uart &&
+                               !uart_rx_empty_uart &&
+                               !rx_fifo_full_uart;
+
+    async_fifo #(
+        .DATA_WIDTH(8),
+        .DEPTH(16)
+    ) tx_async_fifo (
+        .wr_clk(cpu_clk),
+        .wr_rst_n(rst_n),
+        .wr_en(tx_fifo_wr_en_cpu),
+        .wr_data(wdata),
+        .wr_full(tx_fifo_full_cpu),
+        .rd_clk(uart_clk),
+        .rd_rst_n(rst_n),
+        .rd_en(tx_fifo_rd_en_uart),
+        .rd_data(tx_fifo_rdata_uart),
+        .rd_empty(tx_fifo_empty_uart)
     );
 
-    reg_cell #(.W(8)) control_reg(
-        .clk(clk),
-        .rst_n(rst_n),
-        .we(control_reg_we),
-        .oe(1'b1),
-        .d(control_reg_in),
-        .out(control_reg_out)
+    async_fifo #(
+        .DATA_WIDTH(8),
+        .DEPTH(16)
+    ) rx_async_fifo (
+        .wr_clk(uart_clk),
+        .wr_rst_n(rst_n),
+        .wr_en(rx_fifo_wr_en_uart),
+        .wr_data(uart_rx_rdata_uart),
+        .wr_full(rx_fifo_full_uart),
+        .rd_clk(cpu_clk),
+        .rd_rst_n(rst_n),
+        .rd_en(rx_fifo_rd_en_cpu),
+        .rd_data(rx_fifo_rdata_cpu),
+        .rd_empty(rx_fifo_empty_cpu)
     );
 
     uart_top #(
         .CLK_FREQ(27_000_000),
         .TX_FIFO_DEPTH(16),
         .RX_FIFO_DEPTH(16),
+        .USE_TX_FIFO(1'b0),
+        .USE_RX_FIFO(1'b0),
         .IDLE_STATE_BIT(1'b1),
         .STOP_BIT_VALUE(1'b1),
         .START_BIT_VALUE(1'b0)
-    ) uart_module(
-        .clk(clk),           // System clock for UART logic and FIFOs
-        .rst(~rst_n),           // Active-high reset for the UART block
-        .baud_sel(baud_sel_reg_out[2:0]),      // Baud-rate selector input
-        .uart_rx(uart_rx),// Physical UART receive pin
-        .uart_tx(uart_tx),       // Physical.
-        
-        .tx_wdata(uart_tx_wdata),      // Byte to push into the TX path
-        .tx_write(uart_tx_write),      // Write strobe for TX data
-        .tx_full(uart_tx_full),       // TX FIFO cannot accept new data
-        .tx_empty(uart_tx_empty),      // TX path is completely empty
-        .tx_busy(uart_tx_busy),       // Transmitter is current.
-        
-        .rx_read(uart_rx_read),       // Read strobe to consume one RX byte
-        .rx_rdata(uart_rx_rdata),      // Current byte at the RX FIFO output
-        .rx_empty(uart_rx_empty),      // RX FIFO has no received data
-        .rx_full(uart_rx_full),       // RX FIFO cannot accept more data
-        .rx_busy(uart_rx_busy),       // Receiver is currentl.
-        
-        .framing_error(uart_framing_error), // Stop-bit/frame format error occurred
-        .rx_overflow(uart_rx_overflow)    // Received data was dropped because RX FIFO was full
+    ) uart_module (
+        .clk(uart_clk),
+        .rst(~rst_n),
+        .baud_sel(baud_sel_uart),
+        .uart_rx(uart_rx),
+        .uart_tx(uart_tx),
+        .tx_wdata(uart_tx_wdata_uart),
+        .tx_write(uart_tx_write_uart),
+        .tx_full(),
+        .tx_empty(uart_tx_empty_uart),
+        .tx_busy(uart_tx_busy_uart),
+        .rx_read(uart_rx_read_uart),
+        .rx_rdata(uart_rx_rdata_uart),
+        .rx_empty(uart_rx_empty_uart),
+        .rx_full(),
+        .rx_busy(uart_rx_busy_uart),
+        .framing_error(),
+        .rx_overflow(),
+        .framing_error_pulse_out(uart_framing_error_pulse_uart),
+        .rx_overflow_pulse_out(uart_rx_overflow_pulse_uart)
     );
-
 
 endmodule

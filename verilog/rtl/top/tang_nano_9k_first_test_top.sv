@@ -58,6 +58,7 @@ module tang_nano_9k_first_test_top (
     logic [7:0]  mem_rdata;
     logic [7:0]  mem_wdata;
     logic mem_we;
+    logic mem_re;
 
     logic [7:0] data_mem_dout;
     logic [7:0] led_reg_dout;
@@ -83,7 +84,8 @@ module tang_nano_9k_first_test_top (
         .mem_rdata(mem_rdata),
         .mem_addr(mem_addr),
         .mem_wdata(mem_wdata),
-        .mem_wen(mem_we)
+        .mem_wen(mem_we),
+        .mem_ren(mem_re)
     );
 
     data_memory #(.MEM_SIZE(256)) data_mem (

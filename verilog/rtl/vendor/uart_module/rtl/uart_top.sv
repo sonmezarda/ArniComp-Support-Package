@@ -2,6 +2,8 @@ module uart_top #(
     parameter int CLK_FREQ = 27_000_000,
     parameter int TX_FIFO_DEPTH = 16,
     parameter int RX_FIFO_DEPTH = 16,
+    parameter bit USE_TX_FIFO = 1'b1,
+    parameter bit USE_RX_FIFO = 1'b1,
     parameter logic IDLE_STATE_BIT  = 1'b1,
     parameter logic STOP_BIT_VALUE  = 1'b1,
     parameter logic START_BIT_VALUE = 1'b0
@@ -27,8 +29,10 @@ module uart_top #(
     output logic       rx_busy,       // Receiver is currently sampling a frame
 
     // Error flags are sticky until reset so the core can poll them safely.
-    output logic       framing_error, // Stop-bit/frame format error occurred
-    output logic       rx_overflow    // Received data was dropped because RX FIFO was full
+    output logic       framing_error,        // Stop-bit/frame format error occurred
+    output logic       rx_overflow,          // Received data was dropped because RX FIFO was full
+    output logic       framing_error_pulse_out,
+    output logic       rx_overflow_pulse_out
 
 );
 
@@ -48,11 +52,25 @@ module uart_top #(
     logic       tx_fifo_empty;
 
     logic       rx_fifo_wr_en;
+    logic [7:0] rx_hold_data;
+    logic       rx_hold_full;
+    logic       tx_accept_direct;
+    logic [7:0] rx_rdata_int;
+    logic       rx_full_int;
+    logic       rx_empty_int;
+    logic       tx_full_int;
 
-    assign tx_fifo_wr_en = tx_write && !tx_full;
-    assign rx_fifo_wr_en = rx_valid && !rx_full;
-    // TX is considered empty only when both the FIFO and serializer are idle.
-    assign tx_empty      = tx_fifo_empty && !tx_busy;
+    assign tx_accept_direct = tx_write && !tx_busy;
+
+    assign tx_fifo_wr_en = USE_TX_FIFO ? (tx_write && !tx_full_int) : 1'b0;
+    assign rx_fifo_wr_en = USE_RX_FIFO ? (rx_valid && !rx_full_int) : 1'b0;
+
+    // TX is considered empty only when both the buffer path and serializer are idle.
+    assign tx_empty = USE_TX_FIFO ? (tx_fifo_empty && !tx_busy) : !tx_busy;
+    assign tx_full  = tx_full_int;
+    assign rx_rdata = rx_rdata_int;
+    assign rx_full  = rx_full_int;
+    assign rx_empty = rx_empty_int;
 
     uart_baud_rate #(
         .CLK_FREQ(CLK_FREQ)
@@ -79,33 +97,81 @@ module uart_top #(
         .framing_error(framing_error_pulse)
     );
 
-    sync_fifo #(
-        .DATA_WIDTH(8),
-        .DEPTH(RX_FIFO_DEPTH)
-    ) u_rx_fifo (
-        .clk(clk),
-        .rst(rst),
-        .wr_en(rx_fifo_wr_en),
-        .rd_en(rx_read),
-        .wr_data(rx_data),
-        .rd_data(rx_rdata),
-        .full(rx_full),
-        .empty(rx_empty)
-    );
+    generate
+        if (USE_RX_FIFO) begin : gen_rx_fifo
+            logic [7:0] rx_fifo_rdata_int;
+            logic       rx_fifo_full_int;
+            logic       rx_fifo_empty_int;
 
-    sync_fifo #(
-        .DATA_WIDTH(8),
-        .DEPTH(TX_FIFO_DEPTH)
-    ) u_tx_fifo (
-        .clk(clk),
-        .rst(rst),
-        .wr_en(tx_fifo_wr_en),
-        .rd_en(tx_fifo_rd_en),
-        .wr_data(tx_wdata),
-        .rd_data(tx_fifo_rdata),
-        .full(tx_full),
-        .empty(tx_fifo_empty)
-    );
+            sync_fifo #(
+                .DATA_WIDTH(8),
+                .DEPTH(RX_FIFO_DEPTH)
+            ) u_rx_fifo (
+                .clk(clk),
+                .rst(rst),
+                .wr_en(rx_fifo_wr_en),
+                .rd_en(rx_read),
+                .wr_data(rx_data),
+                .rd_data(rx_fifo_rdata_int),
+                .full(rx_fifo_full_int),
+                .empty(rx_fifo_empty_int)
+            );
+
+            assign rx_rdata_int = rx_fifo_rdata_int;
+            assign rx_full_int  = rx_fifo_full_int;
+            assign rx_empty_int = rx_fifo_empty_int;
+        end else begin : gen_rx_hold
+            always_ff @(posedge clk or posedge rst) begin
+                if (rst) begin
+                    rx_hold_data <= 8'h00;
+                    rx_hold_full <= 1'b0;
+                end else begin
+                    if (rx_valid && !rx_hold_full) begin
+                        rx_hold_data <= rx_data;
+                        rx_hold_full <= 1'b1;
+                    end
+
+                    if (rx_read && rx_hold_full) begin
+                        rx_hold_full <= 1'b0;
+                    end
+                end
+            end
+
+            assign rx_rdata_int = rx_hold_data;
+            assign rx_full_int  = rx_hold_full;
+            assign rx_empty_int = !rx_hold_full;
+        end
+    endgenerate
+
+    generate
+        if (USE_TX_FIFO) begin : gen_tx_fifo
+            logic       tx_fifo_full_int;
+            logic       tx_fifo_empty_int;
+            logic [7:0] tx_fifo_rdata_int;
+
+            sync_fifo #(
+                .DATA_WIDTH(8),
+                .DEPTH(TX_FIFO_DEPTH)
+            ) u_tx_fifo (
+                .clk(clk),
+                .rst(rst),
+                .wr_en(tx_fifo_wr_en),
+                .rd_en(tx_fifo_rd_en),
+                .wr_data(tx_wdata),
+                .rd_data(tx_fifo_rdata_int),
+                .full(tx_fifo_full_int),
+                .empty(tx_fifo_empty_int)
+            );
+
+            assign tx_fifo_rdata = tx_fifo_rdata_int;
+            assign tx_fifo_empty = tx_fifo_empty_int;
+            assign tx_full_int   = tx_fifo_full_int;
+        end else begin : gen_no_tx_fifo
+            assign tx_fifo_rdata = tx_wdata;
+            assign tx_fifo_empty = 1'b1;
+            assign tx_full_int   = tx_busy;
+        end
+    endgenerate
 
     uart_tx #(
         .IDLE_STATE_BIT(IDLE_STATE_BIT),
@@ -129,18 +195,27 @@ module uart_top #(
             tx_fifo_rd_en <= 1'b0;
             rx_overflow  <= 1'b0;
             framing_error <= 1'b0;
+            framing_error_pulse_out <= 1'b0;
+            rx_overflow_pulse_out <= 1'b0;
         end else begin
             tx_start      <= 1'b0;
             tx_fifo_rd_en <= 1'b0;
+            framing_error_pulse_out <= 1'b0;
+            rx_overflow_pulse_out <= 1'b0;
             if (rx_valid && rx_full) begin
                 rx_overflow <= 1'b1;
+                rx_overflow_pulse_out <= 1'b1;
             end
 
             if (framing_error_pulse) begin
                 framing_error <= 1'b1;
+                framing_error_pulse_out <= 1'b1;
             end
 
-            if (!tx_busy && !tx_fifo_empty) begin
+            if (!USE_TX_FIFO && tx_accept_direct) begin
+                tx_data  <= tx_wdata;
+                tx_start <= 1'b1;
+            end else if (USE_TX_FIFO && !tx_busy && !tx_fifo_empty) begin
                 tx_data      <= tx_fifo_rdata;
                 tx_start     <= 1'b1;
                 tx_fifo_rd_en <= 1'b1;

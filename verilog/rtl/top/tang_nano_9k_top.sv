@@ -32,18 +32,29 @@ module tang_nano_9k_top (
     logic rst_n_sync, rst_n_debounced;
     logic btn_run_sync, btn_run_debounced;
 
-    always_ff @(posedge clk) begin
-        rst_n_sync <= rst_n;
-        btn_run_sync <= btn_run;
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            rst_n_sync <= 1'b0;
+            btn_run_sync <= 1'b1;
+        end else begin
+            rst_n_sync <= rst_n;
+            btn_run_sync <= btn_run;
+        end
     end
 
-    always_ff @(posedge clk) begin
-        if (debounce_counter < 16'hFFFF) begin
-            debounce_counter <= debounce_counter + 1;
-        end else begin
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
             debounce_counter <= '0;
-            rst_n_debounced <= rst_n_sync;
-            btn_run_debounced <= btn_run_sync;
+            rst_n_debounced <= 1'b0;
+            btn_run_debounced <= 1'b1;
+        end else begin
+            if (debounce_counter < 16'hFFFF) begin
+                debounce_counter <= debounce_counter + 1;
+            end else begin
+                debounce_counter <= '0;
+                rst_n_debounced <= rst_n_sync;
+                btn_run_debounced <= btn_run_sync;
+            end
         end
     end
 
@@ -52,7 +63,8 @@ module tang_nano_9k_top (
     arnicomp_soc_top #(
         .PROG_MEM_FILE("rom/program.mem")
     ) soc (
-        .clk(cpu_clk),
+        .cpu_clk(cpu_clk),
+        .uart_clk(clk),
         .rst_n(rst_n_debounced),
         .uart_rx(uart_rx),
         .uart_tx(uart_tx),

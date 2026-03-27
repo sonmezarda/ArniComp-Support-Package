@@ -4,7 +4,8 @@ module arnicomp_soc_top #(
     parameter string PROG_MEM_FILE = "rom/program.mem",
     parameter int RAM_SIZE = 2048
 )(
-    input  logic       clk,
+    input  logic       cpu_clk,
+    input  logic       uart_clk,
     input  logic       rst_n,
     input  logic       uart_rx,
 
@@ -41,7 +42,7 @@ module arnicomp_soc_top #(
     arnicomp_top #(
         .PROG_MEM_FILE(PROG_MEM_FILE)
     ) cpu (
-        .clk(clk),
+        .clk(cpu_clk),
         .rst_n(rst_n),
         .mem_rdata(mem_rdata),
         .mem_addr(mem_addr),
@@ -71,7 +72,7 @@ module arnicomp_soc_top #(
     data_memory #(
         .MEM_SIZE(RAM_SIZE)
     ) data_mem (
-        .clk(clk),
+        .clk(cpu_clk),
         .we(ram_we),
         .addr(mem_addr),
         .data_in(mem_wdata),
@@ -79,7 +80,8 @@ module arnicomp_soc_top #(
     );
 
     uart_peripheral uart_mmio (
-        .clk(clk),
+        .cpu_clk(cpu_clk),
+        .uart_clk(uart_clk),
         .rst_n(rst_n),
         .sel(uart_sel),
         .we(uart_we),
@@ -92,7 +94,7 @@ module arnicomp_soc_top #(
     );
 
     reg_cell #(.W(8)) sys_led_reg (
-        .clk(clk),
+        .clk(cpu_clk),
         .rst_n(rst_n),
         .we(sys_led_we),
         .oe(1'b1),
