@@ -12,8 +12,9 @@ module data_memory #(
     output logic [DATA_WIDTH-1:0]   data_out
 );
     logic [DATA_WIDTH-1:0] mem [0:MEM_SIZE-1];
-    
-    wire [7:0] mem_addr = addr[7:0];
+    localparam int MEM_ADDR_WIDTH = (MEM_SIZE <= 2) ? 1 : $clog2(MEM_SIZE);
+
+    wire [MEM_ADDR_WIDTH-1:0] mem_addr = addr[MEM_ADDR_WIDTH-1:0];
 
     // Synchronous write
     always_ff @(posedge clk) begin

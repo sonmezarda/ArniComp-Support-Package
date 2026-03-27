@@ -19,11 +19,19 @@
         <File path="rtl/core/reg_marl.sv" type="file.verilog" enable="1"/>
         <File path="rtl/lib/reg_cell.sv" type="file.verilog" enable="1"/>
         <File path="rtl/mem/data_memory.sv" type="file.verilog" enable="1"/>
-        <File path="rtl/mem/memory_system.sv" type="file.verilog" enable="1"/>
+        <File path="rtl/mem/memory_map_unit.sv" type="file.verilog" enable="1"/>
         <File path="rtl/mem/program_memory.sv" type="file.verilog" enable="1"/>
+        <File path="rtl/peripherals/uart_peripheral.sv" type="file.verilog" enable="1"/>
         <File path="rtl/pkg/control_pkg.sv" type="file.verilog" enable="1"/>
+        <File path="rtl/top/arnicomp_soc_top.sv" type="file.verilog" enable="1"/>
         <File path="rtl/top/arnicomp_top.sv" type="file.verilog" enable="1"/>
         <File path="rtl/top/tang_nano_9k_top.sv" type="file.verilog" enable="1"/>
+        <File path="rtl/vendor/uart_module/rtl/sync_fifo.sv" type="file.verilog" enable="1"/>
+        <File path="rtl/vendor/uart_module/rtl/uart_baud_rate.sv" type="file.verilog" enable="1"/>
+        <File path="rtl/vendor/uart_module/rtl/uart_rx.sv" type="file.verilog" enable="1"/>
+        <File path="rtl/vendor/uart_module/rtl/uart_top.sv" type="file.verilog" enable="1"/>
+        <File path="rtl/vendor/uart_module/rtl/uart_tx.sv" type="file.verilog" enable="1"/>
         <File path="constraints/tang_nano_9k.cst" type="file.cst" enable="1"/>
+        <File path="src/arnicomp_tang_nano_9k.sdc" type="file.sdc" enable="1"/>
     </FileList>
 </Project>

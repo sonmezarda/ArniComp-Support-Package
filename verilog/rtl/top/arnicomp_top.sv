@@ -7,7 +7,8 @@ module arnicomp_top #(
 
     output logic [15:0] mem_addr,
     output logic [7:0] mem_wdata,
-    output logic mem_wen
+    output logic mem_wen,
+    output logic mem_ren
 
 );
 
@@ -55,6 +56,7 @@ logic [15:0] mar_addr;
 assign mem_addr = {marh_out, marl_out};
 assign mem_wdata = bus;
 assign mem_wen = mem_we;
+assign mem_ren = control_pins.oe && (control_pins.ssel == 3'b111);
 
 control_pkg::ctrl_t control_pins;
 
