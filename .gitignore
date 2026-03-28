@@ -41,7 +41,10 @@ verilog/*.fs
 verilog/*.gao
 verilog/*.rao
 
+
 verilog/sv2v-Linux
 verilog/synthesis_output
+verilog/visualization
 
 /obj_dir
+/visualization

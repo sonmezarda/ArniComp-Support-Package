@@ -113,8 +113,10 @@ loop:
     JLT                 ; Conditional jump
     
     ; To jump to a label, load address then jump
-    LDI @loop           ; @ for label addresses
-    MOV PRL, RA         ; Set program register
+    LDI @loop.low       ; Explicit low byte
+    MOV PRL, RA         ; Set program register low
+    LDI @loop.high      ; Explicit high byte
+    MOV PRH, RA         ; Set program register high
     JMP                 ; Execute jump
     
     HLT                 ; Halt
@@ -140,7 +142,11 @@ LDI $VALUE     ; Correct: $ only
 label:
     NOP
 LDI @label     ; Correct: @ only
+LDI @label.low ; Explicit low byte of label address
+LDI @label.high; Explicit high byte of label address
 ```
+
+`LDI @label` now assembles the low 7 bits of the label byte and emits warnings when the resolved byte also needs `SMSBRA`, or when a 16-bit label address also needs an explicit `.high` load.
 
 ## Examples
 
@@ -161,8 +167,10 @@ loop:
     JLT
     HLT
     
-    LDI @loop
+    LDI @loop.low
     MOV PRL, RA
+    LDI @loop.high
+    MOV PRH, RA
     JMP
 ```
 

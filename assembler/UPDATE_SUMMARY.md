@@ -36,7 +36,7 @@ The ArniComp assembler has been completely rewritten to support the new ISA (Ins
 - **Clear prefix rules**:
   - `#` → Direct numbers only (`LDI #31`, `ADDI #7`)
   - `$` → Constants only (`LDI $MAX`)
-  - `@` → Labels only (`LDI @loop`)
+  - `@` → Labels only (`LDI @loop`, `LDI @loop.low`, `LDI @loop.high`)
   - **No combinations** allowed (`#$`, `#@`, etc.)
 
 ## File Structure

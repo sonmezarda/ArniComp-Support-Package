@@ -266,6 +266,7 @@ async def compile_code(request: CompileRequest):
         print(f"Raw lines: {lines}")  # Debug
         print(f"Filtered lines: {filtered_lines}")  # Debug
         binary_lines, labels, constants = assembly_helper.convert_to_machine_code(filtered_lines)
+        warnings = list(assembly_helper.last_warnings)
         print(f"Binary lines: {binary_lines}")  # Debug
         if not binary_lines:
             return {'success': False, 'error': 'No valid instructions found'}
@@ -287,7 +288,8 @@ async def compile_code(request: CompileRequest):
             'message': f'Program compiled successfully. {len(program)} instructions loaded.',
             'instructions': len(program),
             'labels': labels,
-            'constants': constants
+            'constants': constants,
+            'warnings': warnings
         }
     except Exception as e:
         print(f"Compilation error: {str(e)}")  # Debug

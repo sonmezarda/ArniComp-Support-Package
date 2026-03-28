@@ -52,6 +52,7 @@ class AssemblerCLI:
         # Assemble
         try:
             binary_lines, labels, constants = self.helper.convert_to_machine_code(raw_lines)
+            warnings = self.helper.last_warnings
             
             # Display info
             print(f"Assembly successful!")
@@ -60,6 +61,7 @@ class AssemblerCLI:
             print(f"  Instructions: {len(binary_lines)}")
             print(f"  Labels: {len(labels)}")
             print(f"  Constants: {len(constants)}")
+            print(f"  Warnings: {len(warnings)}")
             
             if labels:
                 print("\n  Defined labels:")
@@ -70,6 +72,11 @@ class AssemblerCLI:
                 print("\n  Defined constants:")
                 for const, value in sorted(constants.items()):
                     print(f"    {const:20s} = 0x{value:02X} ({value})")
+
+            if warnings:
+                print("\n  Warnings:")
+                for warning in warnings:
+                    print(f"    {warning}")
             
             # Write output
             with open(output_file, 'w') as f:
@@ -179,6 +186,7 @@ class AssemblerCLI:
         # Assemble and convert to Intel HEX
         try:
             binary_lines, labels, constants = self.helper.convert_to_machine_code(raw_lines)
+            warnings = self.helper.last_warnings
             
             # Save as Intel HEX format
             save_intelHexFile(output_file, binary_lines, line_type='bin')
@@ -188,11 +196,16 @@ class AssemblerCLI:
             print(f"  Output: {output_file}")
             print(f"  Instructions: {len(binary_lines)}")
             print(f"  Format: Intel HEX (for Digital circuit simulator)")
+            print(f"  Warnings: {len(warnings)}")
             
             if labels:
                 print(f"  Labels: {len(labels)}")
             if constants:
                 print(f"  Constants: {len(constants)}")
+            if warnings:
+                print("\n  Warnings:")
+                for warning in warnings:
+                    print(f"    {warning}")
             
         except Exception as e:
             print(f"Error creating Intel HEX file: {e}")
@@ -216,6 +229,7 @@ class AssemblerCLI:
         # Assemble and convert to Intel HEX
         try:
             binary_lines, labels, constants = self.helper.convert_to_machine_code(raw_lines)
+            warnings = self.helper.last_warnings
             
             with open(output_file, 'w') as f:
                 f.write("@0\n")
@@ -229,11 +243,16 @@ class AssemblerCLI:
             print(f"  Output: {output_file}")
             print(f"  Instructions: {len(binary_lines)}")
             print(f"  Format: HEX (for SystemVerilog)")
+            print(f"  Warnings: {len(warnings)}")
             
             if labels:
                 print(f"  Labels: {len(labels)}")
             if constants:
                 print(f"  Constants: {len(constants)}")
+            if warnings:
+                print("\n  Warnings:")
+                for warning in warnings:
+                    print(f"    {warning}")
             
         except Exception as e:
             print(f"Error creating SystemVerilog HEX file: {e}")
@@ -354,6 +373,9 @@ ASSEMBLY SYNTAX:
     label:                      ; Define labels
     
     LDI #immediate              ; Load immediate (0-127)
+    LDI @label                  ; Load label low byte (warns if SMSBRA/high byte needed)
+    LDI @label.low              ; Load low byte of a label address
+    LDI @label.high             ; Load high byte of a label address
     MOV dest, src               ; Move data
     ADD src                     ; Add to RD, result in ACC
     SUB src                     ; Subtract from RD

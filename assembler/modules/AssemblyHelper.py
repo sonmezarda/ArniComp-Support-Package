@@ -4,6 +4,7 @@ Handles assembly language parsing, validation, and binary code generation
 """
 
 from __future__ import annotations
+from dataclasses import dataclass, field
 import json
 import os
 import re
@@ -22,6 +23,39 @@ SOURCES = config['sources']
 COMMENT_CHAR = config['special_chars']['comment']
 LABEL_CHAR = config['special_chars']['label']
 CONSTANT_KEYWORD = config['keywords']['constant']
+
+
+@dataclass(frozen=True)
+class LabelReference:
+    """Represents a label-based LDI operand."""
+    source_text: str
+    label_name: str
+    part: str
+    address: int
+    byte_value: int
+
+    @property
+    def encoded_immediate(self) -> int:
+        """LDI can only encode the low 7 bits directly."""
+        return self.byte_value & 0x7F
+
+
+@dataclass
+class ParsedLine:
+    """Parsed source line with optional label metadata."""
+    line_number: int
+    raw_line: str
+    instruction: str
+    args: List[str]
+    label_ref: Optional[LabelReference] = None
+
+
+@dataclass
+class LabelLoadSegment:
+    """Tracks how one label byte is loaded into RA and consumed."""
+    reference: LabelReference
+    smsbra_used: bool = False
+    mov_dests: set[str] = field(default_factory=set)
 
 
 class InstructionEncoder:
@@ -248,6 +282,7 @@ class AssemblyHelper:
         self.constant_prefix = constant_prefix
         self.label_prefix = label_prefix
         self.encoder = InstructionEncoder()
+        self.last_warnings: List[str] = []
     
     def to_decimal(self, value: str) -> int:
         """Convert various number formats to decimal
@@ -364,6 +399,131 @@ class AssemblyHelper:
             resolved.append(line)
         
         return resolved
+
+    def parse_label_reference(self, token: str, labels: Dict[str, int]) -> Optional[LabelReference]:
+        """Parse @label, @label.low, or @label.high references for LDI."""
+        token = token.strip()
+        if not token.startswith(self.label_prefix):
+            return None
+
+        raw_name = token[len(self.label_prefix):].strip()
+        normalized = raw_name.upper()
+
+        # Prefer an exact label match so labels containing dots still work.
+        if normalized in labels:
+            address = labels[normalized]
+            return LabelReference(
+                source_text=token,
+                label_name=normalized,
+                part="full",
+                address=address,
+                byte_value=address & 0xFF
+            )
+
+        suffix_map = {
+            ".LOW": "low",
+            ".LO": "low",
+            ".HIGH": "high",
+            ".HI": "high",
+        }
+
+        for suffix, part in suffix_map.items():
+            if normalized.endswith(suffix):
+                base_name = normalized[:-len(suffix)]
+                if base_name in labels:
+                    address = labels[base_name]
+                    byte_value = address & 0xFF if part == "low" else (address >> 8) & 0xFF
+                    return LabelReference(
+                        source_text=token,
+                        label_name=base_name,
+                        part=part,
+                        address=address,
+                        byte_value=byte_value
+                    )
+
+        raise ValueError(f"Undefined label reference: {token}")
+
+    def parse_source_line(self, line: str, labels: Dict[str, int], line_number: int) -> ParsedLine:
+        """Parse a source line and keep label metadata when present."""
+        instruction, args = self.parse_instruction(line)
+        label_ref = None
+
+        if instruction == "LDI" and len(args) == 1:
+            label_ref = self.parse_label_reference(args[0], labels)
+
+        return ParsedLine(
+            line_number=line_number,
+            raw_line=line,
+            instruction=instruction,
+            args=args,
+            label_ref=label_ref
+        )
+
+    def collect_label_load_segments(self, parsed_lines: List[ParsedLine], start_index: int) -> List[LabelLoadSegment]:
+        """Collect the contiguous RA-loading sequence for the same label."""
+        start_line = parsed_lines[start_index]
+        if not start_line.label_ref:
+            return []
+
+        label_name = start_line.label_ref.label_name
+        segments = [LabelLoadSegment(start_line.label_ref)]
+        current_segment = segments[0]
+
+        for parsed in parsed_lines[start_index + 1:]:
+            if parsed.instruction == "SMSBRA":
+                current_segment.smsbra_used = True
+                continue
+
+            if parsed.instruction == "MOV" and len(parsed.args) == 2 and parsed.args[1].upper() == "RA":
+                current_segment.mov_dests.add(parsed.args[0].upper())
+                continue
+
+            if parsed.instruction == "LDI" and parsed.label_ref and parsed.label_ref.label_name == label_name:
+                current_segment = LabelLoadSegment(parsed.label_ref)
+                segments.append(current_segment)
+                continue
+
+            break
+
+        return segments
+
+    def build_label_warnings(self, parsed_lines: List[ParsedLine]) -> List[str]:
+        """Warn when label bytes need SMSBRA or an explicit high-byte load."""
+        warnings = []
+
+        for index, parsed in enumerate(parsed_lines):
+            ref = parsed.label_ref
+            if not ref:
+                continue
+
+            segments = self.collect_label_load_segments(parsed_lines, index)
+            if not segments:
+                continue
+
+            current_segment = segments[0]
+            byte_desc = "high byte" if ref.part == "high" else "low byte"
+
+            if ref.byte_value > 0x7F and not current_segment.smsbra_used:
+                warnings.append(
+                    f"Line {parsed.line_number} ('{parsed.raw_line}'): "
+                    f"{ref.source_text} resolves to {byte_desc} 0x{ref.byte_value:02X}; "
+                    f"LDI only loads 7 bits, so add SMSBRA after this instruction."
+                )
+
+            if ref.part == "full" and ref.address > 0xFF:
+                has_high_load = any(
+                    segment.reference.part == "high" and "PRH" in segment.mov_dests
+                    for segment in segments[1:]
+                )
+                if not has_high_load:
+                    warnings.append(
+                        f"Line {parsed.line_number} ('{parsed.raw_line}'): "
+                        f"{ref.source_text} resolves to 16-bit address 0x{ref.address:04X}. "
+                        f"This bare form only loads the low byte into RA; also load "
+                        f"{self.label_prefix}{ref.label_name.lower()}.high and move it to PRH."
+                    )
+
+        return warnings
     
     def parse_instruction(self, line: str) -> Tuple[str, List[str]]:
         """Parse an instruction line into opcode and arguments
@@ -380,7 +540,7 @@ class AssemblyHelper:
         
         return instruction, args
     
-    def encode_instruction(self, instruction: str, args: List[str]) -> str:
+    def encode_instruction(self, instruction: str, args: List[str], labels: Optional[Dict[str, int]] = None) -> str:
         """Encode a single instruction to binary"""
         
         # Special instructions (no arguments)
@@ -393,7 +553,11 @@ class AssemblyHelper:
         elif instruction == "LDI":
             if len(args) != 1:
                 raise ValueError(f"LDI requires 1 argument, got {len(args)}")
-            immediate = self.to_decimal(args[0])
+            label_ref = self.parse_label_reference(args[0], labels or {})
+            if label_ref:
+                immediate = label_ref.encoded_immediate
+            else:
+                immediate = self.to_decimal(args[0])
             return self.encoder.encode_ldi(immediate)
         
         # MOV (2 arguments)
@@ -446,6 +610,8 @@ class AssemblyHelper:
         """Main conversion function: assembly source -> binary machine code
         Returns: (binary_lines, labels, constants)
         """
+        self.last_warnings = []
+
         # Step 1: Clean lines
         lines = self.clean_lines(raw_lines)
         
@@ -454,22 +620,28 @@ class AssemblyHelper:
         
         # Step 3: Extract labels
         labels, lines = self.extract_labels(lines)
-        print("[X] Labels found:", labels)
+
         # Step 4: Resolve constants
         lines = self.resolve_constants(lines, constants)
-        
-        # Step 5: Resolve labels
-        lines = self.resolve_labels(lines, labels)
-        
-        # Step 6: Encode instructions
-        binary_lines = []
+
+        # Step 5: Parse instructions while preserving label intent
+        parsed_lines = []
         for i, line in enumerate(lines):
             try:
-                instruction, args = self.parse_instruction(line)
-                binary = self.encode_instruction(instruction, args)
-                binary_lines.append(f"{binary}\n")
+                parsed_lines.append(self.parse_source_line(line, labels, i + 1))
             except Exception as e:
                 raise ValueError(f"Error on line {i + 1} ('{line}'): {e}")
+
+        self.last_warnings = self.build_label_warnings(parsed_lines)
+
+        # Step 6: Encode instructions
+        binary_lines = []
+        for parsed in parsed_lines:
+            try:
+                binary = self.encode_instruction(parsed.instruction, parsed.args, labels=labels)
+                binary_lines.append(f"{binary}\n")
+            except Exception as e:
+                raise ValueError(f"Error on line {parsed.line_number} ('{parsed.raw_line}'): {e}")
         
         return binary_lines, labels, constants
     

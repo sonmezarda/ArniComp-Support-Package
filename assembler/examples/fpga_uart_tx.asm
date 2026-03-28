@@ -4,7 +4,7 @@ equ UART_BAUDSEL_L 0x20
 equ UART_TX_DATA_L 0x10
 equ UART_TX_READY_L 0x11
 
-equ SEND_CHAR 65;
+equ SEND_CHAR 65
 
 ;clear sequence
 ldi #0
@@ -25,7 +25,7 @@ mov m, ra ; enable tx and uart
 ldi $UART_BAUDSEL_L
 mov marl, ra
 
-ldi #7
+ldi #2
 mov m, ra ; baud_rate = 9600
 
 ldi $UART_TX_DATA_L

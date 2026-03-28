@@ -5,7 +5,7 @@
 ### Prefixes
 - **`#`** - Direct numbers: `LDI #31`, `ADDI #7`, `LDI #0x10`, `LDI #0b0101`
 - **`$`** - Constants: `LDI $COUNTER`, `CMP $MAX`
-- **`@`** - Labels: `LDI @loop`, `LDI @start`
+- **`@`** - Labels: `LDI @loop`, `LDI @loop.low`, `LDI @loop.high`
 
 ### Comments and Definitions
 ```assembly
@@ -40,6 +40,9 @@ label:
 ### Data Transfer
 ```assembly
 LDI #value          ; Load immediate to RA (0-127)
+LDI @label          ; Load label low byte to RA (warns if SMSBRA/high byte is needed)
+LDI @label.low      ; Load low byte of label address
+LDI @label.high     ; Load high byte of label address
 MOV dest, src       ; Move from src to dest
 ```
 
@@ -84,9 +87,11 @@ JC                  ; Jump if carry
 
 **Jump Usage**:
 ```assembly
-; Load target address to PRL first
-LDI @target         ; Load target address
-MOV PRL, RA         ; Set program register
+; Load target address before jumping
+LDI @target.low     ; Load target low byte
+MOV PRL, RA         ; Set program register low
+LDI @target.high    ; Load target high byte
+MOV PRH, RA         ; Set program register high
 JMP                 ; Execute jump
 
 target:
@@ -119,8 +124,10 @@ loop:
     JLT             ; Jump if still less than MAX
     HLT
     
-    LDI @loop
+    LDI @loop.low
     MOV PRL, RA
+    LDI @loop.high
+    MOV PRH, RA
     JMP
 ```
 
@@ -177,7 +184,9 @@ CMP RD              ; WRONG: CMP only supports RA, M, ACC
 ### ✅ Correct Usage
 ```assembly
 LDI $CONST          ; Correct: $ alone for constants
-LDI @label          ; Correct: @ alone for labels
+LDI @label          ; Correct: bare label form, with warnings when extra bits/bytes are needed
+LDI @label.low      ; Correct: explicit low byte
+LDI @label.high     ; Correct: explicit high byte
 MOV RD, RA          ; Correct: different registers
 LDI #127            ; Correct: within 0-127
 ADDI #7             ; Correct: within 0-7
