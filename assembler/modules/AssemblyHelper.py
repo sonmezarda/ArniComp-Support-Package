@@ -4,6 +4,7 @@ Handles assembly language parsing, validation, and binary code generation
 """
 
 from __future__ import annotations
+import ast
 from dataclasses import dataclass, field
 import json
 import os
@@ -301,6 +302,89 @@ class AssemblyHelper:
             return int(value[2:], 2)
         else:
             return int(value)
+
+    def evaluate_expression(self, expression: str, variables: Optional[Dict[str, int]] = None) -> int:
+        """Safely evaluate integer expressions for EQU constants."""
+        variables = variables or {}
+        expression = expression.strip()
+
+        allowed_functions = {
+            "MAX": max,
+            "MIN": min,
+        }
+
+        def eval_node(node: ast.AST) -> int:
+            if isinstance(node, ast.Expression):
+                return eval_node(node.body)
+
+            if isinstance(node, ast.Constant):
+                if isinstance(node.value, int):
+                    return int(node.value)
+                raise ValueError(f"Unsupported constant in expression: {expression}")
+
+            if isinstance(node, ast.Name):
+                name = node.id.upper()
+                if name in variables:
+                    return variables[name]
+                raise ValueError(f"Unknown constant in expression: {node.id}")
+
+            if isinstance(node, ast.UnaryOp):
+                operand = eval_node(node.operand)
+                if isinstance(node.op, ast.UAdd):
+                    return operand
+                if isinstance(node.op, ast.USub):
+                    return -operand
+                raise ValueError(f"Unsupported unary operator in expression: {expression}")
+
+            if isinstance(node, ast.BinOp):
+                left = eval_node(node.left)
+                right = eval_node(node.right)
+
+                if isinstance(node.op, ast.Add):
+                    return left + right
+                if isinstance(node.op, ast.Sub):
+                    return left - right
+                if isinstance(node.op, ast.Mult):
+                    return left * right
+                if isinstance(node.op, (ast.Div, ast.FloorDiv)):
+                    if right == 0:
+                        raise ValueError("Division by zero in constant expression")
+                    return left // right
+                if isinstance(node.op, ast.Mod):
+                    if right == 0:
+                        raise ValueError("Modulo by zero in constant expression")
+                    return left % right
+                if isinstance(node.op, ast.LShift):
+                    return left << right
+                if isinstance(node.op, ast.RShift):
+                    return left >> right
+                if isinstance(node.op, ast.BitOr):
+                    return left | right
+                if isinstance(node.op, ast.BitAnd):
+                    return left & right
+                if isinstance(node.op, ast.BitXor):
+                    return left ^ right
+
+                raise ValueError(f"Unsupported operator in expression: {expression}")
+
+            if isinstance(node, ast.Call):
+                if not isinstance(node.func, ast.Name):
+                    raise ValueError(f"Unsupported function call in expression: {expression}")
+
+                func_name = node.func.id.upper()
+                if func_name not in allowed_functions:
+                    raise ValueError(f"Unsupported function in expression: {node.func.id}")
+
+                args = [eval_node(arg) for arg in node.args]
+                return int(allowed_functions[func_name](*args))
+
+            raise ValueError(f"Unsupported expression: {expression}")
+
+        try:
+            parsed = ast.parse(expression, mode='eval')
+            return eval_node(parsed)
+        except SyntaxError as e:
+            raise ValueError(f"Invalid constant expression '{expression}': {e.msg}") from e
     
     def clean_lines(self, lines: List[str]) -> List[str]:
         """Remove comments, whitespace, and empty lines"""
@@ -337,7 +421,7 @@ class AssemblyHelper:
                     raise ValueError(f"Invalid constant definition: {line}")
                 
                 const_name = parts[1].upper()
-                const_value = self.to_decimal(parts[2])
+                const_value = self.evaluate_expression(parts[2], constants)
                 constants[const_name] = const_value
             else:
                 remaining_lines.append(line)
@@ -371,11 +455,9 @@ class AssemblyHelper:
         
         for line in lines:
             # Replace all constant references
-            for const_name, const_value in constants.items():
-                const_ref = self.constant_prefix + const_name
-                if const_ref in line:
-                    # Replace $CONST with #value (add # prefix)
-                    line = line.replace(const_ref, f"{self.number_prefix}{const_value}")
+            for const_name, const_value in sorted(constants.items(), key=lambda item: len(item[0]), reverse=True):
+                pattern = re.escape(self.constant_prefix + const_name) + r"(?![A-Za-z0-9_])"
+                line = re.sub(pattern, f"{self.number_prefix}{const_value}", line, flags=re.IGNORECASE)
             
             resolved.append(line)
         
