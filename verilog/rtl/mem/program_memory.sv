@@ -3,7 +3,7 @@
 module program_memory #(
     parameter int ADDR_WIDTH = 16,
     parameter int DATA_WIDTH = 8,
-    parameter int MEM_SIZE   = 256,  // Small for FPGA demo
+    parameter int MEM_SIZE   = 512,  
     parameter string MEM_FILE = ""
 )(
     input  logic                    clk,
