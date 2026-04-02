@@ -17,8 +17,10 @@ import control_pkg::*;
 
 logic jump_taken;
 logic [2:0] jmp_select;
+logic flush_next_instr;
 
 logic [7:0] inst_q;
+logic [7:0] exec_instr;
 
 logic zero_flag;
 logic negative_flag;
@@ -77,6 +79,28 @@ program_memory #(
     .addr(pc_addr),
     .data(inst_q)
 );
+
+always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+        flush_next_instr <= 1'b0;
+    end else begin
+        flush_next_instr <= jump_taken;
+    end
+end
+
+// Branch/jump flush:
+// Program memory uses synchronous reads, so when a jump is taken the next
+// instruction arriving on inst_q is still the old sequential instruction that
+// was fetched before the PC redirect completed.
+//
+// Without a flush, a taken JEQ/JMP/JAL would incorrectly execute one extra
+// instruction from the fall-through path. That showed up on hardware as:
+// - sentinel string loops sending an extra NUL byte after JEQ
+// - call/return flows stepping one instruction too far
+//
+// To keep ISA semantics "no delay slot", we inject a single-cycle NOP bubble
+// into the decoder on the cycle after jump_taken.
+assign exec_instr = flush_next_instr ? 8'h00 : inst_q;
 
 // Bus Selector 
 
@@ -223,7 +247,7 @@ program_counter pc(
 );
 
 control_decoder instruction_decoder(
-    .instr_in(inst_q),
+    .instr_in(exec_instr),
     .ctrl_pkg_out(control_pins),
     .jmp_sel(jmp_select),
     .reg_a_we(reg_a_we),

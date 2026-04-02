@@ -9,7 +9,9 @@ equ O_C 'O'
 equ K_C 'K'
 equ E_C 'E'
 equ R_C 'R'
-equ NEWLINE_C '\n'
+equ A_C 'A'
+equ B_C 'B'
+equ C_C 'C'
 
 setup:
     ldi #0
@@ -34,11 +36,32 @@ setup:
     mov m, ra ; baud = 9600
 
 main:
-    ldi #0
-    mov rd, ra
+    ; Seed RD with zero once, then stress control flow and other registers.
+    ldi rd, #0
+
+    ldi $A_C
+    mov rb, ra
+    ldi $B_C
+    mov ra, rb
+    ldi $C_C
     mov rb, ra
 
-    cmp rb
+    ldi @skip_1
+    mov prl, ra
+    jmp
+    ldi #'X'
+    mov m, ra
+
+skip_1:
+    ldi @skip_2
+    mov prl, ra
+    jmp
+    ldi #'Y'
+    mov m, ra
+
+skip_2:
+    ldi #0
+    cmp ra ; compare current RA=0 against persistent RD=0
 
     ldi @fail
     mov prl, ra
@@ -60,7 +83,7 @@ pass:
     mov marh, ra
     ldi $SYS_LED_L
     mov marl, ra
-    ldi #0x0F
+    ldi #0x12
     mov m, ra
     hlt
     hlt
@@ -81,7 +104,7 @@ fail:
     mov marh, ra
     ldi $SYS_LED_L
     mov marl, ra
-    ldi #0x03
+    ldi #0x21
     mov m, ra
     hlt
     hlt

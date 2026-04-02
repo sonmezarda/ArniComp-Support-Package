@@ -9,7 +9,6 @@ equ O_C 'O'
 equ K_C 'K'
 equ E_C 'E'
 equ R_C 'R'
-equ NEWLINE_C '\n'
 
 setup:
     ldi #0
@@ -34,11 +33,9 @@ setup:
     mov m, ra ; baud = 9600
 
 main:
+    ldi rd, #0
     ldi #0
-    mov rd, ra
-    mov rb, ra
-
-    cmp rb
+    cmp ra
 
     ldi @fail
     mov prl, ra
@@ -60,7 +57,7 @@ pass:
     mov marh, ra
     ldi $SYS_LED_L
     mov marl, ra
-    ldi #0x0F
+    ldi #0x15
     mov m, ra
     hlt
     hlt
@@ -81,7 +78,7 @@ fail:
     mov marh, ra
     ldi $SYS_LED_L
     mov marl, ra
-    ldi #0x03
+    ldi #0x05
     mov m, ra
     hlt
     hlt

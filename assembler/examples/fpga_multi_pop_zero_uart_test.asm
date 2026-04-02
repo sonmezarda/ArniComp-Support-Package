@@ -5,11 +5,12 @@ equ UART_CNTRL_L 0x40 ; {5'b0, TX_EN, RX_EN, UART_EN}
 equ UART_BAUDSEL_L 0x20
 equ UART_TX_DATA_L 0x10
 
+equ A_C 'A'
+equ B_C 'B'
 equ O_C 'O'
 equ K_C 'K'
 equ E_C 'E'
 equ R_C 'R'
-equ NEWLINE_C '\n'
 
 setup:
     ldi #0
@@ -34,10 +35,27 @@ setup:
     mov m, ra ; baud = 9600
 
 main:
+    ; stack bottom -> top : 0, B, A
+    ldi #0
+    push ra
+    ldi $B_C
+    push ra
+    ldi $A_C
+    push ra
+
+    ldi $UART_TX_DATA_L
+    mov marl, ra
+
+    ; pop A and B and send them so we know pop order is right
+    pop rb
+    mov m, rb
+    pop rb
+    mov m, rb
+
+    ; now the next pop must be zero
+    pop rb
     ldi #0
     mov rd, ra
-    mov rb, ra
-
     cmp rb
 
     ldi @fail
@@ -60,7 +78,7 @@ pass:
     mov marh, ra
     ldi $SYS_LED_L
     mov marl, ra
-    ldi #0x0F
+    ldi #0x33
     mov m, ra
     hlt
     hlt
@@ -81,7 +99,7 @@ fail:
     mov marh, ra
     ldi $SYS_LED_L
     mov marl, ra
-    ldi #0x03
+    ldi #0x0C
     mov m, ra
     hlt
     hlt

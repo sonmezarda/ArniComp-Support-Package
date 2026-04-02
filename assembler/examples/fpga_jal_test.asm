@@ -6,12 +6,6 @@ equ UART_BAUDSEL_L 0x20
 equ UART_TX_DATA_L 0x10
 equ UART_TX_READY_L 0x11
 
-equ A_C 'A'
-equ R_C 'R'
-equ D_C 'D'
-equ N_C 'N'
-equ I_C 'I'
-equ NEWLINE_C '\n'
 equ SPACE_C ' '
 equ ARDA_LEN 4
 equ NIDA_LEN 6
@@ -40,13 +34,13 @@ setup:
 
 
 main:
-    ldi $A_C
+    ldi 'A'
     push ra
-    ldi $D_C
+    ldi 'D'
     push ra
-    ldi $R_C
+    ldi 'R'
     push ra
-    ldi $A_C
+    ldi 'A'
     push ra
     ldi $ARDA_LEN
     mov rd, ra
@@ -55,15 +49,15 @@ main:
     mov prl, ra
     jal
 
-    ldi $NEWLINE_C
+    ldi '\n'
     push ra
-    ldi $A_C
+    ldi 'A'
     push ra
-    ldi $D_C
+    ldi 'D'
     push ra
-    ldi $I_C
+    ldi 'I'
     push ra
-    ldi $N_C
+    ldi 'N'
     push ra
     ldi $SPACE_C
     push ra

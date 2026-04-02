@@ -64,6 +64,7 @@ pass:
     ldi #0x3C
     mov m, ra
     hlt
+    hlt
 
 fail:
     ldi $R_C
@@ -83,6 +84,7 @@ fail:
     mov marl, ra
     ldi #0x30
     mov m, ra
+    hlt
     hlt
 
 send_len_func:

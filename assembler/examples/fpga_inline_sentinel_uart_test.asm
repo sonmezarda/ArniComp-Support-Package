@@ -39,20 +39,6 @@ main:
     ldi $A_C
     push ra
 
-    ldi @send_str_func
-    mov prl, ra
-    jal
-
-    ldi $SYS_LED_H
-    mov marh, ra
-    ldi $SYS_LED_L
-    mov marl, ra
-    ldi #0x3F
-    mov m, ra
-    hlt
-    hlt
-
-send_str_func:
     ldi $UART_TX_DATA_L
     mov marl, ra
 
@@ -64,7 +50,7 @@ send_loop:
     pop rb
     cmp rb
 
-    ldi @end_loop
+    ldi @done
     mov prl, ra
     jeq
 
@@ -74,7 +60,12 @@ send_loop:
     mov prl, ra
     jmp
 
-end_loop:
-    mov prl, lrl
-    mov prh, lrh
-    jmp
+done:
+    ldi $SYS_LED_H
+    mov marh, ra
+    ldi $SYS_LED_L
+    mov marl, ra
+    ldi #0x2A
+    mov m, ra
+    hlt
+    hlt
