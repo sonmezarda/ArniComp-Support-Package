@@ -11,6 +11,10 @@ import os
 import re
 from typing import Dict, List, Optional, Tuple
 
+from .LayoutDirectiveHandler import LayoutDirectiveHandler
+from .MacroExpander import MacroExpander
+from .Preprocessor import Preprocessor
+
 
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), "..", "config", "config.json")
 
@@ -31,6 +35,7 @@ SLICE_RE = re.compile(r"^(?P<base>.+?)\[(?P<hi>\d+):(?P<lo>\d+)\]$")
 class SourceLine:
     line_number: int
     text: str
+    source_name: str = "<input>"
 
 
 @dataclass(frozen=True)
@@ -39,6 +44,19 @@ class ParsedLine:
     raw_line: str
     instruction: str
     args: List[str]
+
+
+@dataclass(frozen=True)
+class ListingEntry:
+    source_name: str
+    line_number: int
+    address: int
+    binary_bytes: List[str]
+    source_text: str
+
+    @property
+    def hex_bytes(self) -> List[str]:
+        return [f"{int(binary, 2):02X}" for binary in self.binary_bytes]
 
 
 @dataclass(frozen=True)
@@ -168,7 +186,23 @@ class AssemblyHelper:
         self.constant_prefix = constant_prefix
         self.label_prefix = label_prefix
         self.encoder = InstructionEncoder()
+        self.macro_expander = MacroExpander(self, self.encoder, JUMP_ALIASES, JUMP_CONDITIONS)
+        self.layout_directives = LayoutDirectiveHandler(self)
         self.last_warnings: List[str] = []
+        self.last_listing: List[ListingEntry] = []
+        self.preprocessor = Preprocessor(
+            comment_char=self.comment_char,
+            source_line_factory=lambda line_number, text, src: SourceLine(line_number, text, source_name=src),
+            expression_evaluator=lambda expr, vars=None: self.evaluate_expression(expr, vars),
+        )
+
+    def format_line_ref(self, source_line: SourceLine) -> str:
+        return f"{source_line.source_name}:{source_line.line_number}"
+
+    def strip_comments(self, line: str) -> str:
+        if self.comment_char in line:
+            line = line[: line.index(self.comment_char)]
+        return line.strip()
 
     def to_decimal(self, value: str) -> int:
         value = value.strip()
@@ -205,6 +239,11 @@ class AssemblyHelper:
         allowed_functions = {
             "MAX": max,
             "MIN": min,
+            "LOW": lambda value: value & 0xFF,
+            "HIGH": lambda value: (value >> 8) & 0xFF,
+            "BYTE0": lambda value: value & 0xFF,
+            "BYTE1": lambda value: (value >> 8) & 0xFF,
+            "BITS": lambda value, hi, lo: (value >> lo) & ((1 << (hi - lo + 1)) - 1),
         }
 
         def eval_node(node: ast.AST) -> int:
@@ -282,15 +321,73 @@ class AssemblyHelper:
         except SyntaxError as e:
             raise ValueError(f"Invalid constant expression '{expression}': {e.msg}") from e
 
+    def evaluate_operand_expression(
+        self,
+        expression: str,
+        labels: Dict[str, int],
+        constants: Dict[str, int],
+        allow_unresolved: bool = False,
+    ) -> Optional[int]:
+        token_pattern = re.compile(r"(?P<prefix>[@$])(?P<name>[A-Za-z_][A-Za-z0-9_]*)")
+        variables: Dict[str, int] = {}
+        rewritten_parts: List[str] = []
+        last_end = 0
+
+        for match in token_pattern.finditer(expression):
+            rewritten_parts.append(expression[last_end:match.start()])
+            prefix = match.group("prefix")
+            name = match.group("name").upper()
+            placeholder = f"{'LBL' if prefix == '@' else 'CONST'}_{name}"
+
+            if prefix == "@":
+                if name not in labels:
+                    if allow_unresolved:
+                        return None
+                    raise ValueError(f"Undefined label reference: @{name}")
+                variables[placeholder] = labels[name]
+            else:
+                if name not in constants:
+                    raise ValueError(f"Undefined constant reference: ${name}")
+                variables[placeholder] = constants[name]
+
+            rewritten_parts.append(placeholder)
+            last_end = match.end()
+
+        rewritten_parts.append(expression[last_end:])
+        rewritten_expression = "".join(rewritten_parts).strip()
+
+        bare_name_pattern = re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*)\b")
+        reserved = {"MAX", "MIN", "LOW", "HIGH", "BYTE0", "BYTE1", "BITS"}
+        for match in bare_name_pattern.finditer(rewritten_expression):
+            name = match.group(1).upper()
+            if name in reserved or name in variables:
+                continue
+            if name in constants:
+                variables[name] = constants[name]
+                continue
+            if name in labels:
+                if allow_unresolved and labels[name] is None:
+                    return None
+                variables[name] = labels[name]
+
+        return self.evaluate_expression(rewritten_expression, variables)
+
     def clean_lines(self, lines: List[str]) -> List[SourceLine]:
         cleaned: List[SourceLine] = []
         for index, line in enumerate(lines, start=1):
-            if self.comment_char in line:
-                line = line[: line.index(self.comment_char)]
-            line = line.strip()
+            line = self.strip_comments(line)
             if not line:
                 continue
             cleaned.append(SourceLine(index, line))
+        return cleaned
+
+    def clean_source_lines(self, lines: List[SourceLine]) -> List[SourceLine]:
+        cleaned: List[SourceLine] = []
+        for source_line in lines:
+            line = self.strip_comments(source_line.text)
+            if not line:
+                continue
+            cleaned.append(SourceLine(source_line.line_number, line, source_name=source_line.source_name))
         return cleaned
 
     def extract_constants(self, lines: List[SourceLine]) -> Tuple[Dict[str, int], List[SourceLine]]:
@@ -302,7 +399,7 @@ class AssemblyHelper:
             if parts and parts[0].lower() == self.constant_keyword:
                 if len(parts) < 3:
                     raise ValueError(
-                        f"Error on line {source_line.line_number} ('{source_line.text}'): "
+                        f"Error on line {self.format_line_ref(source_line)} ('{source_line.text}'): "
                         "Invalid constant definition"
                     )
                 const_name = parts[1].upper()
@@ -314,16 +411,152 @@ class AssemblyHelper:
         return constants, remaining_lines
 
     def is_label_definition(self, text: str) -> bool:
-        return text.endswith(self.label_char)
+        label_name, remainder = self.split_label_prefix(text)
+        return label_name is not None and not remainder
 
     def parse_instruction(self, line: str) -> Tuple[str, List[str]]:
-        parts = line.replace(",", " ").split()
-        if not parts:
+        stripped = line.strip()
+        if not stripped:
             raise ValueError("Empty instruction line")
-        return parts[0].upper(), [arg.strip() for arg in parts[1:]]
+        parts = stripped.split(None, 1)
+        instruction = parts[0].upper()
+        if len(parts) == 1:
+            return instruction, []
+        return instruction, self.split_operands(parts[1])
+
+    def split_label_prefix(self, text: str) -> Tuple[Optional[str], str]:
+        match = re.match(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\:(.*)$", text)
+        if not match:
+            return None, text.strip()
+        return match.group(1).upper(), match.group(2).strip()
+
+    def split_operands(self, operand_text: str) -> List[str]:
+        raw_operands: List[str] = []
+        current: List[str] = []
+        quote_char: Optional[str] = None
+        escape = False
+        bracket_depth = 0
+        paren_depth = 0
+
+        for ch in operand_text:
+            if quote_char is not None:
+                current.append(ch)
+                if escape:
+                    escape = False
+                elif ch == "\\":
+                    escape = True
+                elif ch == quote_char:
+                    quote_char = None
+                continue
+
+            if ch in {'"', "'"}:
+                quote_char = ch
+                current.append(ch)
+                continue
+
+            if ch == "[":
+                bracket_depth += 1
+                current.append(ch)
+                continue
+
+            if ch == "]":
+                bracket_depth = max(0, bracket_depth - 1)
+                current.append(ch)
+                continue
+
+            if ch == "(":
+                paren_depth += 1
+                current.append(ch)
+                continue
+
+            if ch == ")":
+                paren_depth = max(0, paren_depth - 1)
+                current.append(ch)
+                continue
+
+            if ch == "," and bracket_depth == 0 and paren_depth == 0:
+                operand = "".join(current).strip()
+                if operand:
+                    raw_operands.append(operand)
+                current = []
+                continue
+
+            current.append(ch)
+
+        if quote_char is not None:
+            raise ValueError(f"Unterminated string or character literal in operands: {operand_text}")
+
+        tail = "".join(current).strip()
+        if tail:
+            raw_operands.append(tail)
+
+        operands: List[str] = []
+        for operand in raw_operands:
+            operands.extend(self.split_top_level_whitespace(operand))
+        return operands
+
+    def split_top_level_whitespace(self, text: str) -> List[str]:
+        parts: List[str] = []
+        current: List[str] = []
+        quote_char: Optional[str] = None
+        escape = False
+        bracket_depth = 0
+        paren_depth = 0
+
+        for ch in text:
+            if quote_char is not None:
+                current.append(ch)
+                if escape:
+                    escape = False
+                elif ch == "\\":
+                    escape = True
+                elif ch == quote_char:
+                    quote_char = None
+                continue
+
+            if ch in {'"', "'"}:
+                quote_char = ch
+                current.append(ch)
+                continue
+
+            if ch == "[":
+                bracket_depth += 1
+                current.append(ch)
+                continue
+
+            if ch == "]":
+                bracket_depth = max(0, bracket_depth - 1)
+                current.append(ch)
+                continue
+
+            if ch == "(":
+                paren_depth += 1
+                current.append(ch)
+                continue
+
+            if ch == ")":
+                paren_depth = max(0, paren_depth - 1)
+                current.append(ch)
+                continue
+
+            if ch.isspace() and bracket_depth == 0 and paren_depth == 0:
+                part = "".join(current).strip()
+                if part:
+                    parts.append(part)
+                current = []
+                continue
+
+            current.append(ch)
+
+        tail = "".join(current).strip()
+        if tail:
+            parts.append(tail)
+
+        return parts
 
     def parse_source_line(self, source_line: SourceLine) -> ParsedLine:
-        instruction, args = self.parse_instruction(source_line.text)
+        _, instruction_text = self.split_label_prefix(source_line.text)
+        instruction, args = self.parse_instruction(instruction_text)
         return ParsedLine(
             line_number=source_line.line_number,
             raw_line=source_line.text,
@@ -342,27 +575,7 @@ class AssemblyHelper:
         return token_upper
 
     def normalize_instruction(self, instruction: str, args: List[str]) -> Tuple[str, List[str]]:
-        instruction = instruction.upper()
-        args = [arg.strip() for arg in args]
-
-        if instruction in JUMP_ALIASES:
-            instruction = JUMP_ALIASES[instruction]
-
-        if instruction == "JMP" and len(args) == 1 and self.is_jump_name(args[0]):
-            return self.canonical_jump_name(args[0]), []
-
-        if instruction == "CLR":
-            if len(args) != 1:
-                raise ValueError(f"CLR requires 1 argument, got {len(args)}")
-            return "MOV", [args[0], "ZERO"]
-
-        if instruction == "ADD" and len(args) == 1 and self.looks_like_nonzero_immediate(args[0]):
-            raise ValueError("ADD does not accept immediate operands; use ADDI instead")
-
-        if instruction == "SUB" and len(args) == 1 and self.looks_like_nonzero_immediate(args[0]):
-            raise ValueError("SUB does not accept immediate operands; use SUBI instead")
-
-        return instruction, args
+        return self.macro_expander.normalize_instruction(instruction, args)
 
     def looks_like_nonzero_immediate(self, token: str) -> bool:
         stripped = token.strip()
@@ -428,6 +641,14 @@ class AssemblyHelper:
                     return ResolvedValue(raw_text=token, value=None, kind="label")
                 raise ValueError(f"Undefined label reference: {token}")
             return ResolvedValue(raw_text=token, value=labels[name], kind="label")
+
+        try:
+            evaluated = self.evaluate_operand_expression(token, labels, constants, allow_unresolved=allow_unresolved)
+            if evaluated is None:
+                return ResolvedValue(raw_text=token, value=None, kind="expression")
+            return ResolvedValue(raw_text=token, value=evaluated, kind="expression")
+        except ValueError:
+            pass
 
         raise ValueError(f"Unsupported operand value: {token}")
 
@@ -521,6 +742,7 @@ class AssemblyHelper:
         self,
         instruction: str,
         args: List[str],
+        current_pc: int,
         labels: Dict[str, int],
         constants: Dict[str, int],
     ) -> int:
@@ -536,15 +758,13 @@ class AssemblyHelper:
             low_byte = resolved.value & 0xFF
             return 1 if low_byte <= 31 else 2
 
-        if instruction == "JLE":
-            if args:
-                raise ValueError("JLE does not take operands")
-            return 2
+        macro_size = self.macro_expander.estimate_size(instruction, args, labels, constants)
+        if macro_size is not None:
+            return macro_size
 
-        if instruction == "JGE":
-            if args:
-                raise ValueError("JGE does not take operands")
-            return 2
+        layout_size = self.layout_directives.estimate_size(instruction, args, current_pc, labels, constants)
+        if layout_size is not None:
+            return layout_size
 
         return 1
 
@@ -556,21 +776,24 @@ class AssemblyHelper:
             pc = 0
 
             for source_line in lines:
-                if self.is_label_definition(source_line.text):
-                    label_name = source_line.text[:-1].strip().upper()
+                label_name, instruction_text = self.split_label_prefix(source_line.text)
+                if label_name is not None:
                     if label_name in labels:
                         raise ValueError(
-                            f"Error on line {source_line.line_number} ('{source_line.text}'): "
+                            f"Error on line {self.format_line_ref(source_line)} ('{source_line.text}'): "
                             f"Duplicate label definition: {label_name}"
                         )
                     labels[label_name] = pc
-                    continue
+                    if not instruction_text:
+                        continue
 
                 parsed = self.parse_source_line(source_line)
                 try:
-                    pc += self.estimate_instruction_size(parsed.instruction, parsed.args, guess, constants)
+                    pc += self.estimate_instruction_size(parsed.instruction, parsed.args, pc, guess, constants)
                 except Exception as e:
-                    raise ValueError(f"Error on line {parsed.line_number} ('{parsed.raw_line}'): {e}")
+                    raise ValueError(
+                        f"Error on line {self.format_line_ref(source_line)} ('{parsed.raw_line}'): {e}"
+                    )
 
             if labels == guess:
                 return labels
@@ -692,50 +915,96 @@ class AssemblyHelper:
 
         raise ValueError(f"Unknown instruction: {instruction}")
 
-    def emit_instruction(self, parsed: ParsedLine, labels: Dict[str, int], constants: Dict[str, int]) -> List[str]:
+    def emit_instruction(
+        self,
+        parsed: ParsedLine,
+        current_pc: int,
+        labels: Dict[str, int],
+        constants: Dict[str, int],
+    ) -> List[str]:
         instruction, args = self.normalize_instruction(parsed.instruction, parsed.args)
 
         if instruction == "LDI":
             return self.emit_ldi(parsed, args, labels, constants)
-
-        if instruction == "JLE":
-            if args:
-                raise ValueError("JLE does not take operands")
-            return [
-                self.encoder.encode_jump("JEQ"),
-                self.encoder.encode_jump("JLT"),
-            ]
-
-        if instruction == "JGE":
-            if args:
-                raise ValueError("JGE does not take operands")
-            return [
-                self.encoder.encode_jump("JEQ"),
-                self.encoder.encode_special("JGT"),
-            ]
-
+        macro_emitted = self.macro_expander.emit(parsed, instruction, args, labels, constants)
+        if macro_emitted is not None:
+            return macro_emitted
+        layout_emitted = self.layout_directives.emit(parsed, instruction, args, current_pc, labels, constants)
+        if layout_emitted is not None:
+            return layout_emitted
         return [self.encode_actual_instruction(instruction, args, labels, constants)]
 
-    def convert_to_machine_code(self, raw_lines: List[str]) -> Tuple[List[str], Dict[str, int], Dict[str, int]]:
+    def convert_to_machine_code(
+        self,
+        raw_lines: List[str],
+        source_name: str = "<input>",
+    ) -> Tuple[List[str], Dict[str, int], Dict[str, int]]:
         self.last_warnings = []
-
-        lines = self.clean_lines(raw_lines)
+        self.last_listing = []
+        expanded_lines = self.preprocessor.expand(raw_lines, source_name=source_name)
+        lines = self.clean_source_lines(expanded_lines)
         constants, lines = self.extract_constants(lines)
         labels = self.build_labels(lines, constants)
 
         binary_lines: List[str] = []
+        pc = 0
         for source_line in lines:
+            _, instruction_text = self.split_label_prefix(source_line.text)
             if self.is_label_definition(source_line.text):
+                continue
+            if not instruction_text:
                 continue
 
             parsed = self.parse_source_line(source_line)
             try:
-                encoded_lines = self.emit_instruction(parsed, labels, constants)
+                encoded_lines = self.emit_instruction(parsed, pc, labels, constants)
                 binary_lines.extend(f"{binary}\n" for binary in encoded_lines)
+                if encoded_lines:
+                    self.last_listing.append(
+                        ListingEntry(
+                            source_name=source_line.source_name,
+                            line_number=source_line.line_number,
+                            address=pc,
+                            binary_bytes=list(encoded_lines),
+                            source_text=source_line.text,
+                        )
+                    )
+                pc += len(encoded_lines)
             except Exception as e:
-                raise ValueError(f"Error on line {parsed.line_number} ('{parsed.raw_line}'): {e}")
+                raise ValueError(
+                    f"Error on line {self.format_line_ref(source_line)} ('{parsed.raw_line}'): {e}"
+                )
 
         return binary_lines, labels, constants
+
+    def format_listing(self, mode: str = "hex") -> List[str]:
+        mode = mode.lower()
+        if mode not in {"hex", "asm", "both"}:
+            raise ValueError("Listing mode must be one of: hex, asm, both")
+
+        lines: List[str] = []
+        current_source: Optional[str] = None
+        for entry in self.last_listing:
+            if entry.source_name != current_source:
+                if lines:
+                    lines.append("\n")
+                lines.append(f"; Source: {entry.source_name}\n")
+                current_source = entry.source_name
+
+            source_line = f"[{entry.line_number}] {entry.source_text}"
+
+            if mode in {"hex", "both"}:
+                hex_bytes = " ".join(entry.hex_bytes)
+                lines.append(f"{entry.address:04X}  {hex_bytes}\n")
+                lines.append(f"      {source_line}\n")
+
+            if mode in {"asm", "both"}:
+                if mode == "asm":
+                    lines.append(f"{entry.address:04X}  {source_line}\n")
+                for offset, binary in enumerate(entry.binary_bytes):
+                    byte_addr = entry.address + offset
+                    lines.append(f"      {byte_addr:04X}  {int(binary, 2):02X}  {self.disassemble(binary)}\n")
+        return lines
 
     def disassemble(self, binary_code: str) -> str:
         binary_code = binary_code.strip()

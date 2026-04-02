@@ -1,0 +1,126 @@
+; Source: .\examples\fpga_jal_test_modern.asm
+0000  [12] mov prh, zero
+      0000  B4  MOV PRH, ZERO
+0001  [13] mov prl, zero
+      0001  AC  MOV PRL, ZERO
+0002  [14] mov marl, zero
+      0002  9C  MOV MARL, ZERO
+0003  [15] mov marh, zero
+      0003  A4  MOV MARH, ZERO
+0004  [17] ldi $UART_BASE_H
+      0004  C9  LDL RA, #9
+0005  [18] mov marh, ra
+      0005  A0  MOV MARH, RA
+0006  [20] ldi $UART_CONTROL_L
+      0006  C0  LDL RA, #0
+      0007  32  LDH RA, #2
+0008  [21] mov marl, ra
+      0008  98  MOV MARL, RA
+0009  [22] ldi $UART_ENABLE_TX
+      0009  C5  LDL RA, #5
+000A  [23] mov m, ra
+      000A  B8  MOV M, RA
+000B  [25] ldi $UART_BAUDSEL_L
+      000B  C0  LDL RA, #0
+      000C  31  LDH RA, #1
+000D  [26] mov marl, ra
+      000D  98  MOV MARL, RA
+000E  [27] ldi $UART_BAUD_9600
+      000E  C2  LDL RA, #2
+000F  [28] mov m, ra
+      000F  B8  MOV M, RA
+0010  [1] pushstr "ARDA" :RD
+      0010  E1  LDL RD, #1
+      0011  3A  LDH RD, #2
+      0012  21  PUSH RD
+      0013  E4  LDL RD, #4
+      0014  3A  LDH RD, #2
+      0015  21  PUSH RD
+      0016  F2  LDL RD, #18
+      0017  3A  LDH RD, #2
+      0018  21  PUSH RD
+      0019  E1  LDL RD, #1
+      001A  3A  LDH RD, #2
+      001B  21  PUSH RD
+001C  [2] ldi rd, $ARDA_LEN
+      001C  E4  LDL RD, #4
+001D  [3] call send_len_func
+      001D  C1  LDL RA, #1
+      001E  32  LDH RA, #2
+      001F  A8  MOV PRL, RA
+      0020  B4  MOV PRH, ZERO
+      0021  07  JAL
+0022  [5] pushstr " NIDA\n" :RD
+      0022  EA  LDL RD, #10
+      0023  21  PUSH RD
+      0024  E1  LDL RD, #1
+      0025  3A  LDH RD, #2
+      0026  21  PUSH RD
+      0027  E4  LDL RD, #4
+      0028  3A  LDH RD, #2
+      0029  21  PUSH RD
+      002A  E9  LDL RD, #9
+      002B  3A  LDH RD, #2
+      002C  21  PUSH RD
+      002D  EE  LDL RD, #14
+      002E  3A  LDH RD, #2
+      002F  21  PUSH RD
+      0030  E0  LDL RD, #0
+      0031  39  LDH RD, #1
+      0032  21  PUSH RD
+0033  [6] ldi rd, $NIDA_LEN
+      0033  E6  LDL RD, #6
+0034  [7] call send_len_func
+      0034  C1  LDL RA, #1
+      0035  32  LDH RA, #2
+      0036  A8  MOV PRL, RA
+      0037  B4  MOV PRH, ZERO
+      0038  07  JAL
+0039  [49] ldi $SYS_LED_H
+      0039  CC  LDL RA, #12
+003A  [50] mov marh, ra
+      003A  A0  MOV MARH, RA
+003B  [51] ldi $SYS_LED_L
+      003B  C0  LDL RA, #0
+003C  [52] mov marl, ra
+      003C  98  MOV MARL, RA
+003D  [53] ldi #0x01
+      003D  C1  LDL RA, #1
+003E  [54] mov m, ra
+      003E  B8  MOV M, RA
+003F  [56] done: hlt
+      003F  01  HLT
+0040  [57] hlt
+      0040  01  HLT
+0041  [60] ldi $UART_TX_DATA_L
+      0041  D0  LDL RA, #16
+0042  [61] mov marl, ra
+      0042  98  MOV MARL, RA
+0043  [63] ldi $UART_BASE_H
+      0043  C9  LDL RA, #9
+0044  [64] mov marh, ra
+      0044  A0  MOV MARH, RA
+0045  [67] pop rb
+      0045  2A  POP RB
+0046  [68] mov m, rb
+      0046  BA  MOV M, RB
+0047  [70] subi #1
+      0047  69  SUBI #1
+0048  [71] mov rd, acc
+      0048  8B  MOV RD, ACC
+0049  [73] jeq send_done
+      0049  D3  LDL RA, #19
+      004A  32  LDH RA, #2
+      004B  A8  MOV PRL, RA
+      004C  B4  MOV PRH, ZERO
+      004D  18  JEQ
+004E  [74] jmp send_loop
+      004E  C5  LDL RA, #5
+      004F  32  LDH RA, #2
+      0050  A8  MOV PRL, RA
+      0051  B4  MOV PRH, ZERO
+      0052  1F  JMP
+0053  [76] send_done: ret
+      0053  AD  MOV PRL, LRL
+      0054  B6  MOV PRH, LRH
+      0055  1F  JMP

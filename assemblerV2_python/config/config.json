@@ -1,9 +1,0 @@
-{
-    "special_chars":{
-        "comment":";",
-        "label":":"
-    },
-    "keywords":{
-        "constant": "const"
-    }
-}

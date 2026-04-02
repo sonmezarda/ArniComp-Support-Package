@@ -115,18 +115,41 @@ All major components except the compiler are complete. The compiler effort has b
 
 ## ISA Evolution (2025 Redesign)
 
-During development, the original opcode/argcode-based instruction format was replaced with a new **leading-zero classified encoding (Rev 2)**.
+During development, the original opcode/argcode-based instruction format was replaced with the current **final 8-bit ISA** used by the assembler and Verilog implementation.
 
-Key changes include:
-- Instruction families determined by leading zero count
-- Unified `MOV` encoding (`01 ddd sss`)
-- Memory access via `ML` / `MH` pseudo-registers
-- Integrated arithmetic (`ADD`, `SUB`, `ADC`, `SBC`)
-- Short immediate forms (`ADDI`, `SUBI`)
-- Logical operations (`AND`)
-- Dual `NOP` encodings
-- Conditional jump on carry (`JC`)
-- Introduction of a carry flag with proper overflow/borrow semantics
+Key characteristics of the current ISA include:
+- `LDL` / `LDH` split byte construction for `RA` and `RD`
+- unified `MOV` encoding (`10 ddd sss`)
+- source-side `ZERO`, `LRL`, and `LRH` bus options
+- arithmetic family using `RD` as the left operand:
+  - `ADD`, `ADDI`, `ADC`
+  - `SUB`, `SUBI`, `SBC`
+  - `CMP`
+- logical operations:
+  - `XOR`, `AND`, `NOT`
+- stack operations:
+  - `PUSH`, `POP`
+- MAR update operations:
+  - `INC #1/#2`
+  - `DEC #1/#2`
+- jump family based on `Z/N/C/V` flags:
+  - `JEQ`, `JNE`, `JCS`, `JCC`, `JMI`, `JVS`, `JLT`, `JMP`
+  - `JGT` as the dedicated extra opcode
+  - `JAL` for link-and-jump through `PRH:PRL`
+- `LRL` / `LRH` replacing the older direct `PC` readback model
+
+Assembler-side productivity features now include pseudoinstructions such as:
+- `LDI`
+- `CALL`
+- `JMPA`
+- `RET`
+- `PUSHI`
+- `PUSHSTR`
+
+The assembler README documents the current split between:
+- real ISA instructions
+- assembler pseudoinstructions/macros
+- aliases
 
 Legacy documentation remains in `arnicomp_details.txt` for historical context.
 

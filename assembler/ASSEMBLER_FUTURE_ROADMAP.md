@@ -9,6 +9,30 @@ This document captures proposed quality-of-life and power-user features for the 
 - Add common assembler conveniences without hiding machine behavior.
 - Preserve explicitness where instruction count or register choice matters.
 
+## Status
+
+- [x] `.include`
+- [x] `CALL`
+- [x] `JMPA`
+- [x] `RET`
+- [x] `PUSHI`
+- [ ] `DB/DW/ASCII/ASCIIZ`
+- [x] `.repeat`
+- [x] `LOW/HIGH/BITS`
+- [x] `.org/.align/.fill`
+- [x] conditional assembly
+- [x] listing/debug output
+
+## Internal Refactor Direction
+
+- `AssemblyHelper` should remain the orchestration layer for parsing, symbol resolution, and final encoding.
+- Preprocess concerns such as includes and future conditional assembly should move toward dedicated helper modules.
+- Macro and pseudoinstruction expansion should live outside `AssemblyHelper`.
+- Current status:
+  - include expansion is already isolated conceptually as a preprocessing stage
+  - macro handling has started moving into a dedicated `MacroExpander` module
+- preprocess handling has moved into a dedicated `Preprocessor` module
+
 ## Guiding Principles
 
 1. Default behavior should be convenient but predictable.
@@ -49,6 +73,18 @@ Notes:
 - The expansion must be deterministic and documented.
 - The chosen temporary register should control whether the generated `LDI/LDL/LDH` sequence targets `RA` or `RD`.
 
+Status:
+
+- Implemented
+- Supported forms:
+  - `CALL target`
+  - `CALL @target`
+  - `CALL target :RA`
+  - `CALL target :RD`
+- Default temporary register is `RA`
+- Bare label names are accepted
+- If the target high byte is zero, the assembler emits `MOV PRH, ZERO`
+
 #### `jmpa label`
 
 Add an absolute jump pseudoinstruction similar to `call`, but ending with `JMP` instead of `JAL`.
@@ -69,6 +105,19 @@ LDI @label[15:8]
 MOV PRH, <tmp>
 JMP
 ```
+
+Status:
+
+- Implemented
+- Supported forms:
+  - `JMPA target`
+  - `JMPA @target`
+  - `JMPA target :RA`
+  - `JMPA target :RD`
+- Default temporary register is `RA`
+- Bare label names are accepted
+- If the target high byte is zero, the assembler emits `MOV PRH, ZERO`
+- Conditional jumps now also support target operands with the same `:RA` / `:RD` temporary-register selection model
 
 #### `ret`
 
@@ -95,10 +144,19 @@ JMP
 One possible expansion:
 
 ```asm
-POP PRL      ; low byte
-POP PRH      ; high byte
+POP PRH      ; high byte on top of stack
+POP PRL      ; low byte below it
 JMP
 ```
+
+Status:
+
+- Implemented
+- Supported forms:
+  - `RET`
+  - `RET :STACK`
+- `RET` returns via `LRL/LRH`
+- `RET :STACK` expects low byte pushed first, high byte pushed second
 
 ### 2. Stack Convenience Macros
 
@@ -125,6 +183,18 @@ Expansion:
 LDI <tmp>, value
 PUSH <tmp>
 ```
+
+Status:
+
+- Implemented
+- Supported forms:
+  - `PUSHI #65`
+  - `PUSHI 'A'`
+  - `PUSHI $CONST[7:0]`
+  - `PUSHI #65 :RD`
+- Default temporary register is `RA`
+- `:RD` selects `RD` as the temporary register
+- Uses the same byte-loading rules as `LDI`
 
 #### `pushstr`
 
@@ -154,6 +224,17 @@ PUSHSTR "Hello", 0 :reverse
 .
 .
 ```
+
+Status:
+
+- Implemented in its basic form
+- Supported forms:
+  - `PUSHSTR "HELLO"`
+  - `PUSHSTR "HELLO", '\0'`
+  - `PUSHSTR "HELLO" :RA`
+  - `PUSHSTR "HELLO" :RD`
+- Default behavior is pop-friendly string order
+- Future extension still possible for an explicit reverse/alternate mode
 ### 3. Data Definition Directives
 
 Add standard data emitters.
@@ -216,6 +297,13 @@ Future optional support:
 }
 ```
 
+Status:
+
+- Implemented
+- Supports nested `.repeat` blocks
+- Repeat counts use integer expressions
+- Current syntax requires `{` on the `.repeat` line and a standalone `}` line
+
 ### 5. Built-in Helper Functions
 
 Add helper functions for readability:
@@ -246,6 +334,17 @@ These should coexist with the current slice syntax:
 @label[7:5]
 ```
 
+Status:
+
+- Implemented
+- Supported helpers:
+  - `LOW(x)`
+  - `HIGH(x)`
+  - `BYTE0(x)`
+  - `BYTE1(x)`
+  - `BITS(x, hi, lo)`
+- Supported in both constant expressions and normal operands
+
 ### 6. Location Control
 
 Add directives such as:
@@ -263,6 +362,15 @@ Why this matters:
 - create ROM headers
 - align performance-critical or hardware-visible tables
 - avoid manually writing dozens of `NOP`s just to hit an address boundary
+
+Status:
+
+- Implemented
+- Supported directives:
+  - `.fill count[, byte]`
+  - `.org address[, byte]`
+  - `.align boundary[, byte]`
+- Default fill byte is `0x00`
 
 ### 7. Conditional Assembly
 
@@ -292,6 +400,16 @@ This is especially useful for:
 - optional test instrumentation
 - feature-gated macros
 
+Status:
+
+- Implemented
+- Supported directives:
+  - `.define NAME expr`
+  - `.if expr`
+  - `.else`
+  - `.endif`
+- Nested conditionals are supported
+
 ### 8. Include Files
 
 Add:
@@ -308,6 +426,13 @@ Use cases:
 - common startup code
 
 This should be considered a high-priority feature.
+
+Status:
+
+- Implemented
+- Quoted include paths are resolved relative to the file that contains the directive
+- Include expansion happens before constant extraction and label resolution
+- Recursive include chains are rejected
 
 ### 9. Strings and Character Support
 
@@ -330,15 +455,36 @@ DB 'O', 'K', '\n', '\0'
 ASCII "HELLO\n"
 ```
 
+### 10. Listing / Debug Output
+
+Emit an optional human-readable listing file during assembly.
+
+Example command:
+
+```bash
+python main.py assemble program.asm output.txt --listing program.lst
+```
+
+Useful contents:
+
+- final address
+- emitted bytes
+- source file and source line number
+- original source text
+
+Status:
+
+- Implemented
+- Supported through `assemble ... --listing file.lst`
+- Current output is source-oriented and shows final emitted bytes for each source line
+
 ## Proposed Priority Order
 
 ### Phase 1
 
-- `CALL`
 - `JMPA`
 - `RET`
 - `PUSHI`
-- `.include`
 
 ### Phase 2
 
@@ -412,10 +558,4 @@ RET :STACK:RB
 
 Implement Phase 1 first:
 
-1. `.include`
-2. `CALL`
-3. `JMPA`
-4. `RET`
-5. `PUSHI`
-
-These provide the biggest productivity gain with the smallest conceptual jump from the current assembler.
+`.include`, `CALL`, `JMPA`, `RET`, and `PUSHI` are already implemented. The remaining items above provide the biggest productivity gain with the smallest conceptual jump from the current assembler.

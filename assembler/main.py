@@ -5,18 +5,17 @@ A command-line interface for assembling, disassembling, and managing binary file
 for the ArniComp custom ISA architecture.
 
 Usage:
-    python main.py assemble <input.asm> [output.txt]
+    python main.py assemble <input.asm> [output.txt] [--listing output.lst] [--listing-mode hex|asm|both]
     python main.py disassemble <input.txt> [output.asm]
     python main.py createbin <input.txt> [output.bin]
     python main.py createihex <input.asm> [output.hex]
-    python main.py createsvhex <input.asm> [output.mem]
+    python main.py createsvhex <input.asm> [output.mem] [--listing output.lst] [--listing-mode hex|asm|both]
     python main.py load <binary.bin>
     python main.py help
 """
 
 import sys
 import os
-import argparse
 from typing import Optional
 
 from modules.AssemblyHelper import AssemblyHelper
@@ -36,7 +35,13 @@ class AssemblerCLI:
         )
         self.comport = comport
     
-    def assemble(self, input_file: str, output_file: Optional[str] = None) -> None:
+    def assemble(
+        self,
+        input_file: str,
+        output_file: Optional[str] = None,
+        listing_file: Optional[str] = None,
+        listing_mode: str = "hex",
+    ) -> None:
         """Assemble an assembly file to binary machine code"""
         # Determine output file
         if output_file is None:
@@ -53,7 +58,7 @@ class AssemblerCLI:
         
         # Assemble
         try:
-            binary_lines, labels, constants = self.helper.convert_to_machine_code(raw_lines)
+            binary_lines, labels, constants = self.helper.convert_to_machine_code(raw_lines, source_name=input_file)
             warnings = self.helper.last_warnings
             
             # Display info
@@ -83,8 +88,14 @@ class AssemblerCLI:
             # Write output
             with open(output_file, 'w') as f:
                 f.writelines(binary_lines)
-            
+
+            if listing_file:
+                with open(listing_file, 'w', encoding='utf-8') as f:
+                    f.writelines(self.helper.format_listing(listing_mode))
+             
             print(f"\nBinary machine code written to: {output_file}")
+            if listing_file:
+                print(f"Listing written to: {listing_file}")
             
         except Exception as e:
             print(f"Assembly error: {e}")
@@ -187,7 +198,7 @@ class AssemblerCLI:
         
         # Assemble and convert to Intel HEX
         try:
-            binary_lines, labels, constants = self.helper.convert_to_machine_code(raw_lines)
+            binary_lines, labels, constants = self.helper.convert_to_machine_code(raw_lines, source_name=input_file)
             warnings = self.helper.last_warnings
             
             # Save as Intel HEX format
@@ -213,7 +224,13 @@ class AssemblerCLI:
             print(f"Error creating Intel HEX file: {e}")
             sys.exit(1)
 
-    def create_svhex(self, input_file: str, output_file: Optional[str] = None) -> None:
+    def create_svhex(
+        self,
+        input_file: str,
+        output_file: Optional[str] = None,
+        listing_file: Optional[str] = None,
+        listing_mode: str = "hex",
+    ) -> None:
         """Convert assembly file to HEX format for SystemVerilog Program Mem"""
         # Determine output file
         if output_file is None:
@@ -230,7 +247,7 @@ class AssemblerCLI:
         
         # Assemble and convert to Intel HEX
         try:
-            binary_lines, labels, constants = self.helper.convert_to_machine_code(raw_lines)
+            binary_lines, labels, constants = self.helper.convert_to_machine_code(raw_lines, source_name=input_file)
             warnings = self.helper.last_warnings
             
             with open(output_file, 'w') as f:
@@ -239,7 +256,11 @@ class AssemblerCLI:
                     hexLine = hex(int(binline, 2) &0xFF)[2:]
                     f.write(f"{hexLine:>02}\n")
 
-            
+            if listing_file:
+                with open(listing_file, 'w', encoding='utf-8') as f:
+                    f.writelines(self.helper.format_listing(listing_mode))
+
+             
             print(f"HEX file created successfully!")
             print(f"  Input: {input_file}")
             print(f"  Output: {output_file}")
@@ -255,7 +276,9 @@ class AssemblerCLI:
                 print("\n  Warnings:")
                 for warning in warnings:
                     print(f"    {warning}")
-            
+            if listing_file:
+                print(f"  Listing: {listing_file}")
+             
         except Exception as e:
             print(f"Error creating SystemVerilog HEX file: {e}")
             sys.exit(1)
@@ -334,9 +357,9 @@ USAGE:
     python main.py <command> [arguments]
 
 COMMANDS:
-    assemble <input.asm> [output.txt]
+    assemble <input.asm> [output.txt] [--listing output.lst] [--listing-mode hex|asm|both]
         Assemble assembly code to binary text format
-        Example: python main.py assemble program.asm program.txt
+        Example: python main.py assemble program.asm program.txt --listing program.lst --listing-mode both
 
     disassemble <input.txt> [output.asm]
         Disassemble binary text format back to assembly
@@ -350,9 +373,9 @@ COMMANDS:
         Assemble and convert to Intel HEX format (for Digital circuit simulator)
         Example: python main.py createihex program.asm program.hex
 
-    createsvhex <input.asm> [output.mem]
+    createsvhex <input.asm> [output.mem] [--listing output.lst] [--listing-mode hex|asm|both]
         Assemble and convert to SystemVerilog HEX format
-        Example: python main.py createsvhex program.asm program.mem
+        Example: python main.py createsvhex program.asm program.mem --listing program.lst --listing-mode asm
 
     load <binary.bin>
         Load a binary file to EEPROM
@@ -410,13 +433,23 @@ REGISTERS:
     M                           ; Memory[MARH:MARL]
     ZERO / 0 / #0               ; Zero-source alias for MOV
 
-NUMBER FORMATS:
-    #10         Decimal
-    #0x10       Hexadecimal
-    #0b1010     Binary
-    $CONST      Constant reference
-    @label      Label reference
-    value[hi:lo] Bit slice syntax
+    NUMBER FORMATS:
+        #10         Decimal
+        #0x10       Hexadecimal
+        #0b1010     Binary
+        $CONST      Constant reference
+        @label      Label reference
+        value[hi:lo] Bit slice syntax
+
+    LISTING OUTPUT:
+        --listing file.lst
+        Write a debug/listing file with:
+        - final address
+        - emitted bytes
+        - source file and line
+        - original source text
+        --listing-mode hex|asm|both
+        Choose hex summary view, expanded assembly view, or both
 
 EXAMPLES:
     equ TARGET 0x1234
@@ -428,12 +461,14 @@ EXAMPLES:
         LDL RA, $TARGET[4:0]
         LDH RA, $TARGET[7:5]
         CLR RB
-        JEQ
-        JGE
+        JEQ done
+        JGE retry :RD
         HLT
 
 NOTES:
-    - Jumps do not take label operands; they jump to PRH:PRL.
+    - Bare jumps with no operand still jump to the address already in PRH:PRL.
+    - Jump forms with a label or constant target are assembler pseudoinstructions:
+      they load PRH:PRL first, then emit the jump.
     - Jump condition bits are ordered as:
       JEQ=000, JNE=001, JCS=010, JCC=011, JMI=100, JVS=101, JLT=110, JMP=111.
     - JLE expands to JEQ + JLT.
@@ -445,6 +480,43 @@ NOTES:
 
 def main():
     """Main entry point for the CLI"""
+    def parse_assemble_args(arguments):
+        if not arguments:
+            raise ValueError("Input file required")
+
+        input_file = arguments[0]
+        output_file = None
+        listing_file = None
+        listing_mode = "hex"
+        index = 1
+
+        while index < len(arguments):
+            token = arguments[index]
+            if token == "--listing":
+                if index + 1 >= len(arguments):
+                    raise ValueError("--listing requires an output path")
+                listing_file = arguments[index + 1]
+                index += 2
+                continue
+
+            if token == "--listing-mode":
+                if index + 1 >= len(arguments):
+                    raise ValueError("--listing-mode requires one of: hex, asm, both")
+                listing_mode = arguments[index + 1].lower()
+                if listing_mode not in {"hex", "asm", "both"}:
+                    raise ValueError("--listing-mode must be one of: hex, asm, both")
+                index += 2
+                continue
+
+            if output_file is None:
+                output_file = token
+                index += 1
+                continue
+
+            raise ValueError(f"Unexpected assemble argument: {token}")
+
+        return input_file, output_file, listing_file, listing_mode
+
     # Parse command line arguments
     if len(sys.argv) < 2:
         print("Error: No command specified")
@@ -463,12 +535,17 @@ def main():
     elif command == "assemble":
         if len(sys.argv) < 3:
             print("Error: Input file required")
-            print("Usage: python main.py assemble <input.asm> [output.txt]")
+            print("Usage: python main.py assemble <input.asm> [output.txt] [--listing output.lst] [--listing-mode hex|asm|both]")
             sys.exit(1)
-        
-        input_file = sys.argv[2]
-        output_file = sys.argv[3] if len(sys.argv) >= 4 else None
-        cli.assemble(input_file, output_file)
+
+        try:
+            input_file, output_file, listing_file, listing_mode = parse_assemble_args(sys.argv[2:])
+        except ValueError as e:
+            print(f"Error: {e}")
+            print("Usage: python main.py assemble <input.asm> [output.txt] [--listing output.lst] [--listing-mode hex|asm|both]")
+            sys.exit(1)
+
+        cli.assemble(input_file, output_file, listing_file, listing_mode)
     
     elif command == "disassemble":
         if len(sys.argv) < 3:
@@ -503,11 +580,15 @@ def main():
     elif command == "createsvhex":
         if len(sys.argv) < 3:
             print("Error: Input file required")
-            print("Usage: python main.py createsvhex <input.asm> [output.mem]")
+            print("Usage: python main.py createsvhex <input.asm> [output.mem] [--listing output.lst] [--listing-mode hex|asm|both]")
             sys.exit(1)
-        input_file = sys.argv[2]
-        output_file = sys.argv[3] if len(sys.argv) >= 4 else None
-        cli.create_svhex(input_file, output_file)
+        try:
+            input_file, output_file, listing_file, listing_mode = parse_assemble_args(sys.argv[2:])
+        except ValueError as e:
+            print(f"Error: {e}")
+            print("Usage: python main.py createsvhex <input.asm> [output.mem] [--listing output.lst] [--listing-mode hex|asm|both]")
+            sys.exit(1)
+        cli.create_svhex(input_file, output_file, listing_file, listing_mode)
 
     elif command == "load":
         if len(sys.argv) < 3:
