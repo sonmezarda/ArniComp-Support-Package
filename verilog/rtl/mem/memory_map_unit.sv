@@ -10,7 +10,9 @@ module memory_map_unit #(
     parameter logic [15:0] TIMER_BASE_ADDR = 16'h0B00,
     parameter logic [15:0] TIMER_END_ADDR  = 16'h0BFF,
     parameter logic [15:0] SYS_BASE_ADDR   = 16'h0C00,
-    parameter logic [15:0] SYS_END_ADDR    = 16'h0CFF
+    parameter logic [15:0] SYS_END_ADDR    = 16'h0CFF,
+    parameter logic [15:0] STACK_BASE_ADDR = 16'h0D00,
+    parameter logic [15:0] STACK_END_ADDR  = 16'h0DFF
 )(
     input  logic [15:0] addr_in,
     input  logic        enable,
@@ -21,6 +23,7 @@ module memory_map_unit #(
     output logic        i2c_sel,
     output logic        timer_sel,
     output logic        sys_sel,
+    output logic        stack_sel,
     output logic        invalid_sel
 );
 
@@ -31,6 +34,7 @@ module memory_map_unit #(
         i2c_sel     = 1'b0;
         timer_sel   = 1'b0;
         sys_sel     = 1'b0;
+        stack_sel   = 1'b0;
         invalid_sel = 1'b0;
 
         if (enable) begin
@@ -46,6 +50,8 @@ module memory_map_unit #(
                 timer_sel = 1'b1;
             end else if ((addr_in >= SYS_BASE_ADDR) && (addr_in <= SYS_END_ADDR)) begin
                 sys_sel = 1'b1;
+            end else if ((addr_in >= STACK_BASE_ADDR) && (addr_in <= STACK_END_ADDR)) begin
+                stack_sel = 1'b1;
             end else begin
                 invalid_sel = 1'b1;
             end

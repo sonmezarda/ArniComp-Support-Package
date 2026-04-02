@@ -1,28 +1,20 @@
-// CMP and SBC test program
-// Tests: CMP RA (sets flags), SBC RA (subtract with carry)
-//
-// Test 1: CMP - compare and set flags
-// Test 2: SBC - subtract with borrow (needs C=1 first)
-//
-// Expected: RB=0x0F (SBC result), GT flag=1
 @0
-// First create overflow to set C=1
-FF    // LDI 0x7F -> RA=0x7F
-41    // MOV RD,RA -> RD=0x7F  
-37    // ADDI 7 -> ACC=0x86
-58    // MOV RA,ACC -> RA=0x86
-41    // MOV RD,RA -> RD=0x86
-FF    // LDI 0x7F -> RA=0x7F
-08    // ADD RA -> ACC=0x86+0x7F=0x05, C=1 (overflow)
-// Now C=1, test SBC
-94    // LDI 0x14 (20) -> RA=20
-41    // MOV RD,RA -> RD=20
-85    // LDI 5 -> RA=5
-20    // SBC RA -> ACC = RD - RA - !C = 20 - 5 - 0 = 15
-5A    // MOV RB,ACC -> RB=15 (0x0F)
-// Test CMP: sets flags based on RD - RA
-94    // LDI 20 -> RA=20
-41    // MOV RD,RA -> RD=20
-85    // LDI 5 -> RA=5
-05    // CMP RA -> compare RD(20) with RA(5): GT=1, EQ=0, LT=0
-01    // HLT
+df
+33
+88
+4f
+83
+88
+df
+33
+40
+d4
+88
+c5
+70
+93
+d4
+88
+c5
+78
+01

@@ -8,7 +8,10 @@ module tb_alu;
     logic       negative;
     logic       c_in;
     logic [7:0] result;
+    logic       zero_flag;
+    logic       negative_flag;
     logic       carry_flag;
+    logic       overflow_flag;
 
     alu dut (
         .a(a),
@@ -17,7 +20,10 @@ module tb_alu;
         .negative(negative),
         .c_in(c_in),
         .result(result),
-        .carry_flag(carry_flag)
+        .zero_flag(zero_flag),
+        .negative_flag(negative_flag),
+        .carry_flag(carry_flag),
+        .overflow_flag(overflow_flag)
     );
 
     task automatic check_case(
@@ -70,7 +76,7 @@ module tb_alu;
         // Bitwise ops
         check_case(8'hAA, 8'h0F, 2'b01, 1'b0, 1'b0, 8'h0A, 1'b0, "AND");
         check_case(8'hAA, 8'h0F, 2'b10, 1'b0, 1'b0, 8'hA5, 1'b0, "XOR");
-        check_case(8'h55, 8'h00, 2'b11, 1'b0, 1'b0, 8'hAA, 1'b0, "NOT");
+        check_case(8'h00, 8'h55, 2'b11, 1'b0, 1'b0, 8'hAA, 1'b0, "NOT");
 
         $display("PASS: tb_alu OK");
         $finish;

@@ -1,281 +1,166 @@
 """
-AssemblyHelper: A clean, modular assembler for the custom ISA
-Handles assembly language parsing, validation, and binary code generation
+AssemblyHelper: assembler/disassembler for the final ArniComp ISA.
 """
 
 from __future__ import annotations
+
 import ast
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 import json
 import os
 import re
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Optional, Tuple
 
-# Load configuration
-config_path = "../assembler/config/config.json"
 
-with open(config_path, 'r') as f:
+CONFIG_PATH = os.path.join(os.path.dirname(__file__), "..", "config", "config.json")
+
+with open(CONFIG_PATH, "r", encoding="utf-8") as f:
     config = json.load(f)
 
-# Extract configuration sections
-INSTRUCTIONS = config['instructions']
-DESTINATIONS = config['destinations']
-SOURCES = config['sources']
-COMMENT_CHAR = config['special_chars']['comment']
-LABEL_CHAR = config['special_chars']['label']
-CONSTANT_KEYWORD = config['keywords']['constant']
+DESTINATIONS = {name.upper(): bits for name, bits in config["destinations"].items()}
+SOURCES = {name.upper(): bits for name, bits in config["sources"].items()}
+JUMP_CONDITIONS = {name.upper(): bits for name, bits in config["jump_conditions"].items()}
+JUMP_ALIASES = {name.upper(): target.upper() for name, target in config["jump_aliases"].items()}
+COMMENT_CHAR = config["special_chars"]["comment"]
+LABEL_CHAR = config["special_chars"]["label"]
+CONSTANT_KEYWORD = config["keywords"]["constant"]
+SLICE_RE = re.compile(r"^(?P<base>.+?)\[(?P<hi>\d+):(?P<lo>\d+)\]$")
 
 
 @dataclass(frozen=True)
-class LabelReference:
-    """Represents a label-based LDI operand."""
-    source_text: str
-    label_name: str
-    part: str
-    address: int
-    byte_value: int
-
-    @property
-    def encoded_immediate(self) -> int:
-        """LDI can only encode the low 7 bits directly."""
-        return self.byte_value & 0x7F
+class SourceLine:
+    line_number: int
+    text: str
 
 
-@dataclass
+@dataclass(frozen=True)
 class ParsedLine:
-    """Parsed source line with optional label metadata."""
     line_number: int
     raw_line: str
     instruction: str
     args: List[str]
-    label_ref: Optional[LabelReference] = None
 
 
-@dataclass
-class LabelLoadSegment:
-    """Tracks how one label byte is loaded into RA and consumed."""
-    reference: LabelReference
-    smsbra_used: bool = False
-    mov_dests: set[str] = field(default_factory=set)
+@dataclass(frozen=True)
+class ResolvedValue:
+    raw_text: str
+    value: Optional[int]
+    kind: str
+    sliced: bool = False
+    slice_hi: Optional[int] = None
+    slice_lo: Optional[int] = None
+
+    @property
+    def width(self) -> Optional[int]:
+        if not self.sliced or self.slice_hi is None or self.slice_lo is None:
+            return None
+        return self.slice_hi - self.slice_lo + 1
 
 
 class InstructionEncoder:
-    """Handles encoding of instructions to binary format"""
-    
+    """Encode final ISA instructions to 8-bit binary strings."""
+
     @staticmethod
-    def encode_ldi(immediate: int) -> str:
-        """Encode LDI instruction: LDI #imm7"""
-        if not (0 <= immediate <= 127):
-            raise ValueError(f"LDI immediate value {immediate} out of range (0-127)")
-        return f"1{immediate:07b}"
-    
+    def encode_ldl(dest: str, immediate: int) -> str:
+        if dest not in {"RA", "RD"}:
+            raise ValueError("LDL destination must be RA or RD")
+        if not (0 <= immediate <= 31):
+            raise ValueError(f"LDL immediate value {immediate} out of range (0-31)")
+        return f"11{1 if dest == 'RD' else 0}{immediate:05b}"
+
+    @staticmethod
+    def encode_ldh(dest: str, immediate: int) -> str:
+        if dest not in {"RA", "RD"}:
+            raise ValueError("LDH destination must be RA or RD")
+        if not (0 <= immediate <= 7):
+            raise ValueError(f"LDH immediate value {immediate} out of range (0-7)")
+        return f"0011{1 if dest == 'RD' else 0}{immediate:03b}"
+
     @staticmethod
     def encode_mov(dest: str, src: str) -> str:
-        """Encode MOV instruction: MOV dest, src
-        Format: 0 1 [A1 A2 J=source] [S2 S1 S0=dest]
-        Based on instruction table:
-        - Row 3: Move From RA -> 01 000 [D2D1D0]
-        - Row 5: Move From RD -> 01 001 [D2D1D0]
-        - Row 7: Move From RB -> 01 010 [D2D1D0]
-        - Row 9: Move From ACC -> 01 011 [D2D1D0]
-        - Row 11: Move From PCL -> 01 100 [D2D1D0]
-        - Row 12: Move From PCH -> 01 101 [D2D1D0]
-        - Row 13: Move From Memory -> 01 111 [D2D1D0]
-        """
-        dest_upper = dest.upper()
-        src_upper = src.upper()
-        
-        # Validate forbidden combinations
-        forbidden = [("RA", "RA"), ("RD", "RD"), ("RB", "RB"), ("M", "M")]
-        if (dest_upper, src_upper) in forbidden:
-            raise ValueError(f"MOV {dest}, {src} is forbidden (same source and destination)")
-        
-        # Get encodings
-        if dest_upper not in DESTINATIONS:
+        if dest not in DESTINATIONS:
             raise ValueError(f"Invalid destination register: {dest}")
-        if src_upper not in SOURCES:
+        if src not in SOURCES:
             raise ValueError(f"Invalid source register: {src}")
-            
-        dest_bits = DESTINATIONS[dest_upper]
-        src_bits = SOURCES[src_upper]
-        
-        # CORRECT FORMAT: 01 [source] [dest]
-        return f"01{src_bits}{dest_bits}"
-    
+        return f"10{DESTINATIONS[dest]}{SOURCES[src]}"
+
     @staticmethod
-    def encode_not(src: str) -> str:
-        """Encode NOT instruction
-        Allowed sources: RA, RB, ACC, RD, M
-        Based on instruction table:
-        - Row 4: NOT RA  -> 0 1 0 0 0 0 0 0 = 01000000
-        - Row 6: NOT RD  -> 0 1 0 0 1 0 0 1 = 01001001
-        - Row 8: NOT ACC -> 0 1 0 1 0 0 1 0 = 01010010
-        - Row 14: NOT M  -> 0 1 1 1 1 1 1 1 = 01111111
-        - Row 31: NOT RB -> 0 0 0 0 0 1 0 0 = 00000100
-        """
-        src_upper = src.upper()
-        allowed = ["RA", "RB", "ACC", "RD", "M"]
-        
-        if src_upper not in allowed:
-            raise ValueError(f"NOT instruction only supports {allowed}, got {src}")
-        
-        encodings = {
-            "RA": "01000000",   # Row 4:  NOT RA
-            "RD": "01001001",   # Row 6:  NOT RD (düzeltildi: 01001001, 01001000 değil)
-            "ACC": "01010010",  # Row 8:  NOT ACC
-            "M": "01111111",    # Row 14: NOT M
-            "RB": "00000100"    # Row 31: NOT RB (düzeltildi: 00000100, 01010000 değil)
+    def encode_source_op(operation: str, src: str) -> str:
+        if src not in SOURCES:
+            raise ValueError(f"Invalid source register for {operation}: {src}")
+
+        prefixes = {
+            "ADD": "01000",
+            "ADC": "01010",
+            "NOT": "01011",
+            "SUB": "01100",
+            "SBC": "01110",
+            "CMP": "01111",
+            "XOR": "00001",
+            "AND": "00010",
+            "PUSH": "00100",
         }
-        
-        return encodings[src_upper]
-    
+        if operation not in prefixes:
+            raise ValueError(f"Unknown source-form instruction: {operation}")
+        return f"{prefixes[operation]}{SOURCES[src]}"
+
     @staticmethod
-    def encode_arithmetic(operation: str, src: str) -> str:
-        """Encode ADD, SUB, ADC, SBC, AND instructions
-        All sources allowed: RA, RD, RB, ACC, PCL, PCH, M
-        Format based on instruction table
-        """
-        src_upper = src.upper()
-        
-        if src_upper not in SOURCES:
-            raise ValueError(f"Invalid source for {operation}: {src}")
-        
-        src_bits = SOURCES[src_upper]
-        
-        # Based on instruction table
-        # ADD (row 15): 0 0 0 0 1 S2 S1 S0
-        # SUB (row 17): 0 0 0 1 0 S2 S1 S0  
-        # ADC (row 19): 0 0 0 1 1 S2 S1 S0
-        # SBC (row 21): 0 0 1 0 0 S2 S1 S0
-        # AND (row 23): 0 0 1 0 1 S2 S1 S0
-        
-        op_prefixes = {
-            "ADD": "00001",
-            "SUB": "00010",
-            "ADC": "00011",
-            "SBC": "00100",
-            "AND": "00101"
-        }
-        
-        if operation.upper() not in op_prefixes:
-            raise ValueError(f"Unknown arithmetic operation: {operation}")
-        
-        return f"{op_prefixes[operation.upper()]}{src_bits}"
-    
-    @staticmethod
-    def encode_xor(src: str) -> str:
-        """Encode XOR instruction
-        Allowed sources: RA, RB, RD, ACC, M
-        """
-        src_upper = src.upper()
-        allowed = ["RA", "RB", "RD", "ACC", "M"]
-        
-        if src_upper not in allowed:
-            raise ValueError(f"XOR instruction only supports {allowed}, got {src}")
-        
-        # Based on instruction table
-        # Row 16: XOR RA -> 0 0 0 0 1 1 0 0
-        # Row 18: XOR RB -> 0 0 0 1 0 1 0 0
-        # Row 20: XOR ACC -> 0 0 0 1 1 0 1 0
-        # Row 22: XOR M -> 0 0 1 0 0 1 0 0
-        # Row 24: XOR RD -> 0 0 1 0 1 1 0 0
-        
-        encodings = {
-            "RA": "00001100",
-            "RB": "00010100",
-            "RD": "00101100",
-            "ACC": "00011010",
-            "M": "00100100"
-        }
-        
-        return encodings[src_upper]
-    
-    @staticmethod
-    def encode_immediate_arithmetic(operation: str, immediate: int) -> str:
-        """Encode ADDI/SUBI with 3-bit immediate
-        Format: 0 0 1 1 J IM2 IM1 IM0
-        ADDI: J=0, SUBI: J=1
-        """
+    def encode_immediate_op(operation: str, immediate: int) -> str:
         if not (0 <= immediate <= 7):
             raise ValueError(f"{operation} immediate value {immediate} out of range (0-7)")
-        
-        if operation.upper() == "ADDI":
-            return f"00110{immediate:03b}"
-        elif operation.upper() == "SUBI":
-            return f"00111{immediate:03b}"
-        else:
-            raise ValueError(f"Unknown immediate operation: {operation}")
-    
+        prefixes = {
+            "ADDI": "01001",
+            "SUBI": "01101",
+        }
+        if operation not in prefixes:
+            raise ValueError(f"Unknown immediate instruction: {operation}")
+        return f"{prefixes[operation]}{immediate:03b}"
+
     @staticmethod
     def encode_jump(condition: str) -> str:
-        """Encode jump instructions
-        Format: 0 1 1 0 0 JS2 JS1 JS0
-        Conditions map to last 3 bits
-        """
-        conditions = {
-            "JMP": "000",
-            "JEQ": "001",
-            "JGT": "010",
-            "JLT": "011",
-            "JGE": "100",
-            "JLE": "101",
-            "JNE": "110",
-            "JC": "111"
-        }
-        
-        cond_upper = condition.upper()
-        if cond_upper not in conditions:
+        if condition not in JUMP_CONDITIONS:
             raise ValueError(f"Unknown jump condition: {condition}")
-        
-        return f"01100{conditions[cond_upper]}"
-    
+        return f"00011{JUMP_CONDITIONS[condition]}"
+
     @staticmethod
-    def encode_cmp(src: str) -> str:
-        """Encode CMP instruction
-        Allowed sources: RA, M, ACC
-        """
-        src_upper = src.upper()
-        allowed = ["RA", "M", "ACC"]
-        
-        if src_upper not in allowed:
-            raise ValueError(f"CMP instruction only supports {allowed}, got {src}")
-        
-        # Based on instruction table
-        # Row 32: CMP RA and RD -> 0 0 0 0 0 1 0 1
-        # Row 33: CMP M and RD -> 0 0 0 0 0 1 1 0
-        # Row 34: CMP ACC and RD -> 0 0 0 0 0 1 1 1
-        
-        encodings = {
-            "RA": "00000101",
-            "M": "00000110",
-            "ACC": "00000111"
-        }
-        
-        return encodings[src_upper]
-    
+    def encode_pop(dest: str) -> str:
+        if dest not in DESTINATIONS:
+            raise ValueError(f"Invalid destination register for POP: {dest}")
+        return f"00101{DESTINATIONS[dest]}"
+
     @staticmethod
-    def encode_special(instruction: str) -> str:
-        """Encode special instructions: NOP, HLT, SMSBRA, INX"""
-        specials = {
-            "NOP": "00000000",
-            "HLT": "00000001",
-            "SMSBRA": "00000010",
-            "INX": "00000011"
-        }
-        
-        inst_upper = instruction.upper()
-        if inst_upper not in specials:
-            raise ValueError(f"Unknown special instruction: {instruction}")
-        
-        return specials[inst_upper]
+    def encode_special(instruction: str, immediate: Optional[int] = None) -> str:
+        if instruction == "NOP":
+            return "00000000"
+        if instruction == "HLT":
+            return "00000001"
+        if instruction == "JGT":
+            return "00000110"
+        if instruction == "JAL":
+            return "00000111"
+        if instruction == "INC":
+            if immediate not in {1, 2}:
+                raise ValueError("INC only accepts #1 or #2")
+            return f"0000001{immediate - 1}"
+        if instruction == "DEC":
+            if immediate not in {1, 2}:
+                raise ValueError("DEC only accepts #1 or #2")
+            return f"0000010{immediate - 1}"
+        raise ValueError(f"Unknown special instruction: {instruction}")
 
 
 class AssemblyHelper:
-    """Main assembler class for parsing and converting assembly to machine code"""
-    
-    def __init__(self, comment_char: str = ';', label_char: str = ':', 
-                 constant_keyword: str = 'equ', number_prefix: str = '#',
-                 constant_prefix: str = '$', label_prefix: str = '@'):
+    """Main assembler class for parsing and converting assembly to machine code."""
+
+    def __init__(
+        self,
+        comment_char: str = COMMENT_CHAR,
+        label_char: str = LABEL_CHAR,
+        constant_keyword: str = CONSTANT_KEYWORD,
+        number_prefix: str = "#",
+        constant_prefix: str = "$",
+        label_prefix: str = "@",
+    ):
         self.comment_char = comment_char
         self.label_char = label_char
         self.constant_keyword = constant_keyword.lower()
@@ -284,27 +169,36 @@ class AssemblyHelper:
         self.label_prefix = label_prefix
         self.encoder = InstructionEncoder()
         self.last_warnings: List[str] = []
-    
+
     def to_decimal(self, value: str) -> int:
-        """Convert various number formats to decimal
-        Supports: #0x10, #0b1010, #10, 0x10, 0b1010, 10
-        """
         value = value.strip()
-        
-        # Remove number prefix if present
         if value.startswith(self.number_prefix):
             value = value[len(self.number_prefix):]
-        
-        # Parse different number formats
-        if value.startswith("0x") or value.startswith("0X"):
+        if value.startswith(("0x", "0X")):
             return int(value[2:], 16)
-        elif value.startswith("0b") or value.startswith("0B"):
+        if value.startswith(("0b", "0B")):
             return int(value[2:], 2)
-        else:
-            return int(value)
+        return int(value)
+
+    def try_parse_char_literal(self, token: str) -> Optional[int]:
+        token = token.strip()
+        if token.startswith(self.number_prefix):
+            token = token[len(self.number_prefix) :].strip()
+
+        if len(token) < 2 or token[0] not in {"'", '"'} or token[-1] != token[0]:
+            return None
+
+        try:
+            literal = ast.literal_eval(token)
+        except (SyntaxError, ValueError) as exc:
+            raise ValueError(f"Invalid character literal: {token}") from exc
+
+        if not isinstance(literal, str) or len(literal) != 1:
+            raise ValueError(f"Character literals must contain exactly one character: {token}")
+
+        return ord(literal)
 
     def evaluate_expression(self, expression: str, variables: Optional[Dict[str, int]] = None) -> int:
-        """Safely evaluate integer expressions for EQU constants."""
         variables = variables or {}
         expression = expression.strip()
 
@@ -320,6 +214,12 @@ class AssemblyHelper:
             if isinstance(node, ast.Constant):
                 if isinstance(node.value, int):
                     return int(node.value)
+                if isinstance(node.value, str):
+                    if len(node.value) != 1:
+                        raise ValueError(
+                            f"Character literals in expressions must contain exactly one character: {expression}"
+                        )
+                    return ord(node.value)
                 raise ValueError(f"Unsupported constant in expression: {expression}")
 
             if isinstance(node, ast.Name):
@@ -339,7 +239,6 @@ class AssemblyHelper:
             if isinstance(node, ast.BinOp):
                 left = eval_node(node.left)
                 right = eval_node(node.right)
-
                 if isinstance(node.op, ast.Add):
                     return left + right
                 if isinstance(node.op, ast.Sub):
@@ -364,439 +263,547 @@ class AssemblyHelper:
                     return left & right
                 if isinstance(node.op, ast.BitXor):
                     return left ^ right
-
                 raise ValueError(f"Unsupported operator in expression: {expression}")
 
             if isinstance(node, ast.Call):
                 if not isinstance(node.func, ast.Name):
                     raise ValueError(f"Unsupported function call in expression: {expression}")
-
                 func_name = node.func.id.upper()
                 if func_name not in allowed_functions:
                     raise ValueError(f"Unsupported function in expression: {node.func.id}")
-
                 args = [eval_node(arg) for arg in node.args]
                 return int(allowed_functions[func_name](*args))
 
             raise ValueError(f"Unsupported expression: {expression}")
 
         try:
-            parsed = ast.parse(expression, mode='eval')
+            parsed = ast.parse(expression, mode="eval")
             return eval_node(parsed)
         except SyntaxError as e:
             raise ValueError(f"Invalid constant expression '{expression}': {e.msg}") from e
-    
-    def clean_lines(self, lines: List[str]) -> List[str]:
-        """Remove comments, whitespace, and empty lines"""
-        cleaned = []
-        
-        for line in lines:
-            # Remove comments
+
+    def clean_lines(self, lines: List[str]) -> List[SourceLine]:
+        cleaned: List[SourceLine] = []
+        for index, line in enumerate(lines, start=1):
             if self.comment_char in line:
-                line = line[:line.index(self.comment_char)]
-            
-            # Strip whitespace
+                line = line[: line.index(self.comment_char)]
             line = line.strip()
-            
-            # Skip empty lines
             if not line:
                 continue
-            
-            cleaned.append(line)
-        
+            cleaned.append(SourceLine(index, line))
         return cleaned
-    
-    def extract_constants(self, lines: List[str]) -> Tuple[Dict[str, int], List[str]]:
-        """Extract EQU constant definitions
-        Format: equ NAME value
-        """
-        constants = {}
-        remaining_lines = []
-        
-        for line in lines:
-            parts = line.split(None, 2)  # Split on whitespace, max 3 parts
-            
+
+    def extract_constants(self, lines: List[SourceLine]) -> Tuple[Dict[str, int], List[SourceLine]]:
+        constants: Dict[str, int] = {}
+        remaining_lines: List[SourceLine] = []
+
+        for source_line in lines:
+            parts = source_line.text.split(None, 2)
             if parts and parts[0].lower() == self.constant_keyword:
                 if len(parts) < 3:
-                    raise ValueError(f"Invalid constant definition: {line}")
-                
+                    raise ValueError(
+                        f"Error on line {source_line.line_number} ('{source_line.text}'): "
+                        "Invalid constant definition"
+                    )
                 const_name = parts[1].upper()
                 const_value = self.evaluate_expression(parts[2], constants)
                 constants[const_name] = const_value
             else:
-                remaining_lines.append(line)
-        
+                remaining_lines.append(source_line)
+
         return constants, remaining_lines
-    
-    def extract_labels(self, lines: List[str]) -> Tuple[Dict[str, int], List[str]]:
-        """Extract labels and their line numbers
-        Format: label:
-        """
-        labels = {}
-        remaining_lines = []
-        line_number = 0
-        
-        for line in lines:
-            if line.endswith(self.label_char):
-                # Extract label name
-                label_name = line[:-1].strip().upper()
-                labels[label_name] = line_number
-            else:
-                remaining_lines.append(line)
-                line_number += 1
-        
-        return labels, remaining_lines
-    
-    def resolve_constants(self, lines: List[str], constants: Dict[str, int]) -> List[str]:
-        """Replace constant references with their values
-        $CONST is replaced with #value (adds # prefix for immediate values)
-        """
-        resolved = []
-        
-        for line in lines:
-            # Replace all constant references
-            for const_name, const_value in sorted(constants.items(), key=lambda item: len(item[0]), reverse=True):
-                pattern = re.escape(self.constant_prefix + const_name) + r"(?![A-Za-z0-9_])"
-                line = re.sub(pattern, f"{self.number_prefix}{const_value}", line, flags=re.IGNORECASE)
-            
-            resolved.append(line)
-        
-        return resolved
-    
-    def resolve_labels(self, lines: List[str], labels: Dict[str, int]) -> List[str]:
-        """Replace label references with their addresses
-        @label is replaced with #address (adds # prefix for immediate values)
-        Case-insensitive matching
-        """
-        resolved = []
-        
-        for line in lines:
-            # Replace all label references (case-insensitive)
-            for label_name, label_addr in labels.items():
-                # Use regex for true case-insensitive replacement
-                # Escape special regex characters in label_name (like the dot in .Lelse0)
-                pattern = re.escape(self.label_prefix + label_name)
-                line = re.sub(pattern, f"{self.number_prefix}{label_addr}", line, flags=re.IGNORECASE)
-            
-            resolved.append(line)
-        
-        return resolved
 
-    def parse_label_reference(self, token: str, labels: Dict[str, int]) -> Optional[LabelReference]:
-        """Parse @label, @label.low, or @label.high references for LDI."""
-        token = token.strip()
-        if not token.startswith(self.label_prefix):
-            return None
+    def is_label_definition(self, text: str) -> bool:
+        return text.endswith(self.label_char)
 
-        raw_name = token[len(self.label_prefix):].strip()
-        normalized = raw_name.upper()
-
-        # Prefer an exact label match so labels containing dots still work.
-        if normalized in labels:
-            address = labels[normalized]
-            return LabelReference(
-                source_text=token,
-                label_name=normalized,
-                part="full",
-                address=address,
-                byte_value=address & 0xFF
-            )
-
-        suffix_map = {
-            ".LOW": "low",
-            ".LO": "low",
-            ".HIGH": "high",
-            ".HI": "high",
-        }
-
-        for suffix, part in suffix_map.items():
-            if normalized.endswith(suffix):
-                base_name = normalized[:-len(suffix)]
-                if base_name in labels:
-                    address = labels[base_name]
-                    byte_value = address & 0xFF if part == "low" else (address >> 8) & 0xFF
-                    return LabelReference(
-                        source_text=token,
-                        label_name=base_name,
-                        part=part,
-                        address=address,
-                        byte_value=byte_value
-                    )
-
-        raise ValueError(f"Undefined label reference: {token}")
-
-    def parse_source_line(self, line: str, labels: Dict[str, int], line_number: int) -> ParsedLine:
-        """Parse a source line and keep label metadata when present."""
-        instruction, args = self.parse_instruction(line)
-        label_ref = None
-
-        if instruction == "LDI" and len(args) == 1:
-            label_ref = self.parse_label_reference(args[0], labels)
-
-        return ParsedLine(
-            line_number=line_number,
-            raw_line=line,
-            instruction=instruction,
-            args=args,
-            label_ref=label_ref
-        )
-
-    def collect_label_load_segments(self, parsed_lines: List[ParsedLine], start_index: int) -> List[LabelLoadSegment]:
-        """Collect the contiguous RA-loading sequence for the same label."""
-        start_line = parsed_lines[start_index]
-        if not start_line.label_ref:
-            return []
-
-        label_name = start_line.label_ref.label_name
-        segments = [LabelLoadSegment(start_line.label_ref)]
-        current_segment = segments[0]
-
-        for parsed in parsed_lines[start_index + 1:]:
-            if parsed.instruction == "SMSBRA":
-                current_segment.smsbra_used = True
-                continue
-
-            if parsed.instruction == "MOV" and len(parsed.args) == 2 and parsed.args[1].upper() == "RA":
-                current_segment.mov_dests.add(parsed.args[0].upper())
-                continue
-
-            if parsed.instruction == "LDI" and parsed.label_ref and parsed.label_ref.label_name == label_name:
-                current_segment = LabelLoadSegment(parsed.label_ref)
-                segments.append(current_segment)
-                continue
-
-            break
-
-        return segments
-
-    def build_label_warnings(self, parsed_lines: List[ParsedLine]) -> List[str]:
-        """Warn when label bytes need SMSBRA or an explicit high-byte load."""
-        warnings = []
-
-        for index, parsed in enumerate(parsed_lines):
-            ref = parsed.label_ref
-            if not ref:
-                continue
-
-            segments = self.collect_label_load_segments(parsed_lines, index)
-            if not segments:
-                continue
-
-            current_segment = segments[0]
-            byte_desc = "high byte" if ref.part == "high" else "low byte"
-
-            if ref.byte_value > 0x7F and not current_segment.smsbra_used:
-                warnings.append(
-                    f"Line {parsed.line_number} ('{parsed.raw_line}'): "
-                    f"{ref.source_text} resolves to {byte_desc} 0x{ref.byte_value:02X}; "
-                    f"LDI only loads 7 bits, so add SMSBRA after this instruction."
-                )
-
-            if ref.part == "full" and ref.address > 0xFF:
-                has_high_load = any(
-                    segment.reference.part == "high" and "PRH" in segment.mov_dests
-                    for segment in segments[1:]
-                )
-                if not has_high_load:
-                    warnings.append(
-                        f"Line {parsed.line_number} ('{parsed.raw_line}'): "
-                        f"{ref.source_text} resolves to 16-bit address 0x{ref.address:04X}. "
-                        f"This bare form only loads the low byte into RA; also load "
-                        f"{self.label_prefix}{ref.label_name.lower()}.high and move it to PRH."
-                    )
-
-        return warnings
-    
     def parse_instruction(self, line: str) -> Tuple[str, List[str]]:
-        """Parse an instruction line into opcode and arguments
-        Returns: (instruction_name, [arg1, arg2, ...])
-        """
-        # Split by whitespace and commas
-        parts = line.replace(',', ' ').split()
-        
+        parts = line.replace(",", " ").split()
         if not parts:
             raise ValueError("Empty instruction line")
-        
-        instruction = parts[0].upper()
-        args = [arg.strip() for arg in parts[1:]]
-        
+        return parts[0].upper(), [arg.strip() for arg in parts[1:]]
+
+    def parse_source_line(self, source_line: SourceLine) -> ParsedLine:
+        instruction, args = self.parse_instruction(source_line.text)
+        return ParsedLine(
+            line_number=source_line.line_number,
+            raw_line=source_line.text,
+            instruction=instruction,
+            args=args,
+        )
+
+    def is_jump_name(self, token: str) -> bool:
+        token_upper = token.upper()
+        return token_upper in JUMP_CONDITIONS or token_upper in JUMP_ALIASES
+
+    def canonical_jump_name(self, token: str) -> str:
+        token_upper = token.upper()
+        if token_upper in JUMP_ALIASES:
+            return JUMP_ALIASES[token_upper]
+        return token_upper
+
+    def normalize_instruction(self, instruction: str, args: List[str]) -> Tuple[str, List[str]]:
+        instruction = instruction.upper()
+        args = [arg.strip() for arg in args]
+
+        if instruction in JUMP_ALIASES:
+            instruction = JUMP_ALIASES[instruction]
+
+        if instruction == "JMP" and len(args) == 1 and self.is_jump_name(args[0]):
+            return self.canonical_jump_name(args[0]), []
+
+        if instruction == "CLR":
+            if len(args) != 1:
+                raise ValueError(f"CLR requires 1 argument, got {len(args)}")
+            return "MOV", [args[0], "ZERO"]
+
+        if instruction == "ADD" and len(args) == 1 and self.looks_like_nonzero_immediate(args[0]):
+            raise ValueError("ADD does not accept immediate operands; use ADDI instead")
+
+        if instruction == "SUB" and len(args) == 1 and self.looks_like_nonzero_immediate(args[0]):
+            raise ValueError("SUB does not accept immediate operands; use SUBI instead")
+
         return instruction, args
-    
-    def encode_instruction(self, instruction: str, args: List[str], labels: Optional[Dict[str, int]] = None) -> str:
-        """Encode a single instruction to binary"""
-        
-        # Special instructions (no arguments)
-        if instruction in ["NOP", "HLT", "SMSBRA", "INX"]:
+
+    def looks_like_nonzero_immediate(self, token: str) -> bool:
+        stripped = token.strip()
+        if stripped.upper() == "ZERO":
+            return False
+        if stripped in {"0", "#0"}:
+            return False
+        if stripped.startswith(self.label_prefix):
+            return False
+        if stripped.startswith(self.constant_prefix):
+            return True
+        try:
+            char_value = self.try_parse_char_literal(stripped)
+            if char_value is not None:
+                return char_value != 0
+            return self.to_decimal(stripped) != 0
+        except Exception:
+            return stripped.startswith(self.number_prefix)
+
+    def parse_slice(self, token: str) -> Tuple[str, Optional[int], Optional[int]]:
+        match = SLICE_RE.match(token.strip())
+        if not match:
+            return token.strip(), None, None
+        hi = int(match.group("hi"))
+        lo = int(match.group("lo"))
+        if hi < lo:
+            raise ValueError(f"Invalid bit slice '{token}': high bit must be >= low bit")
+        return match.group("base").strip(), hi, lo
+
+    def resolve_base_value(
+        self,
+        token: str,
+        labels: Dict[str, int],
+        constants: Dict[str, int],
+        allow_unresolved: bool = False,
+    ) -> ResolvedValue:
+        token = token.strip()
+        token_upper = token.upper()
+
+        if token_upper == "ZERO":
+            return ResolvedValue(raw_text=token, value=0, kind="zero")
+
+        char_value = self.try_parse_char_literal(token)
+        if char_value is not None:
+            return ResolvedValue(raw_text=token, value=char_value, kind="char")
+
+        if token.startswith(self.number_prefix) or re.fullmatch(r"(0[xX][0-9a-fA-F]+|0[bB][01]+|\d+)", token):
+            return ResolvedValue(raw_text=token, value=self.to_decimal(token), kind="numeric")
+
+        if token_upper == "0":
+            return ResolvedValue(raw_text=token, value=0, kind="zero")
+
+        if token.startswith(self.constant_prefix):
+            name = token[len(self.constant_prefix) :].strip().upper()
+            if name not in constants:
+                raise ValueError(f"Undefined constant reference: {token}")
+            return ResolvedValue(raw_text=token, value=constants[name], kind="constant")
+
+        if token.startswith(self.label_prefix):
+            name = token[len(self.label_prefix) :].strip().upper()
+            if name not in labels:
+                if allow_unresolved:
+                    return ResolvedValue(raw_text=token, value=None, kind="label")
+                raise ValueError(f"Undefined label reference: {token}")
+            return ResolvedValue(raw_text=token, value=labels[name], kind="label")
+
+        raise ValueError(f"Unsupported operand value: {token}")
+
+    def resolve_value(
+        self,
+        token: str,
+        labels: Dict[str, int],
+        constants: Dict[str, int],
+        allow_unresolved: bool = False,
+    ) -> ResolvedValue:
+        base_token, hi, lo = self.parse_slice(token)
+        base_value = self.resolve_base_value(base_token, labels, constants, allow_unresolved=allow_unresolved)
+
+        if hi is None or lo is None:
+            return base_value
+
+        if hi < 0 or lo < 0:
+            raise ValueError(f"Invalid bit slice '{token}': bit indices must be non-negative")
+
+        if base_value.value is None:
+            return ResolvedValue(
+                raw_text=token,
+                value=None,
+                kind=base_value.kind,
+                sliced=True,
+                slice_hi=hi,
+                slice_lo=lo,
+            )
+
+        width = hi - lo + 1
+        slice_value = (base_value.value >> lo) & ((1 << width) - 1)
+        return ResolvedValue(
+            raw_text=token,
+            value=slice_value,
+            kind=base_value.kind,
+            sliced=True,
+            slice_hi=hi,
+            slice_lo=lo,
+        )
+
+    def parse_destination(self, token: str, instruction: str) -> str:
+        token_upper = token.upper()
+        if token_upper not in DESTINATIONS:
+            raise ValueError(f"{instruction} destination must be one of {list(DESTINATIONS.keys())}, got {token}")
+        return token_upper
+
+    def parse_ra_rd_destination(self, token: str, instruction: str) -> str:
+        token_upper = token.upper()
+        if token_upper not in {"RA", "RD"}:
+            raise ValueError(f"{instruction} destination must be RA or RD, got {token}")
+        return token_upper
+
+    def parse_source(self, token: str, instruction: str, allow_zero_alias: bool = True) -> str:
+        token_upper = token.upper()
+        if allow_zero_alias and token_upper in {"ZERO", "0", "#0"}:
+            return "ZERO"
+        if token_upper in SOURCES:
+            return token_upper
+        raise ValueError(f"{instruction} source must be one of {list(SOURCES.keys()) + ['0', '#0']}, got {token}")
+
+    def parse_small_immediate(
+        self,
+        token: str,
+        instruction: str,
+        labels: Dict[str, int],
+        constants: Dict[str, int],
+        min_value: int,
+        max_value: int,
+        required_width: Optional[int] = None,
+    ) -> int:
+        resolved = self.resolve_value(token, labels, constants)
+        if resolved.value is None:
+            raise ValueError(f"{instruction} could not resolve operand {token}")
+        if required_width is not None and resolved.sliced and resolved.width != required_width:
+            raise ValueError(
+                f"{instruction} requires a slice width of {required_width} bits, got "
+                f"[{resolved.slice_hi}:{resolved.slice_lo}]"
+            )
+        if not (min_value <= resolved.value <= max_value):
+            raise ValueError(f"{instruction} immediate value {resolved.value} out of range ({min_value}-{max_value})")
+        return resolved.value
+
+    def normalize_ldi_args(self, args: List[str]) -> Tuple[str, str]:
+        if len(args) == 1:
+            return "RA", args[0]
+        if len(args) == 2:
+            return self.parse_ra_rd_destination(args[0], "LDI"), args[1]
+        raise ValueError(f"LDI requires 1 or 2 arguments, got {len(args)}")
+
+    def estimate_instruction_size(
+        self,
+        instruction: str,
+        args: List[str],
+        labels: Dict[str, int],
+        constants: Dict[str, int],
+    ) -> int:
+        instruction, args = self.normalize_instruction(instruction, args)
+
+        if instruction == "LDI":
+            _, value_token = self.normalize_ldi_args(args)
+            resolved = self.resolve_value(value_token, labels, constants, allow_unresolved=True)
+            if resolved.value is None:
+                return 2
+            if resolved.sliced and resolved.width != 8:
+                raise ValueError("LDI sliced operands must be exactly 8 bits wide")
+            low_byte = resolved.value & 0xFF
+            return 1 if low_byte <= 31 else 2
+
+        if instruction == "JLE":
             if args:
-                raise ValueError(f"{instruction} does not take arguments")
-            return self.encoder.encode_special(instruction)
-        
-        # LDI (1 argument)
-        elif instruction == "LDI":
+                raise ValueError("JLE does not take operands")
+            return 2
+
+        if instruction == "JGE":
+            if args:
+                raise ValueError("JGE does not take operands")
+            return 2
+
+        return 1
+
+    def build_labels(self, lines: List[SourceLine], constants: Dict[str, int]) -> Dict[str, int]:
+        guess: Dict[str, int] = {}
+
+        for _ in range(32):
+            labels: Dict[str, int] = {}
+            pc = 0
+
+            for source_line in lines:
+                if self.is_label_definition(source_line.text):
+                    label_name = source_line.text[:-1].strip().upper()
+                    if label_name in labels:
+                        raise ValueError(
+                            f"Error on line {source_line.line_number} ('{source_line.text}'): "
+                            f"Duplicate label definition: {label_name}"
+                        )
+                    labels[label_name] = pc
+                    continue
+
+                parsed = self.parse_source_line(source_line)
+                try:
+                    pc += self.estimate_instruction_size(parsed.instruction, parsed.args, guess, constants)
+                except Exception as e:
+                    raise ValueError(f"Error on line {parsed.line_number} ('{parsed.raw_line}'): {e}")
+
+            if labels == guess:
+                return labels
+            guess = labels
+
+        raise ValueError("Label address stabilization failed after 32 passes")
+
+    def emit_ldi(self, parsed: ParsedLine, args: List[str], labels: Dict[str, int], constants: Dict[str, int]) -> List[str]:
+        dest, value_token = self.normalize_ldi_args(args)
+        resolved = self.resolve_value(value_token, labels, constants)
+        if resolved.value is None:
+            raise ValueError(f"LDI could not resolve operand {value_token}")
+        if resolved.sliced and resolved.width != 8:
+            raise ValueError("LDI sliced operands must be exactly 8 bits wide")
+
+        if not resolved.sliced and resolved.value > 0xFF:
+            self.last_warnings.append(
+                f"Line {parsed.line_number} ('{parsed.raw_line}'): "
+                f"LDI operand resolves to 0x{resolved.value:X}; only the low byte 0x{resolved.value & 0xFF:02X} is used."
+            )
+
+        byte_value = resolved.value & 0xFF
+        if byte_value <= 31:
+            return [self.encoder.encode_ldl(dest, byte_value)]
+
+        return [
+            self.encoder.encode_ldl(dest, byte_value & 0x1F),
+            self.encoder.encode_ldh(dest, (byte_value >> 5) & 0x07),
+        ]
+
+    def encode_actual_instruction(
+        self,
+        instruction: str,
+        args: List[str],
+        labels: Dict[str, int],
+        constants: Dict[str, int],
+    ) -> str:
+        if instruction == "NOP":
+            if args:
+                raise ValueError("NOP does not take arguments")
+            return self.encoder.encode_special("NOP")
+
+        if instruction == "HLT":
+            if args:
+                raise ValueError("HLT does not take arguments")
+            return self.encoder.encode_special("HLT")
+
+        if instruction == "JGT":
+            if args:
+                raise ValueError("JGT does not take arguments")
+            return self.encoder.encode_special("JGT")
+
+        if instruction == "JAL":
+            if args:
+                raise ValueError("JAL does not take arguments")
+            return self.encoder.encode_special("JAL")
+
+        if instruction == "INC":
             if len(args) != 1:
-                raise ValueError(f"LDI requires 1 argument, got {len(args)}")
-            label_ref = self.parse_label_reference(args[0], labels or {})
-            if label_ref:
-                immediate = label_ref.encoded_immediate
-            else:
-                immediate = self.to_decimal(args[0])
-            return self.encoder.encode_ldi(immediate)
-        
-        # MOV (2 arguments)
-        elif instruction == "MOV":
+                raise ValueError(f"INC requires 1 argument, got {len(args)}")
+            resolved = self.resolve_value(args[0], labels, constants)
+            if resolved.value not in {1, 2}:
+                raise ValueError("INC only accepts #1 or #2")
+            value = resolved.value
+            return self.encoder.encode_special("INC", value)
+
+        if instruction == "DEC":
+            if len(args) != 1:
+                raise ValueError(f"DEC requires 1 argument, got {len(args)}")
+            resolved = self.resolve_value(args[0], labels, constants)
+            if resolved.value not in {1, 2}:
+                raise ValueError("DEC only accepts #1 or #2")
+            value = resolved.value
+            return self.encoder.encode_special("DEC", value)
+
+        if instruction == "LDL":
             if len(args) != 2:
-                raise ValueError(f"MOV requires 2 arguments (dest, src), got {len(args)}")
-            return self.encoder.encode_mov(args[0], args[1])
-        
-        # NOT (1 argument)
-        elif instruction == "NOT":
-            if len(args) != 1:
-                raise ValueError(f"NOT requires 1 argument, got {len(args)}")
-            return self.encoder.encode_not(args[0])
-        
-        # Arithmetic operations (1 argument)
-        elif instruction in ["ADD", "SUB", "ADC", "SBC", "AND"]:
-            if len(args) != 1:
-                raise ValueError(f"{instruction} requires 1 argument, got {len(args)}")
-            return self.encoder.encode_arithmetic(instruction, args[0])
-        
-        # XOR (1 argument)
-        elif instruction == "XOR":
-            if len(args) != 1:
-                raise ValueError(f"XOR requires 1 argument, got {len(args)}")
-            return self.encoder.encode_xor(args[0])
-        
-        # Immediate arithmetic (1 argument)
-        elif instruction in ["ADDI", "SUBI"]:
+                raise ValueError(f"LDL requires 2 arguments, got {len(args)}")
+            dest = self.parse_ra_rd_destination(args[0], "LDL")
+            immediate = self.parse_small_immediate(args[1], "LDL", labels, constants, 0, 31, required_width=5)
+            return self.encoder.encode_ldl(dest, immediate)
+
+        if instruction == "LDH":
+            if len(args) != 2:
+                raise ValueError(f"LDH requires 2 arguments, got {len(args)}")
+            dest = self.parse_ra_rd_destination(args[0], "LDH")
+            immediate = self.parse_small_immediate(args[1], "LDH", labels, constants, 0, 7, required_width=3)
+            return self.encoder.encode_ldh(dest, immediate)
+
+        if instruction == "MOV":
+            if len(args) != 2:
+                raise ValueError(f"MOV requires 2 arguments, got {len(args)}")
+            dest = self.parse_destination(args[0], "MOV")
+            src = self.parse_source(args[1], "MOV")
+            return self.encoder.encode_mov(dest, src)
+
+        if instruction in {"ADD", "ADC", "NOT", "SUB", "SBC", "CMP", "XOR", "AND", "PUSH"}:
             if len(args) != 1:
                 raise ValueError(f"{instruction} requires 1 argument, got {len(args)}")
-            immediate = self.to_decimal(args[0])
-            return self.encoder.encode_immediate_arithmetic(instruction, immediate)
-        
-        # Jump instructions (no arguments)
-        elif instruction in ["JMP", "JEQ", "JGT", "JLT", "JGE", "JLE", "JNE", "JC"]:
+            src = self.parse_source(args[0], instruction)
+            return self.encoder.encode_source_op(instruction, src)
+
+        if instruction in {"ADDI", "SUBI"}:
+            if len(args) != 1:
+                raise ValueError(f"{instruction} requires 1 argument, got {len(args)}")
+            immediate = self.parse_small_immediate(args[0], instruction, labels, constants, 0, 7)
+            return self.encoder.encode_immediate_op(instruction, immediate)
+
+        if instruction == "POP":
+            if len(args) != 1:
+                raise ValueError(f"POP requires 1 argument, got {len(args)}")
+            dest = self.parse_destination(args[0], "POP")
+            return self.encoder.encode_pop(dest)
+
+        if instruction in JUMP_CONDITIONS:
             if args:
-                raise ValueError(f"{instruction} does not take arguments (use MOV PRL, #addr first)")
+                raise ValueError(f"{instruction} does not take operands")
             return self.encoder.encode_jump(instruction)
-        
-        # CMP (1 argument)
-        elif instruction == "CMP":
-            if len(args) != 1:
-                raise ValueError(f"CMP requires 1 argument, got {len(args)}")
-            return self.encoder.encode_cmp(args[0])
-        
-        else:
-            raise ValueError(f"Unknown instruction: {instruction}")
-    
+
+        raise ValueError(f"Unknown instruction: {instruction}")
+
+    def emit_instruction(self, parsed: ParsedLine, labels: Dict[str, int], constants: Dict[str, int]) -> List[str]:
+        instruction, args = self.normalize_instruction(parsed.instruction, parsed.args)
+
+        if instruction == "LDI":
+            return self.emit_ldi(parsed, args, labels, constants)
+
+        if instruction == "JLE":
+            if args:
+                raise ValueError("JLE does not take operands")
+            return [
+                self.encoder.encode_jump("JEQ"),
+                self.encoder.encode_jump("JLT"),
+            ]
+
+        if instruction == "JGE":
+            if args:
+                raise ValueError("JGE does not take operands")
+            return [
+                self.encoder.encode_jump("JEQ"),
+                self.encoder.encode_special("JGT"),
+            ]
+
+        return [self.encode_actual_instruction(instruction, args, labels, constants)]
+
     def convert_to_machine_code(self, raw_lines: List[str]) -> Tuple[List[str], Dict[str, int], Dict[str, int]]:
-        """Main conversion function: assembly source -> binary machine code
-        Returns: (binary_lines, labels, constants)
-        """
         self.last_warnings = []
 
-        # Step 1: Clean lines
         lines = self.clean_lines(raw_lines)
-        
-        # Step 2: Extract constants
         constants, lines = self.extract_constants(lines)
-        
-        # Step 3: Extract labels
-        labels, lines = self.extract_labels(lines)
+        labels = self.build_labels(lines, constants)
 
-        # Step 4: Resolve constants
-        lines = self.resolve_constants(lines, constants)
+        binary_lines: List[str] = []
+        for source_line in lines:
+            if self.is_label_definition(source_line.text):
+                continue
 
-        # Step 5: Parse instructions while preserving label intent
-        parsed_lines = []
-        for i, line in enumerate(lines):
+            parsed = self.parse_source_line(source_line)
             try:
-                parsed_lines.append(self.parse_source_line(line, labels, i + 1))
-            except Exception as e:
-                raise ValueError(f"Error on line {i + 1} ('{line}'): {e}")
-
-        self.last_warnings = self.build_label_warnings(parsed_lines)
-
-        # Step 6: Encode instructions
-        binary_lines = []
-        for parsed in parsed_lines:
-            try:
-                binary = self.encode_instruction(parsed.instruction, parsed.args, labels=labels)
-                binary_lines.append(f"{binary}\n")
+                encoded_lines = self.emit_instruction(parsed, labels, constants)
+                binary_lines.extend(f"{binary}\n" for binary in encoded_lines)
             except Exception as e:
                 raise ValueError(f"Error on line {parsed.line_number} ('{parsed.raw_line}'): {e}")
-        
+
         return binary_lines, labels, constants
-    
+
     def disassemble(self, binary_code: str) -> str:
-        """Disassemble binary code to assembly mnemonics"""
         binary_code = binary_code.strip()
-        
-        if len(binary_code) != 8:
-            raise ValueError(f"Invalid binary code length: {len(binary_code)}")
-        
-        # Check if it's LDI (IM7 = 1)
-        if binary_code[0] == '1':
-            immediate = int(binary_code[1:], 2)
-            return f"LDI #{immediate}"
-        
-        # Parse standard instruction format
-        im7 = binary_code[0]
-        mv = binary_code[1]
-        a1 = binary_code[2]
-        a2 = binary_code[3]
-        j = binary_code[4]
-        s2 = binary_code[5]
-        s1 = binary_code[6]
-        s0 = binary_code[7]
-        
-        # Special instructions
+        if len(binary_code) != 8 or any(bit not in "01" for bit in binary_code):
+            raise ValueError(f"Invalid binary code: {binary_code}")
+
+        if binary_code.startswith("11"):
+            dest = "RD" if binary_code[2] == "1" else "RA"
+            immediate = int(binary_code[3:], 2)
+            return f"LDL {dest}, #{immediate}"
+
+        if binary_code.startswith("10"):
+            dest_bits = binary_code[2:5]
+            src_bits = binary_code[5:8]
+            dest = next((name for name, bits in DESTINATIONS.items() if bits == dest_bits), None)
+            src = next((name for name, bits in SOURCES.items() if bits == src_bits), None)
+            if not dest or not src:
+                return f"??? {binary_code}"
+            return f"MOV {dest}, {src}"
+
         if binary_code == "00000000":
             return "NOP"
-        elif binary_code == "00000001":
+        if binary_code == "00000001":
             return "HLT"
-        elif binary_code == "00000010":
-            return "SMSBRA"
-        elif binary_code == "00000011":
-            return "INX"
-        
-        # MOV instructions (MV = 1)
-        if mv == '1':
-            dest_bits = a1 + a2 + j
-            src_bits = s2 + s1 + s0
-            
-            # Find destination and source
-            dest = None
-            src = None
-            
-            for name, bits in DESTINATIONS.items():
-                if bits == dest_bits:
-                    dest = name
-                    break
-            
-            for name, bits in SOURCES.items():
-                if bits == src_bits:
-                    src = name
-                    break
-            
-            if dest and src:
-                return f"MOV {dest}, {src}"
-            else:
-                return f"MOV ?, ? (unknown encoding)"
-        
-        # Jump instructions (A1=1, A2J=000)
-        if a1 == '1' and a2 + j + s2 == '000':
-            condition_bits = s1 + s0
-            conditions = ["JMP", "JEQ", "JGT", "JLT", "JGE", "JLE", "JNE", "JC"]
-            condition_map = {f"{i:03b}"[1:]: conditions[i] for i in range(8)}
-            return condition_map.get(condition_bits, f"J? (unknown)")
-        
-        # Immediate arithmetic (A1A2=11)
-        if a1 + a2 == '11':
-            immediate = int(s2 + s1 + s0, 2)
-            if j == '0':
-                return f"ADDI #{immediate}"
-            else:
-                return f"SUBI #{immediate}"
-        
-        # Other instructions
+        if binary_code == "00000110":
+            return "JGT"
+        if binary_code == "00000111":
+            return "JAL"
+        if binary_code.startswith("0000001"):
+            return f"INC #{int(binary_code[-1], 2) + 1}"
+        if binary_code.startswith("0000010"):
+            return f"DEC #{int(binary_code[-1], 2) + 1}"
+        if binary_code.startswith("00011"):
+            cond_bits = binary_code[5:8]
+            name = next((mnemonic for mnemonic, bits in JUMP_CONDITIONS.items() if bits == cond_bits), None)
+            return name or f"??? {binary_code}"
+        if binary_code.startswith("00100"):
+            src_bits = binary_code[5:8]
+            src = next((name for name, bits in SOURCES.items() if bits == src_bits), None)
+            return f"PUSH {src}" if src else f"??? {binary_code}"
+        if binary_code.startswith("00101"):
+            dest_bits = binary_code[5:8]
+            dest = next((name for name, bits in DESTINATIONS.items() if bits == dest_bits), None)
+            return f"POP {dest}" if dest else f"??? {binary_code}"
+        if binary_code.startswith("0011"):
+            dest = "RD" if binary_code[4] == "1" else "RA"
+            immediate = int(binary_code[5:8], 2)
+            return f"LDH {dest}, #{immediate}"
+
+        source_forms = {
+            "01000": "ADD",
+            "01010": "ADC",
+            "01011": "NOT",
+            "01100": "SUB",
+            "01110": "SBC",
+            "01111": "CMP",
+            "00001": "XOR",
+            "00010": "AND",
+        }
+        for prefix, mnemonic in source_forms.items():
+            if binary_code.startswith(prefix):
+                src_bits = binary_code[5:8]
+                src = next((name for name, bits in SOURCES.items() if bits == src_bits), None)
+                return f"{mnemonic} {src}" if src else f"??? {binary_code}"
+
+        if binary_code.startswith("01001"):
+            return f"ADDI #{int(binary_code[5:8], 2)}"
+        if binary_code.startswith("01101"):
+            return f"SUBI #{int(binary_code[5:8], 2)}"
+
         return f"??? {binary_code}"

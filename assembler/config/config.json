@@ -1,154 +1,176 @@
 {
-    "special_chars":{
-        "comment":";",
-        "label":":"
+    "special_chars": {
+        "comment": ";",
+        "label": ":"
     },
-    "keywords":{
+    "keywords": {
         "constant": "equ"
     },
-    "destinations":{
-        "RA":"000",
-        "RD":"001",
-        "RB":"010",
-        "MARL":"011",
-        "MARH":"100",
-        "PRL":"101",
-        "PRH":"110",
-        "M":"111"
+    "destinations": {
+        "RA": "000",
+        "RD": "001",
+        "RB": "010",
+        "MARL": "011",
+        "MARH": "100",
+        "PRL": "101",
+        "PRH": "110",
+        "M": "111"
     },
-    "sources":{
-        "RA":"000",
-        "RD":"001",
-        "RB":"010",
-        "ACC":"011",
-        "PCL":"100",
-        "PCH":"101",
-        "M":"111"
+    "sources": {
+        "RA": "000",
+        "RD": "001",
+        "RB": "010",
+        "ACC": "011",
+        "ZERO": "100",
+        "LRL": "101",
+        "LRH": "110",
+        "M": "111"
     },
-    "instructions" : {
-        "LDI" : {
-            "description": "Load immediate to RA",
-            "format": "LDI #imm7",
-            "encoding": "IM7=1, immediate=7bits"
+    "jump_conditions": {
+        "JEQ": "000",
+        "JNE": "001",
+        "JCS": "010",
+        "JCC": "011",
+        "JMI": "100",
+        "JVS": "101",
+        "JLT": "110",
+        "JMP": "111"
+    },
+    "jump_aliases": {
+        "JZ": "JEQ",
+        "JNZ": "JNE",
+        "JC": "JCS",
+        "JGEU": "JCS",
+        "JNC": "JCC",
+        "JLTU": "JCC",
+        "JN": "JMI",
+        "JV": "JVS",
+        "JLTS": "JLT"
+    },
+    "instructions": {
+        "LDL": {
+            "format": "LDL RA|RD, value",
+            "encoding": "11 Ds0 imm5"
         },
-        "MOV" : {
-            "description": "Move from source to destination",
+        "LDH": {
+            "format": "LDH RA|RD, value",
+            "encoding": "0011 Ds0 imm3"
+        },
+        "LDI": {
+            "format": "LDI [RA|RD,] value",
+            "encoding": "pseudo over LDL/LDH"
+        },
+        "MOV": {
             "format": "MOV dest, src",
-            "encoding": "IM7=0, MV=1, A1A2=dest(3bits), J=src(3bits), rest=0",
-            "forbidden": ["RA,RA", "RD,RD", "RB,RB", "M,M"]
+            "encoding": "10 ddd sss"
         },
-        "NOT" : {
-            "description": "Bitwise NOT",
-            "format": "NOT src",
-            "encoding": "IM7=0, MV=1, varies by source",
-            "allowed_sources": ["RA", "RB", "ACC", "RD", "M"]
+        "CLR": {
+            "format": "CLR dest",
+            "encoding": "pseudo over MOV dest, ZERO"
         },
-        "ADD" : {
-            "description": "Add source to RD, result to ACC",
+        "ADD": {
             "format": "ADD src",
-            "encoding": "IM7=0, MV=0, A1A2=00, J=src, S2S1=S0"
+            "encoding": "01000 sss"
         },
-        "XOR" : {
-            "description": "XOR operation",
-            "format": "XOR src",
-            "encoding": "IM7=0, MV=0, varies by source",
-            "allowed_sources": ["RA", "RB", "RD", "ACC", "M"]
+        "ADDI": {
+            "format": "ADDI imm3",
+            "encoding": "01001 iii"
         },
-        "SUB" : {
-            "description": "Subtract (with carry) source from RD",
-            "format": "SUB src",
-            "encoding": "IM7=0, MV=0, A1A2=01, J=src, S2S1=S0"
-        },
-        "ADC" : {
-            "description": "Add with carry",
+        "ADC": {
             "format": "ADC src",
-            "encoding": "IM7=0, MV=0, A1A2=01, J=src, S2S1=S0"
+            "encoding": "01010 sss"
         },
-        "SBC" : {
-            "description": "Subtract with carry",
+        "NOT": {
+            "format": "NOT src",
+            "encoding": "01011 sss"
+        },
+        "SUB": {
+            "format": "SUB src",
+            "encoding": "01100 sss"
+        },
+        "SUBI": {
+            "format": "SUBI imm3",
+            "encoding": "01101 iii"
+        },
+        "SBC": {
             "format": "SBC src",
-            "encoding": "IM7=0, MV=0, A1A2=01, J=src, S2S1=S0"
+            "encoding": "01110 sss"
         },
-        "AND" : {
-            "description": "Bitwise AND",
+        "CMP": {
+            "format": "CMP src",
+            "encoding": "01111 sss"
+        },
+        "XOR": {
+            "format": "XOR src",
+            "encoding": "00001 sss"
+        },
+        "AND": {
             "format": "AND src",
-            "encoding": "IM7=0, MV=0, A1A2=10, J=src, S2S1=S0"
+            "encoding": "00010 sss"
         },
-        "JMP" : {
-            "description": "Unconditional jump",
+        "PUSH": {
+            "format": "PUSH src",
+            "encoding": "00100 sss"
+        },
+        "POP": {
+            "format": "POP dest",
+            "encoding": "00101 ddd"
+        },
+        "JMP": {
             "format": "JMP",
-            "encoding": "IM7=0, MV=0, A1=1, A2J=000, S2S1S0=JS2JS1JS0(000)"
+            "encoding": "00011 000"
         },
-        "JEQ" : {
-            "description": "Jump if equal",
+        "JEQ": {
             "format": "JEQ",
-            "encoding": "IM7=0, MV=0, A1=1, A2J=000, S2S1S0=001"
+            "encoding": "00011 001"
         },
-        "JGT" : {
-            "description": "Jump if greater than",
-            "format": "JGT",
-            "encoding": "IM7=0, MV=0, A1=1, A2J=000, S2S1S0=010"
-        },
-        "JLT" : {
-            "description": "Jump if less than",
-            "format": "JLT",
-            "encoding": "IM7=0, MV=0, A1=1, A2J=000, S2S1S0=011"
-        },
-        "JGE" : {
-            "description": "Jump if greater or equal",
-            "format": "JGE",
-            "encoding": "IM7=0, MV=0, A1=1, A2J=000, S2S1S0=100"
-        },
-        "JLE" : {
-            "description": "Jump if less or equal",
-            "format": "JLE",
-            "encoding": "IM7=0, MV=0, A1=1, A2J=000, S2S1S0=101"
-        },
-        "JNE" : {
-            "description": "Jump if not equal",
+        "JNE": {
             "format": "JNE",
-            "encoding": "IM7=0, MV=0, A1=1, A2J=000, S2S1S0=110"
+            "encoding": "00011 010"
         },
-        "JC" : {
-            "description": "Jump if carry",
-            "format": "JC",
-            "encoding": "IM7=0, MV=0, A1=1, A2J=000, S2S1S0=111"
+        "JCS": {
+            "format": "JCS",
+            "encoding": "00011 011"
         },
-        "ADDI" : {
-            "description": "Add immediate (3-bit)",
-            "format": "ADDI #imm3",
-            "encoding": "IM7=0, MV=0, A1A2=11, J=0, IM2IM1IM0=imm3"
+        "JCC": {
+            "format": "JCC",
+            "encoding": "00011 100"
         },
-        "SUBI" : {
-            "description": "Subtract immediate (3-bit)",
-            "format": "SUBI #imm3",
-            "encoding": "IM7=0, MV=0, A1A2=11, J=1, IM2IM1IM0=imm3"
+        "JMI": {
+            "format": "JMI",
+            "encoding": "00011 101"
         },
-        "NOP" : {
-            "description": "No operation",
+        "JVS": {
+            "format": "JVS",
+            "encoding": "00011 110"
+        },
+        "JLT": {
+            "format": "JLT",
+            "encoding": "00011 111"
+        },
+        "NOP": {
             "format": "NOP",
             "encoding": "00000000"
         },
-        "HLT" : {
-            "description": "Halt",
+        "HLT": {
             "format": "HLT",
             "encoding": "00000001"
         },
-        "SMSBRA" : {
-            "description": "Set MSB of RA to 1",
-            "format": "SMSBRA",
-            "encoding": "00000010"
+        "INC": {
+            "format": "INC #1|#2",
+            "encoding": "0000001x"
         },
-        "INX" : {
-            "description": "Increment MARL",
-            "format": "INX",
-            "encoding": "00000011"
+        "DEC": {
+            "format": "DEC #1|#2",
+            "encoding": "0000010x"
         },
-        "CMP" : {
-            "description": "Compare (RA, M, or ACC with RD)",
-            "format": "CMP src",
-            "encoding": "varies by source",
-            "allowed_sources": ["RA", "M", "ACC"]
+        "JGT": {
+            "format": "JGT",
+            "encoding": "00000110"
+        },
+        "JAL": {
+            "format": "JAL",
+            "encoding": "00000111"
         }
     }
 }

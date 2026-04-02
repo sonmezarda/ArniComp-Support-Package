@@ -1,5 +1,9 @@
 `timescale 1ns/1ps
 //
+// DEPRECATED:
+// This wrapper still uses the older ad-hoc local memory decode and is kept only
+// as a legacy bring-up target. Prefer arnicomp_soc_top for the current ISA.
+//
 // Tang Nano 9K Top-Level Wrapper for ArniComp CPU
 // 
 // Features:

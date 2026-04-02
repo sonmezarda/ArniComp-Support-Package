@@ -1,197 +1,114 @@
 equ SYS_LED_H 0x0C
 equ SYS_LED_L 0x00
+equ UART_BASE_H 0x09
+equ UART_CNTRL_L 0x40 ; {5'b0, TX_EN, RX_EN, UART_EN}
+equ UART_BAUDSEL_L 0x20
+equ UART_TX_DATA_L 0x10
+equ UART_TX_READY_L 0x11
 
-equ CLOCK_HZ 10000
-equ LINK_RET_L 0x10
-equ LINK_RET_H 0x11
-equ DELAY_SLOT 0x12
+equ A_C 'A'
+equ R_C 'R'
+equ D_C 'D'
+equ N_C 'N'
+equ I_C 'I'
+equ NEWLINE_C '\n'
+equ SPACE_C ' '
+equ ARDA_LEN 4
+equ NIDA_LEN 6
 
-equ BLINK_DELAY_MS 100
-equ LED_ON_VALUE 0x3F
-equ LED_OFF_VALUE 0x00
-equ DELAY_TARGET_CYCLES (CLOCK_HZ / 1000)
-equ DELAY_INNER_COUNT MAX(1, MIN(127, ((DELAY_TARGET_CYCLES - 41) / 14)))
-equ DELAY_MID_BLOCK_CYCLES (18 + (14 * DELAY_INNER_COUNT))
-equ DELAY_MID_COUNT MAX(1, (((DELAY_TARGET_CYCLES - 23) + (DELAY_MID_BLOCK_CYCLES / 2)) / DELAY_MID_BLOCK_CYCLES))
-
-; Software JAL convention for this ISA:
-; 1. Caller writes return label low/high to LINK_RET_L / LINK_RET_H
-; 2. Caller puts delay parameter in RB
-; 3. Caller jumps to delay
-; 4. delay returns by restoring PRL/PRH from the link slots
-;
-; Delay calibration:
-; One outer iteration is approximately:
-;   23 + DELAY_MID_COUNT * (18 + 14 * DELAY_INNER_COUNT) cycles
-; DELAY_MID_COUNT is derived from CLOCK_HZ, so changing CLOCK_HZ
-; updates the compiled loop count automatically.
-; DELAY_INNER_COUNT is also derived from CLOCK_HZ so low clock values
-; do not get stuck with an oversized minimum delay block.
-;
-; Tang Nano top currently divides 27 MHz down to a 500 kHz CPU clock,
-; so CLOCK_HZ defaults to 500000 here.
-;
-; LED outputs are active-low in hardware (led = ~debug_led[5:0]).
-; Writing 0x3F turns all 6 onboard LEDs on, writing 0x00 turns them off.
-
-; ---- reset / init ----
-ldi #0
-mov prh, ra
-mov prl, ra
-mov marh, ra
-mov marl, ra
-
-main_loop:
-    ; LED ON
-    ldi $SYS_LED_H
-    mov marh, ra
-    ldi $SYS_LED_L
-    mov marl, ra
-    ldi $LED_ON_VALUE
-    mov m, ra
-
-    ; call delay(BLINK_DELAY_MS)
+setup:
     ldi #0
-    mov marh, ra
-    ldi $LINK_RET_L
-    mov marl, ra
-    ldi @after_on_delay.low
-    mov m, ra
-    ldi $LINK_RET_H
-    mov marl, ra
-    ldi @after_on_delay.high
-    mov m, ra
-    ldi $BLINK_DELAY_MS
-    mov rb, ra
-    ldi @delay.low
+    mov prh, ra 
     mov prl, ra
-    ldi @delay.high
-    mov prh, ra
-    jmp
-
-after_on_delay:
-    ; LED OFF
-    ldi $SYS_LED_H
+    mov marl, ra
     mov marh, ra
-    ldi $SYS_LED_L
-    mov marl, ra
-    ldi $LED_OFF_VALUE
-    mov m, ra
 
-    ; call delay(BLINK_DELAY_MS)
-    ldi #0
+    ldi $UART_BASE_H
     mov marh, ra
-    ldi $LINK_RET_L
+
+    ldi $UART_CNTRL_L
     mov marl, ra
-    ldi @after_off_delay.low
-    mov m, ra
-    ldi $LINK_RET_H
+
+    ldi #0b00000101
+    mov m, ra ; enable tx and uart
+
+    ldi $UART_BAUDSEL_L
     mov marl, ra
-    ldi @after_off_delay.high
-    mov m, ra
-    ldi $BLINK_DELAY_MS
-    mov rb, ra
-    ldi @delay.low
-    mov prl, ra
-    ldi @delay.high
-    mov prh, ra
-    jmp
 
-after_off_delay:
-    ldi @main_loop.low
-    mov prl, ra
-    ldi @main_loop.high
-    mov prh, ra
-    jmp
+    ldi #2
+    mov m, ra ; baud_rate = 9600
 
 
-; delay(RB)
-; RB = approximate milliseconds when CLOCK_HZ = 1_000_000
-; LINK_RET_L/H = return address
-delay:
-delay_outer:
-    mov rd, rb
-    ldi #0
-    cmp ra
-    ldi @delay_return.low
-    mov prl, ra
-    ldi @delay_return.high
-    mov prh, ra
-    jeq
-
-    ; middle loop counter lives in RAM so RD can be reused by inner loop
-    ldi #0
-    mov marh, ra
-    ldi $DELAY_SLOT
-    mov marl, ra
-    ldi $DELAY_MID_COUNT
-    mov m, ra
-
-delay_middle:
-    ldi $DELAY_INNER_COUNT
+main:
+    ldi $A_C
+    push ra
+    ldi $D_C
+    push ra
+    ldi $R_C
+    push ra
+    ldi $A_C
+    push ra
+    ldi $ARDA_LEN
     mov rd, ra
 
-delay_inner:
-    nop
-    nop
-    nop
-    nop
-
-    ldi #1
-    sub ra
-    mov rd, acc
-
-    ldi #0
-    cmp ra
-    ldi @delay_inner.low
+    ldi @send_str_func
     mov prl, ra
-    ldi @delay_inner.high
-    mov prh, ra
-    jne
+    jal
 
-    ; decrement middle counter in RAM
-    ldi #0
+    ldi $NEWLINE_C
+    push ra
+    ldi $A_C
+    push ra
+    ldi $D_C
+    push ra
+    ldi $I_C
+    push ra
+    ldi $N_C
+    push ra
+    ldi $SPACE_C
+    push ra
+    ldi $NIDA_LEN
+    mov rd, ra
+
+    ldi @send_str_func
+    mov prl, ra
+    jal
+
+    ldi $SYS_LED_H
     mov marh, ra
-    ldi $DELAY_SLOT
+    ldi $SYS_LED_L
     mov marl, ra
-    mov rd, m
-    ldi #1
-    sub ra
-    mov m, acc
-    mov rd, acc
 
-    ldi #0
-    cmp ra
-    ldi @delay_middle.low
-    mov prl, ra
-    ldi @delay_middle.high
-    mov prh, ra
-    jne
+    ldi #0xff
+    mov m, ra
+    
+    HLT
+    HLT
 
-    ; decrement outer counter in RB
-    mov rd, rb
-    ldi #1
-    sub ra
-    mov rb, acc
 
-    ldi @delay_outer.low
-    mov prl, ra
-    ldi @delay_outer.high
-    mov prh, ra
-    jmp
+send_str_func: ; str must be in the stack with reverse order
+    
+    ldi $UART_TX_DATA_L
+    mov marl, ra
 
-delay_return:
-    ldi #0
+    ldi $UART_BASE_H
     mov marh, ra
+    send_loop:
+        pop rb
+        mov m, rb ; send rb to uart
 
-    ldi $LINK_RET_L
-    mov marl, ra
-    mov ra, m
-    mov prl, ra
+        subi #1
+        mov rd, acc
+        
+        ldi @end_loop
+        mov prl, ra
+        jeq    ; count reached zero ? end_loop
 
-    ldi $LINK_RET_H
-    mov marl, ra
-    mov ra, m
-    mov prh, ra
+        ldi @send_loop
+        mov prl, ra
+        jmp
 
-    jmp
+    end_loop:
+        mov prl, lrl
+        mov prh, lrh
+        jmp

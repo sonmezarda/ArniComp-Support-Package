@@ -2,27 +2,27 @@
 package control_pkg;
 
   typedef struct packed {      
-    logic        nc_1;   // not connected
-    logic        inc;    // increment marl
-    logic [1:0]  ops;    // op select OPS1 OPS0
-    logic        sn;     // Set negative
-    logic        ce;     // count en
-    logic        jmp;    // jmp active
-    logic        sc;     // set carry
-    
-    logic        nc_2;   // not connected
-    logic        we;     // destination write en
-    logic        accw;   // ACC write
-    logic [2:0]  dsel;   // destination select
-    logic        sf;     // set flags
-    logic        im3;    // use 3 bit immediate
+    logic        jgt;        // jump greater than
+    logic        inc_mar;    // update full 16-bit MAR
+    logic [1:0]  ops;        // op select OPS1 OPS0
+    logic        sn;         // Set negative
+    logic        ce;         // count en
+    logic        jmp;        // jmp active
+    logic        sc;         // set carry
+       
+    logic        set_lr;      // set lr = pc + 1
+    logic        we;         // destination write en
+    logic        accw;       // ACC write
+    logic [2:0]  dsel;       // destination select
+    logic        sf;         // set flags
+    logic        im3_low_en; // use 3 bit low immediate
 
-    logic        nc_3;
-    logic        nc_4;
-    logic        smsbra; // set Ra msb bit 1
-    logic [2:0]  ssel;   // source select
-    logic        oe;     // output en
-    logic        im7;    // use 7 bit immediate
+    logic        im3_high_en;// use 3 bit high immediate
+    logic        inc_dec_sel;// 0 : increment, 1 : decrement
+    logic        sp_sel;     // stack pointer sel
+    logic [2:0]  ssel;       // source select
+    logic        oe;         // output en
+    logic        im5_en;     // use 5 bit immediate
 
   } ctrl_t;
 

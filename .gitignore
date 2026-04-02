@@ -45,6 +45,10 @@ verilog/*.rao
 verilog/sv2v-Linux
 verilog/synthesis_output
 verilog/visualization
+verilog/obj_tb*
+.codex
 
+_tmp*
 /obj_dir
+/obj_tb**
 /visualization

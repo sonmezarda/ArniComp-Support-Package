@@ -8,6 +8,8 @@ Usage:
     python main.py assemble <input.asm> [output.txt]
     python main.py disassemble <input.txt> [output.asm]
     python main.py createbin <input.txt> [output.bin]
+    python main.py createihex <input.asm> [output.hex]
+    python main.py createsvhex <input.asm> [output.mem]
     python main.py load <binary.bin>
     python main.py help
 """
@@ -348,6 +350,10 @@ COMMANDS:
         Assemble and convert to Intel HEX format (for Digital circuit simulator)
         Example: python main.py createihex program.asm program.hex
 
+    createsvhex <input.asm> [output.mem]
+        Assemble and convert to SystemVerilog HEX format
+        Example: python main.py createsvhex program.asm program.mem
+
     load <binary.bin>
         Load a binary file to EEPROM
         Example: python main.py load program.bin
@@ -372,50 +378,67 @@ ASSEMBLY SYNTAX:
     equ CONSTANT_NAME value     ; Define constants
     label:                      ; Define labels
     
-    LDI #immediate              ; Load immediate (0-127)
-    LDI @label                  ; Load label low byte (warns if SMSBRA/high byte needed)
-    LDI @label.low              ; Load low byte of a label address
-    LDI @label.high             ; Load high byte of a label address
-    MOV dest, src               ; Move data
-    ADD src                     ; Add to RD, result in ACC
-    SUB src                     ; Subtract from RD
-    ADC src                     ; Add with carry
-    SBC src                     ; Subtract with carry
-    AND src                     ; Bitwise AND
-    XOR src                     ; Bitwise XOR
-    NOT src                     ; Bitwise NOT
+    LDL RA|RD, value            ; Load low 5 bits (0-31 or [4:0] slice)
+    LDH RA|RD, value            ; Load high 3 bits (0-7 or [7:5] slice)
+    LDI [RA|RD,] value          ; Pseudo over LDL/LDH, defaults to RA
+    MOV dest, src               ; Move source to destination
+    CLR dest                    ; Pseudo for MOV dest, ZERO
+    ADD src                     ; ACC <- RD + src
+    ADC src                     ; ACC <- RD + src + CF
+    SUB src                     ; ACC <- RD - src
+    SBC src                     ; ACC <- RD - src - CF
+    AND src                     ; ACC <- RD and src
+    XOR src                     ; ACC <- RD xor src
+    NOT src                     ; ACC <- ~src
     ADDI #imm3                  ; Add immediate (0-7)
     SUBI #imm3                  ; Subtract immediate (0-7)
-    CMP src                     ; Compare (RA, M, ACC only)
-    JMP, JEQ, JGT, JLT, JGE, JLE, JNE, JC
-    NOP, HLT, SMSBRA, INX
+    CMP src                     ; Update flags only
+    PUSH src                    ; Push source value
+    POP dest                    ; Pop into destination
+    JEQ, JNE, JCS, JCC, JMI, JVS, JLT, JMP, JGT
+    JLE, JGE                    ; Assembler macros
+    JZ, JNZ, JC, JNC, JN, JV,
+    JGEU, JLTU, JLTS            ; Jump aliases
+    NOP, HLT, INC #1|#2, DEC #1|#2, JAL
 
 REGISTERS:
     RA, RD, RB                  ; General purpose
-    ACC                         ; Accumulator
-    PCL, PCH                    ; Program counter
+    ACC                         ; Accumulator (source)
     PRL, PRH                    ; Program register
     MARL, MARH                  ; Memory address register
+    LRL, LRH                    ; Link register bytes (source)
     M                           ; Memory[MARH:MARL]
+    ZERO / 0 / #0               ; Zero-source alias for MOV
 
 NUMBER FORMATS:
     #10         Decimal
     #0x10       Hexadecimal
     #0b1010     Binary
+    $CONST      Constant reference
+    @label      Label reference
+    value[hi:lo] Bit slice syntax
 
 EXAMPLES:
-    equ COUNTER 0x00
-    equ MAX 100
+    equ TARGET 0x1234
     
     start:
-        LDI #0
-        MOV RA, RA
-        ADD RD
-    loop:
+        LDI #10
+        MOV RD, RA
         ADDI #1
-        CMP #MAX
-        JLT
+        LDL RA, $TARGET[4:0]
+        LDH RA, $TARGET[7:5]
+        CLR RB
+        JEQ
+        JGE
         HLT
+
+NOTES:
+    - Jumps do not take label operands; they jump to PRH:PRL.
+    - Jump condition bits are ordered as:
+      JEQ=000, JNE=001, JCS=010, JCC=011, JMI=100, JVS=101, JLT=110, JMP=111.
+    - JLE expands to JEQ + JLT.
+    - JGE expands to JEQ + JGT.
+    - ADD #imm and SUB #imm are not accepted; use ADDI / SUBI.
 """
         print(help_text)
 
@@ -480,7 +503,7 @@ def main():
     elif command == "createsvhex":
         if len(sys.argv) < 3:
             print("Error: Input file required")
-            print("Usage: python main.py createihex <input.asm> [output.hex]")
+            print("Usage: python main.py createsvhex <input.asm> [output.mem]")
             sys.exit(1)
         input_file = sys.argv[2]
         output_file = sys.argv[3] if len(sys.argv) >= 4 else None

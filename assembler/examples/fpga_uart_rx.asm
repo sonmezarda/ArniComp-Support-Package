@@ -11,11 +11,10 @@ equ ON_CHAR 65
 equ OFF_CHAR 66
 
 ; clear sequence
-ldi #0
-mov prh, ra 
-mov prl, ra
-mov marl, ra
-mov marh, ra
+mov prh, zero
+mov prl, zero
+mov marl, zero
+mov marh, zero
 
 ldi $UART_BASE_H
 mov marh, ra
@@ -56,7 +55,7 @@ main_loop:
         cmp ra       ; rd == ra ; rx_data == ON_CHAR
         
         ldi @led_not_on
-        mov prl, ra  ; jmp addr = led_on
+        mov prl, ra  ; jmp addr = led_on_not
         jne
 
         ldi #1

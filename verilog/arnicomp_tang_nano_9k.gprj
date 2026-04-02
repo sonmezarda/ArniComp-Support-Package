@@ -6,17 +6,16 @@
     <Device name="GW1NR-9C" pn="GW1NR-LV9QN88PC6/I5">gw1nr9c-004</Device>
     <FileList>
         <File path="rtl/blocks/alu.sv" type="file.verilog" enable="1"/>
-        <File path="rtl/blocks/comparator.sv" type="file.verilog" enable="1"/>
         <File path="rtl/blocks/program_counter.sv" type="file.verilog" enable="1"/>
         <File path="rtl/blocks/write_selector.sv" type="file.verilog" enable="1"/>
         <File path="rtl/core/bus_selector.sv" type="file.verilog" enable="1"/>
         <File path="rtl/core/control_decoder.sv" type="file.verilog" enable="1"/>
         <File path="rtl/core/control_rom.sv" type="file.verilog" enable="1"/>
-        <File path="rtl/core/datapath.sv" type="file.verilog" enable="1"/>
         <File path="rtl/core/flag_reg.sv" type="file.verilog" enable="1"/>
         <File path="rtl/core/jump_logic.sv" type="file.verilog" enable="1"/>
         <File path="rtl/core/reg_a.sv" type="file.verilog" enable="1"/>
         <File path="rtl/core/reg_marl.sv" type="file.verilog" enable="1"/>
+        <File path="rtl/core/stack_pointer.sv" type="file.verilog" enable="1"/>
         <File path="rtl/lib/async_fifo.sv" type="file.verilog" enable="1"/>
         <File path="rtl/lib/reg_cell.sv" type="file.verilog" enable="1"/>
         <File path="rtl/mem/data_memory.sv" type="file.verilog" enable="1"/>

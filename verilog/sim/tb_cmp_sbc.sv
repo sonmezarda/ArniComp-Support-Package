@@ -5,6 +5,11 @@ module tb_cmp_sbc;
 
     logic clk = 0;
     logic rst_n = 0;
+    logic [15:0] mem_addr;
+    logic [7:0] mem_rdata;
+    logic [7:0] mem_wdata;
+    logic mem_wen;
+    logic mem_ren;
 
     always #5000 clk = ~clk;
 
@@ -12,7 +17,20 @@ module tb_cmp_sbc;
         .PROG_MEM_FILE("sim/tb_cmp_sbc.mem")
     ) dut (
         .clk(clk),
-        .rst_n(rst_n)
+        .rst_n(rst_n),
+        .mem_rdata(mem_rdata),
+        .mem_addr(mem_addr),
+        .mem_wdata(mem_wdata),
+        .mem_wen(mem_wen),
+        .mem_ren(mem_ren)
+    );
+
+    data_memory #(.MEM_SIZE(4096)) data_mem (
+        .clk(clk),
+        .we(mem_wen),
+        .addr(mem_addr),
+        .data_in(mem_wdata),
+        .data_out(mem_rdata)
     );
 
     int pass_count = 0, fail_count = 0;
@@ -66,8 +84,8 @@ module tb_cmp_sbc;
         $display("RD   = 0x%02X", dut.reg_d_out);
         $display("RB   = 0x%02X", dut.reg_b_out);
         $display("ACC  = 0x%02X", dut.acc_out);
-        $display("Flags: LT=%b EQ=%b GT=%b C=%b", 
-                 dut.lf_reg_out, dut.eq_reg_out, dut.gt_reg_out, dut.c_reg_out);
+        $display("Flags: Z=%b N=%b C=%b V=%b", 
+                 dut.z_reg_out, dut.n_reg_out, dut.c_reg_out, dut.v_reg_out);
 
         $display("\n--- Checking Expected Values ---\n");
         
@@ -76,7 +94,8 @@ module tb_cmp_sbc;
         // Test: RD=20, RA=5, C=1 (from overflow), SBC -> 20 - 5 - 0 = 15
         
         check_reg("RB", dut.reg_b_out, 8'h0F);  // SBC result: 20 - 5 - !C = 15
-        check_flag("GT", dut.gt_reg_out, 1'b1); // Final CMP: 20 > 5
+        check_flag("Z", dut.z_reg_out, 1'b0);
+        check_flag("C", dut.c_reg_out, 1'b1);
 
         $display("\n========================================");
         $display("Test Summary: %0d passed, %0d failed", pass_count, fail_count);

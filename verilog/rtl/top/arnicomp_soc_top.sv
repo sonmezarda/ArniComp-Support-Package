@@ -2,7 +2,10 @@
 
 module arnicomp_soc_top #(
     parameter string PROG_MEM_FILE = "rom/program.mem",
-    parameter int RAM_SIZE = 2048
+    parameter int RAM_SIZE = 2048,
+    parameter int STACK_SIZE = 256,
+    parameter logic [15:0] STACK_BASE_ADDR = 16'h0D00,
+    parameter logic [15:0] STACK_END_ADDR  = 16'h0DFF
 )(
     input  logic       cpu_clk,
     input  logic       uart_clk,
@@ -27,20 +30,24 @@ module arnicomp_soc_top #(
     logic        i2c_sel;
     logic        timer_sel;
     logic        sys_sel;
+    logic        stack_sel;
     logic        invalid_sel;
 
     logic [7:0]  ram_rdata;
+    logic [7:0]  stack_rdata;
     logic [7:0]  uart_rdata;
     logic [7:0]  sys_rdata;
     logic [7:0]  sys_led_reg_out;
     logic        ram_we;
+    logic        stack_we;
     logic        uart_we;
     logic        uart_re;
     logic        sys_led_we;
     logic        sys_led_sel;
 
     arnicomp_top #(
-        .PROG_MEM_FILE(PROG_MEM_FILE)
+        .PROG_MEM_FILE(PROG_MEM_FILE),
+        .STACK_PTR_RESET_VALUE(STACK_BASE_ADDR)
     ) cpu (
         .clk(cpu_clk),
         .rst_n(rst_n),
@@ -51,7 +58,10 @@ module arnicomp_soc_top #(
         .mem_ren(mem_ren)
     );
 
-    memory_map_unit memory_map_i (
+    memory_map_unit #(
+        .STACK_BASE_ADDR(STACK_BASE_ADDR),
+        .STACK_END_ADDR(STACK_END_ADDR)
+    ) memory_map_i (
         .addr_in(mem_addr),
         .enable(1'b1),
         .ram_sel(ram_sel),
@@ -60,10 +70,12 @@ module arnicomp_soc_top #(
         .i2c_sel(i2c_sel),
         .timer_sel(timer_sel),
         .sys_sel(sys_sel),
+        .stack_sel(stack_sel),
         .invalid_sel(invalid_sel)
     );
 
     assign ram_we     = mem_wen && ram_sel;
+    assign stack_we   = mem_wen && stack_sel;
     assign uart_we    = mem_wen && uart_sel;
     assign uart_re    = mem_ren && uart_sel;
     assign sys_led_sel = sys_sel && (mem_addr[7:0] == SYS_LED_OFFSET);
@@ -77,6 +89,16 @@ module arnicomp_soc_top #(
         .addr(mem_addr),
         .data_in(mem_wdata),
         .data_out(ram_rdata)
+    );
+
+    data_memory #(
+        .MEM_SIZE(STACK_SIZE)
+    ) stack_mem (
+        .clk(cpu_clk),
+        .we(stack_we),
+        .addr(mem_addr),
+        .data_in(mem_wdata),
+        .data_out(stack_rdata)
     );
 
     uart_peripheral uart_mmio (
@@ -105,6 +127,7 @@ module arnicomp_soc_top #(
     assign sys_rdata = sys_led_sel ? sys_led_reg_out : 8'h00;
 
     assign mem_rdata = ram_sel  ? ram_rdata  :
+                       stack_sel ? stack_rdata :
                        uart_sel ? uart_rdata :
                        sys_sel  ? sys_rdata  :
                        8'h00;

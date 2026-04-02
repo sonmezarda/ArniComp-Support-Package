@@ -1,56 +1,33 @@
-// Jump instruction test program
-// Tests: JMP (unconditional), JEQ (taken), JNE (not taken)
-//
-// Expected flow:
-// 0x00: Setup PRL=0x10, JMP -> jump to 0x10
-// 0x10: Set RA=0x11, setup EQ flag, PRL=0x20, JEQ -> jump to 0x20
-// 0x20: Set RB=0x22, PRL=0x30, JNE (not taken because EQ=1)
-// Continue: Set RD=0x33, HLT
-//
-// Expected: RA=0x11, RB=0x22, RD=0x33
 @0
-90    // 0x00: LDI 0x10 -> RA=0x10
-45    // 0x01: MOV PRL,RA -> PRL=0x10
-80    // 0x02: LDI 0 -> RA=0
-46    // 0x03: MOV PRH,RA -> PRH=0
-60    // 0x04: JMP (unconditional jump to 0x0010)
-00    // 0x05: NOP (should be skipped)
-00    // 0x06: NOP
-00    // 0x07: NOP
-00    // 0x08: NOP
-00    // 0x09: NOP
-00    // 0x0A: NOP
-00    // 0x0B: NOP
-00    // 0x0C: NOP
-00    // 0x0D: NOP
-00    // 0x0E: NOP
-00    // 0x0F: NOP
-@10
-91    // 0x10: LDI 0x11 -> RA=0x11 (proves JMP worked)
-41    // 0x11: MOV RD,RA -> RD=0x11
-05    // 0x12: CMP RA -> compare RD with RA (0x11 == 0x11 -> EQ=1)
-A0    // 0x13: LDI 0x20 -> RA=0x20
-45    // 0x14: MOV PRL,RA -> PRL=0x20
-80    // 0x15: LDI 0 -> RA=0
-46    // 0x16: MOV PRH,RA -> PRH=0
-91    // 0x17: LDI 0x11 -> RA=0x11 (restore for later)
-61    // 0x18: JEQ (jump if EQ=1 -> should jump to 0x0020)
-00    // 0x19: NOP (should be skipped)
-00    // 0x1A: NOP
-00    // 0x1B: NOP
-00    // 0x1C: NOP
-00    // 0x1D: NOP
-00    // 0x1E: NOP
-00    // 0x1F: NOP
-@20
-A2    // 0x20: LDI 0x22 -> RA=0x22
-42    // 0x21: MOV RB,RA -> RB=0x22 (proves JEQ worked)
-B0    // 0x22: LDI 0x30 -> RA=0x30 
-45    // 0x23: MOV PRL,RA -> PRL=0x30
-80    // 0x24: LDI 0 -> RA=0
-46    // 0x25: MOV PRH,RA -> PRH=0
-66    // 0x26: JNE (jump if EQ=0 -> should NOT jump because EQ=1)
-B3    // 0x27: LDI 0x33 -> RA=0x33 (should execute because JNE not taken)
-41    // 0x28: MOV RD,RA -> RD=0x33
-91    // 0x29: LDI 0x11 -> RA=0x11 (restore original value)
-01    // 0x2A: HLT
+c6
+a8
+84
+b0
+1f
+00
+d1
+88
+78
+cf
+a8
+84
+b0
+18
+00
+c2
+31
+90
+dc
+a8
+84
+b0
+19
+d3
+31
+88
+d1
+01
+c4
+32
+88
+01

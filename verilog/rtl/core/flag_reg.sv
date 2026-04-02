@@ -2,14 +2,14 @@ module flag_reg(
     input  logic clk,
     input  logic we,
     input  logic rst_n,
-    input  logic lt_f_in,
-    input  logic eq_f_in,
-    input  logic gt_f_in,
+    input  logic z_f_in,
+    input  logic n_f_in,
     input  logic c_f_in,
-    output logic lt_f_out,
-    output logic eq_f_out,
-    output logic gt_f_out,
-    output logic c_f_out
+    input  logic v_f_in,
+    output logic z_f_out,
+    output logic n_f_out,
+    output logic c_f_out,
+    output logic v_f_out
 );
 
 reg_cell #(
@@ -19,8 +19,8 @@ reg_cell #(
     .rst_n(rst_n),
     .we(we),
     .oe(1'b1),
-    .d({lt_f_in, eq_f_in, gt_f_in, c_f_in}),
-    .out({lt_f_out, eq_f_out, gt_f_out, c_f_out})
+    .d({z_f_in, n_f_in, c_f_in, v_f_in}),
+    .out({z_f_out, n_f_out, c_f_out, v_f_out})
 );
 
 endmodule

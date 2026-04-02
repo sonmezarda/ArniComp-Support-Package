@@ -5,6 +5,11 @@ module tb_adc_sbc;
 
     logic clk = 0;
     logic rst_n = 0;
+    logic [15:0] mem_addr;
+    logic [7:0] mem_rdata;
+    logic [7:0] mem_wdata;
+    logic mem_wen;
+    logic mem_ren;
 
     always #5000 clk = ~clk;
 
@@ -12,7 +17,20 @@ module tb_adc_sbc;
         .PROG_MEM_FILE("sim/tb_adc_sbc.mem")
     ) dut (
         .clk(clk),
-        .rst_n(rst_n)
+        .rst_n(rst_n),
+        .mem_rdata(mem_rdata),
+        .mem_addr(mem_addr),
+        .mem_wdata(mem_wdata),
+        .mem_wen(mem_wen),
+        .mem_ren(mem_ren)
+    );
+
+    data_memory #(.MEM_SIZE(4096)) data_mem (
+        .clk(clk),
+        .we(mem_wen),
+        .addr(mem_addr),
+        .data_in(mem_wdata),
+        .data_out(mem_rdata)
     );
 
     int pass_count = 0, fail_count = 0;

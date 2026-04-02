@@ -1,23 +1,17 @@
-// ADC and SBC test program
-// Test: Generate overflow (C=1), then use ADC with carry
-//
-// Step 1: 0x7F + 7 = 0x86 (no overflow)
-// Step 2: 0x86 + 0x7F = 0x105 -> 0x05, C=1 (overflow!)
-// Step 3: RD=0, RA=5, ADC RA -> ACC=0+5+1=6
-//
-// Expected: RB=0x05, RA=0x06
 @0
-FF    // LDI 0x7F -> RA=0x7F (127)
-41    // MOV RD,RA -> RD=0x7F
-37    // ADDI 7 -> ACC=0x7F+7=0x86
-58    // MOV RA,ACC -> RA=0x86
-41    // MOV RD,RA -> RD=0x86
-FF    // LDI 0x7F -> RA=0x7F
-08    // ADD RA -> ACC=0x86+0x7F=0x05, C=1
-5A    // MOV RB,ACC -> RB=0x05
-80    // LDI 0 -> RA=0
-41    // MOV RD,RA -> RD=0
-85    // LDI 5 -> RA=5
-18    // ADC RA -> ACC=0+5+C(1)=6
-58    // MOV RA,ACC -> RA=6
-01    // HLT
+df
+33
+88
+4f
+83
+88
+df
+33
+40
+93
+c0
+88
+c5
+50
+83
+01

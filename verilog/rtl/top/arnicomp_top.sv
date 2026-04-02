@@ -1,5 +1,6 @@
 module arnicomp_top #(
-    parameter string PROG_MEM_FILE = ""
+    parameter string PROG_MEM_FILE = "",
+    parameter logic [15:0] STACK_PTR_RESET_VALUE = 16'h0000
 )(
     input logic       clk,
     input logic       rst_n,
@@ -19,15 +20,15 @@ logic [2:0] jmp_select;
 
 logic [7:0] inst_q;
 
-logic less_flag;
-logic equal_flag;
-logic greater_flag;
+logic zero_flag;
+logic negative_flag;
 logic carry_flag;
+logic overflow_flag;
 
-logic lf_reg_out;
-logic eq_reg_out;
-logic gt_reg_out;
+logic z_reg_out;
+logic n_reg_out;
 logic c_reg_out;
+logic v_reg_out;
 
 logic [7:0] alu_out;
 logic [7:0] reg_a_out;
@@ -38,7 +39,12 @@ logic [7:0] marl_out;
 logic [7:0] marh_out;
 logic [7:0] prl_out;
 logic [7:0] prh_out;
+logic [7:0] lrl_out;
+logic [7:0] lrh_out;
+logic [15:0] lr_out;
 logic [15:0] pc_addr;
+logic [15:0] sp_out;
+logic [15:0] active_stack_addr;
 
 logic reg_a_we;
 logic reg_b_we;
@@ -51,9 +57,11 @@ logic prh_we;
 logic mem_we;
 
 logic [7:0] bus;
-logic [15:0] mar_addr;
-
-assign mem_addr = {marh_out, marl_out};
+logic [7:0] ldh_bus;
+// Stack grows upward with PUSH writing at SP then incrementing.
+// POP must therefore read from SP-1 before the stack pointer register is updated.
+assign active_stack_addr = control_pins.inc_dec_sel ? (sp_out - 16'd1) : sp_out;
+assign mem_addr = control_pins.sp_sel ? active_stack_addr : {marh_out, marl_out};
 assign mem_wdata = bus;
 assign mem_wen = mem_we;
 assign mem_ren = control_pins.oe && (control_pins.ssel == 3'b111);
@@ -70,8 +78,6 @@ program_memory #(
     .data(inst_q)
 );
 
-
-
 // Bus Selector 
 
 logic [7:0] bus_sel_out;
@@ -83,23 +89,29 @@ bus_selector bus_selector_i(
     .d(reg_d_out),
     .b(reg_b_out),
     .acc(acc_out),
-    .pcl(pc_addr[7:0]),
-    .pch(pc_addr[15:8]),
+    .lrl(lrl_out),
+    .lrh(lrh_out),
     .m(mem_rdata),
     .out(bus_sel_out)
 );
 
 // Im7: Use 7-bit immediate from instruction byte
 // Im3: Use 3-bit immediate from instruction byte 
-assign bus = control_pins.im7 ? {1'b0, inst_q[6:0]} :
-             control_pins.im3 ? {{5{1'b0}}, inst_q[2:0]} :
+// LDH preserves the low 5 bits of the selected target register and only updates bits [7:5].
+assign ldh_bus = (control_pins.dsel == 3'b001)
+               ? {inst_q[2:0], reg_d_out[4:0]}
+               : {inst_q[2:0], reg_a_out[4:0]};
+
+assign bus = control_pins.im5_en ? {3'b0, inst_q[4:0]} :
+             control_pins.im3_low_en ? {{5{1'b0}}, inst_q[2:0]} :
+             control_pins.im3_high_en ? ldh_bus :
              bus_sel_out;
 
 reg_a reg_a_i(
     .clk(clk),
     .rst_n(rst_n),
     .we(reg_a_we),
-    .smsbra(control_pins.smsbra),
+    .smsbra(1'b0),
     .d(bus),
     .out(reg_a_out)
 );
@@ -134,19 +146,14 @@ reg_cell #(.W(8)) acc(
 reg_marl marl_i(
     .clk(clk),
     .rst_n(rst_n),
-    .we(marl_we),
-    .inc(control_pins.inc),
+    .marl_we(marl_we),
+    .marh_we(marh_we),
+    .inc(control_pins.inc_mar),
+    .inc_dec_sel(control_pins.inc_dec_sel),
+    .inc_by_two(inst_q[0]),
     .d(bus),
-    .out(marl_out)
-);
-
-reg_cell #(.W(8)) marh(
-    .clk(clk),
-    .rst_n(rst_n),
-    .we(marh_we),
-    .oe(1'b1),
-    .d(bus),
-    .out(marh_out)
+    .marl_out(marl_out),
+    .marh_out(marh_out)
 );
 
 reg_cell #(.W(8)) prl(
@@ -167,29 +174,43 @@ reg_cell #(.W(8)) prh(
     .out(prh_out)
 );
 
+reg_cell #(.W(16)) lr(
+    .clk(clk),
+    .rst_n(rst_n),
+    .we(control_pins.set_lr),
+    .oe(1'b1),
+    .d(pc_addr),
+    .out(lr_out)
+);
+
+assign lrl_out = lr_out[7:0];
+assign lrh_out = lr_out[15:8];
+
+stack_pointer #(
+    .RESET_VALUE(STACK_PTR_RESET_VALUE)
+) sp_i (
+    .clk(clk),
+    .rst_n(rst_n),
+    .update_en(control_pins.sp_sel),
+    .inc_dec_sel(control_pins.inc_dec_sel),
+    .out(sp_out)
+);
+
 logic [15:0] jump_addr;
 assign jump_addr = {prh_out, prl_out};
-
-comparator comparator(
-    .a(reg_d_out),
-    .b(bus),
-    .less_flag(less_flag),
-    .equal_flag(equal_flag),
-    .greater_flag(greater_flag)
-);
 
 flag_reg flag_reg_i(
     .clk(clk),
     .we(control_pins.sf),
     .rst_n(rst_n),
-    .lt_f_in(less_flag),
-    .eq_f_in(equal_flag),
-    .gt_f_in(greater_flag),
+    .z_f_in(zero_flag),
+    .n_f_in(negative_flag),
     .c_f_in(carry_flag),
-    .lt_f_out(lf_reg_out),
-    .eq_f_out(eq_reg_out),
-    .gt_f_out(gt_reg_out),
-    .c_f_out(c_reg_out)
+    .v_f_in(overflow_flag),
+    .z_f_out(z_reg_out),
+    .n_f_out(n_reg_out),
+    .c_f_out(c_reg_out),
+    .v_f_out(v_reg_out)
 );
 
 program_counter pc(
@@ -216,7 +237,10 @@ control_decoder instruction_decoder(
     .acc_we(acc_we)
 );
 
+logic alu_zero_out;
+logic alu_negative_out;
 logic alu_carry_out;
+logic alu_overflow_out;
 
 // ALU carry input
 logic alu_carry_in;
@@ -229,17 +253,24 @@ alu alu_i(
     .negative(control_pins.sn),
     .c_in(alu_carry_in),
     .result(alu_out),
-    .carry_flag(alu_carry_out)
+    .zero_flag(alu_zero_out),
+    .negative_flag(alu_negative_out),
+    .carry_flag(alu_carry_out),
+    .overflow_flag(alu_overflow_out)
 );
 
+assign zero_flag = alu_zero_out;
+assign negative_flag = alu_negative_out;
 assign carry_flag = alu_carry_out;
+assign overflow_flag = alu_overflow_out;
 
 jump_logic jump_decoder(
     .jmp_en(control_pins.jmp),
+    .jgt(control_pins.jgt),
+    .zero_flag(z_reg_out),
+    .negative_flag(n_reg_out),
+    .overflow_flag(v_reg_out),
     .carry_flag(c_reg_out),
-    .equal_flag(eq_reg_out),
-    .greater_flag(gt_reg_out),
-    .less_flag(lf_reg_out),
     .jmp_cond(jmp_select),
     .jmp_taken(jump_taken)
 );

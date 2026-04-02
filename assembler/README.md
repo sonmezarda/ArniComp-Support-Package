@@ -1,257 +1,221 @@
 # ArniComp Assembler
 
-A clean, modern assembler for the ArniComp custom ISA architecture with support for the latest instruction set.
+Final ISA assembler for ArniComp's 8-bit CPU.
 
-## Features
+## Overview
 
-- **Complete ISA Support**: All instructions including MOV, arithmetic, logical, jumps, and special instructions
-- **Constants**: Define constants using `equ` keyword
-- **Labels**: Support for labels and label references
-- **Multiple Number Formats**: Decimal, hexadecimal (0x), and binary (0b)
-- **Validation**: Comprehensive error checking for instruction restrictions
-- **CLI Interface**: Easy-to-use command-line interface
-- **Disassembler**: Convert binary back to assembly
+- Line-based parser, no separate lexer/AST layer
+- `equ` constants with simple integer expressions
+- `label:` definitions with iterative address resolution
+- Final ISA encoder plus a small disassembler
+- Pseudoinstructions:
+  - `LDI [RA|RD,] value`
+  - `CLR dst`
 
-## Architecture Overview
+## Constants
 
-### Registers
-- **RA, RD, RB**: General purpose registers (8-bit)
-- **ACC**: Accumulator (8-bit)
-- **PCL, PCH**: Program counter low/high (8-bit each)
-- **PRL, PRH**: Program register low/high (8-bit each)
-- **MARL, MARH**: Memory address register low/high (8-bit each)
-- **M**: Memory at address [MARH:MARL]
-
-### Instruction Set
-
-#### Data Movement
-- `LDI #imm7` - Load immediate to RA (0-127)
-- `MOV dest, src` - Move from source to destination
-  - Sources: RA, RD, RB, ACC, PCL, PCH, M
-  - Destinations: RA, RD, RB, PRL, PRH, MARL, MARH, M
-  - Forbidden: MOV RA,RA / MOV RD,RD / MOV RB,RB / MOV M,M
-
-#### Arithmetic
-- `ADD src` - Add source to RD, result in ACC
-- `SUB src` - Subtract source from RD, result in ACC
-- `ADC src` - Add with carry
-- `SBC src` - Subtract with carry
-- `ADDI #imm3` - Add immediate (0-7)
-- `SUBI #imm3` - Subtract immediate (0-7)
-
-#### Logical
-- `AND src` - Bitwise AND
-- `XOR src` - Bitwise XOR (allowed: RA, RB, RD, ACC, M)
-- `NOT src` - Bitwise NOT (allowed: RA, RB, ACC, RD, M)
-
-#### Comparison & Jumps
-- `CMP src` - Compare source with RD (allowed: RA, M, ACC)
-- `JMP` - Unconditional jump
-- `JEQ` - Jump if equal
-- `JGT` - Jump if greater than
-- `JLT` - Jump if less than
-- `JGE` - Jump if greater or equal
-- `JLE` - Jump if less or equal
-- `JNE` - Jump if not equal
-- `JC` - Jump if carry
-
-#### Special
-- `NOP` - No operation
-- `HLT` - Halt processor
-- `SMSBRA` - Set MSB of RA to 1
-- `INX` - Increment MARL
-
-## Usage
-
-### Installation
-
-```bash
-cd /path/to/ArniComp-Support-Package/assembler
-# No installation needed, just use Python 3
-```
-
-### Basic Commands
-
-```bash
-# Assemble a program
-python3 main.py assemble program.asm output.txt
-
-# Disassemble binary code
-python3 main.py disassemble binary.txt output.asm
-
-# Create binary file
-python3 main.py createbin machine_code.txt program.bin
-
-# Load to EEPROM
-python3 main.py load program.bin
-
-# All-in-one: assemble and load
-python3 main.py loadasm program.asm
-
-# Get help
-python3 main.py help
-```
-
-### Assembly Syntax
+`equ` supports integer expressions and single-character literals.
 
 ```assembly
-; Comments start with semicolon
-
-; Define constants
-equ CONSTANT_NAME value
-equ MAX_COUNT 100
-equ START_ADDR 0x00
-
-; Define labels
-start:
-    LDI #0              ; Load immediate (# for direct numbers)
-    MOV RD, RA          ; Move data
-    
-loop:
-    ADDI #1             ; Add immediate
-    CMP ACC             ; Compare
-    JLT                 ; Conditional jump
-    
-    ; To jump to a label, load address then jump
-    LDI @loop.low       ; Explicit low byte
-    MOV PRL, RA         ; Set program register low
-    LDI @loop.high      ; Explicit high byte
-    MOV PRH, RA         ; Set program register high
-    JMP                 ; Execute jump
-    
-    HLT                 ; Halt
-
-; Use constants with $ prefix (no # needed)
-    LDI $MAX_COUNT      ; $ for constants
-    LDI $START_ADDR
+equ ON_CHAR 'A'
+equ OFF_CHAR 'B'
+equ NEXT_CHAR 'A' + 1
 ```
 
-### Number Formats
+## Registers
+
+### Destinations
+
+- `RA`
+- `RD`
+- `RB`
+- `MARL`
+- `MARH`
+- `PRL`
+- `PRH`
+- `M`
+
+### Sources
+
+- `RA`
+- `RD`
+- `RB`
+- `ACC`
+- `ZERO`
+- `LRL`
+- `LRH`
+- `M`
+
+`0` and `#0` are also accepted where a zero-source alias is allowed.
+
+## Instructions
+
+### Loads
 
 ```assembly
-; Direct numbers use # prefix
-LDI #10        ; Decimal
-LDI #0x0A      ; Hexadecimal
-LDI #0b1010    ; Binary
+LDL RA, #5
+LDL RD, #31
+LDH RA, #7
+LDH RD, #3
 
-; Constants use $ prefix (no # needed)
-equ VALUE 10
-LDI $VALUE     ; Correct: $ only
+LDI #10
+LDI 'A'
+LDI #'A'
+LDI RD, #125
+LDI RA, $CONST
+LDI RD, @label
+```
 
-; Labels use @ prefix (no # needed)
-label:
+### Data movement
+
+```assembly
+MOV RA, RD
+MOV MARL, RA
+MOV RA, 0
+MOV RA, #0
+MOV RA, ZERO
+CLR RA
+```
+
+### Arithmetic / logic
+
+```assembly
+ADD RA
+ADDI #3
+ADC M
+SUB RB
+SUBI #2
+SBC LRL
+CMP M
+NOT RA
+XOR RD
+AND RB
+```
+
+### Stack / flow
+
+```assembly
+PUSH RA
+POP RD
+
+NOP
+HLT
+INC #1
+INC #2
+DEC #1
+DEC #2
+JAL
+
+JMP
+JEQ
+JNE
+JCS
+JCC
+JMI
+JVS
+JLT
+JGT
+JLE
+JGE
+```
+
+### Jump aliases
+
+```assembly
+JZ
+JNZ
+JC
+JNC
+JN
+JV
+JGEU
+JLTU
+JLTS
+```
+
+### Jump encoding
+
+Canonical jump condition bits now use this order:
+
+```text
+JEQ = 000
+JNE = 001
+JCS = 010
+JCC = 011
+JMI = 100
+JVS = 101
+JLT = 110
+JMP = 111
+```
+
+This keeps unconditional jump on `111`, matching `JAL = 00000111` on its low 3 bits.
+
+## Bit Slices
+
+The assembler supports general `value[hi:lo]` slices on numeric literals, constants, and labels.
+
+```assembly
+equ CONST 0x1234
+
+LDL RA, $CONST[4:0]
+LDH RD, $CONST[7:5]
+
+LDL RA, @target[4:0]
+LDH RD, @target[7:5]
+
+LDI RA, #0x1234[15:8]
+```
+
+Notes:
+
+- `LDL` accepts only 5-bit values or 5-bit slices.
+- `LDH` accepts only 3-bit values or 3-bit slices.
+- `LDI` accepts an unsliced value or an explicit 8-bit slice.
+
+## Labels and Address Loading
+
+Jumps do not take label operands. They jump to the address already present in `PRH:PRL`.
+
+```assembly
+target:
     NOP
-LDI @label     ; Correct: @ only
-LDI @label.low ; Explicit low byte of label address
-LDI @label.high; Explicit high byte of label address
-```
 
-`LDI @label` now assembles the low 7 bits of the label byte and emits warnings when the resolved byte also needs `SMSBRA`, or when a 16-bit label address also needs an explicit `.high` load.
-
-## Examples
-
-### Example 1: Simple Counter
-
-```assembly
-equ MAX 10
-
-start:
-    LDI #0
-    MOV RD, RA
-    
-loop:
-    ADDI #1
-    MOV RD, ACC
-    LDI $MAX
-    CMP RA
-    JLT
-    HLT
-    
-    LDI @loop.low
+    LDI RA, @target
     MOV PRL, RA
-    LDI @loop.high
+    LDI RA, #0
     MOV PRH, RA
     JMP
 ```
 
-### Example 2: Memory Operations
+If an unsliced `LDI` operand resolves above `0xFF`, the assembler loads only the low byte and emits a warning.
 
-```assembly
-equ DATA_ADDR 0x20
+## Commands
 
-start:
-    ; Set memory address
-    LDI $DATA_ADDR      ; Use $ for constants
-    MOV MARL, RA
-    LDI #0
-    MOV MARH, RA
-    
-    ; Write to memory
-    LDI #42             ; Use # for direct numbers
-    MOV M, RA
-    
-    ; Read from memory
-    MOV RA, M
-    
-    HLT
+```bash
+python main.py assemble program.asm output.txt
+python main.py disassemble program.txt output.asm
+python main.py createbin program.txt program.bin
+python main.py load program.bin
+python main.py help
 ```
 
-## Instruction Encoding
+## Verification
 
-All instructions are 8 bits:
+Run the included verification script:
 
-```
-Format: IM7 MV A1 A2 J S2 S1 S0
-
-- IM7=1: LDI instruction (7-bit immediate follows)
-- IM7=0, MV=1: MOV instruction
-- IM7=0, MV=0, A1A2=00: Arithmetic (ADD, SUB, ADC, SBC, AND, XOR)
-- IM7=0, MV=0, A1A2=10: Jump instructions
-- IM7=0, MV=0, A1A2=11: Immediate arithmetic (ADDI, SUBI)
+```bash
+python verify_final_isa.py
 ```
 
-## Error Handling
+## Migration Notes
 
-The assembler provides detailed error messages:
-
-```
-Assembly error: Error on line 5 ('MOV RA, RA'): MOV RA, RA is forbidden
-Assembly error: Error on line 10 ('LDI #200'): LDI immediate value 200 out of range (0-127)
-Assembly error: Error on line 15 ('NOT PCL'): NOT instruction only supports ['RA', 'RB', 'ACC', 'RD', 'M']
-```
-
-## Development
-
-### Project Structure
-
-```
-assembler/
-├── main.py                  # CLI interface
-├── modules/
-│   ├── AssemblyHelper.py    # Core assembler logic
-│   └── EepromLoader.py      # EEPROM loading utilities
-├── config/
-│   └── config.json          # ISA configuration
-├── examples/
-│   └── simple_counter.asm   # Example programs
-└── README.md                # This file
-```
-
-### Adding New Instructions
-
-1. Update `config.json` with instruction details
-2. Add encoding method in `InstructionEncoder` class
-3. Add parsing in `AssemblyHelper.encode_instruction()`
-4. Add disassembly support in `AssemblyHelper.disassemble()`
-
-## License
-
-Part of the ArniComp Support Package project.
-
-## Author
-
-sonmezarda
-
-## Version
-
-2.0 - Complete rewrite for new ISA (October 2025)
+- Old `LDI` is now a pseudoinstruction over `LDL` and `LDH`.
+- `LDI` still defaults to `RA`, but now `LDI RD, ...` is also valid.
+- Old label suffix syntax like `@label.low` / `@label.high` was replaced by bit slices such as `@label[7:0]`, `@label[15:8]`, `@label[4:0]`, `@label[7:5]`.
+- Immediate arithmetic must be written explicitly as `ADDI` or `SUBI`.
+- `ADD #imm` and `SUB #imm` are rejected with guidance.
+- `JGT` now uses the formerly reserved opcode `00000110`.
+- `JMP` now uses jump-condition bits `111`.
+- `JLE` is supported as an assembler macro and expands to `JEQ` followed by `JLT`.
+- `JGE` is supported as an assembler macro and expands to `JEQ` followed by `JGT`.
+- Legacy mnemonics outside the final ISA, such as `SMSBRA`, `INX`, and the old `JGT/JGE/JLE` semantics, are no longer accepted.

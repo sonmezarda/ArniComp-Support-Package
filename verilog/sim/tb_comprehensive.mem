@@ -1,50 +1,36 @@
-// ArniComp Comprehensive Test Program
-// Auto-generated - Tests: LDI, MOV, ADD, SUB, ADDI, SUBI, AND, XOR, NOT, INX, SMSBRA
 @0
-94
-41
-85
-42
-08
-58
-41
-33
-9E
-41
-8A
-10
-3D
-8F
-41
-D5
-28
-FF
-41
-8F
-0C
-D5
-40
-03
-03
-03
-B0
-45
-80
-46
-B2
-41
-94
-10
-80
+84
+98
+a0
+c5
+90
+ba
+87
 02
+02
+02
+d0
+a8
+84
+b0
+1f
+c1
+d2
+31
+88
+42
+69
+0a
+10
+5a
+78
+d0
+31
+a8
+84
+b0
+d4
+60
+c0
+34
 01
-
-// Expected final state:
-// RA = 0x80
-// RD = 0x32
-// RB = 0x05
-// ACC = 0x1E
-// MARL = 0x03
-// MARH = 0x00
-// PRL = 0x30
-// PRH = 0x00

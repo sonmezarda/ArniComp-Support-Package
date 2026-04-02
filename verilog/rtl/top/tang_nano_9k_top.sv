@@ -9,7 +9,7 @@ module tang_nano_9k_top (
     output logic       uart_tx
 );
 
-    localparam int CLK_DIV = 1350;
+    localparam int CLK_DIV = 135000;
 
     logic [$clog2(CLK_DIV)-1:0] clk_counter;
     logic cpu_clk;
