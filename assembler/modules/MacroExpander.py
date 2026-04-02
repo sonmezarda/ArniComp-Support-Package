@@ -225,6 +225,43 @@ class MacroExpander:
             size += self.estimate_load_byte_size(high_byte) + 1
         return size
 
+    def estimate_unsigned_gt_target_size(
+        self,
+        instruction: str,
+        args: List[str],
+        current_pc: int,
+        labels: Dict[str, int],
+        constants: Dict[str, int],
+    ) -> int:
+        target_token, _ = self.parse_jump_target_args(args, instruction)
+        _ = self.resolve_address_operand(target_token, labels, constants, instruction, allow_unresolved=True)
+
+        # skip target points to the instruction after the whole macro
+        unresolved_skip_size = 4 + 2 + 4 + 1
+        for _ in range(8):
+            skip_addr = current_pc + unresolved_skip_size
+            skip_low = skip_addr & 0xFF
+            skip_high = (skip_addr >> 8) & 0xFF
+            skip_load_size = self.estimate_load_byte_size(skip_low) + 1
+            skip_load_size += 1 if skip_high == 0 else self.estimate_load_byte_size(skip_high) + 1
+
+            target_resolved = self.resolve_address_operand(target_token, labels, constants, instruction, allow_unresolved=True)
+            if target_resolved.value is None:
+                target_load_size = 4
+            else:
+                target_value = target_resolved.value & 0xFFFF
+                target_low = target_value & 0xFF
+                target_high = (target_value >> 8) & 0xFF
+                target_load_size = self.estimate_load_byte_size(target_low) + 1
+                target_load_size += 1 if target_high == 0 else self.estimate_load_byte_size(target_high) + 1
+
+            size = skip_load_size + 2 + target_load_size + 1
+            if size == unresolved_skip_size:
+                return size
+            unresolved_skip_size = size
+
+        return unresolved_skip_size
+
     def emit_absolute_transfer(
         self,
         instruction: str,
@@ -295,10 +332,54 @@ class MacroExpander:
                 emitted.append(self.encoder.encode_jump(op))
         return emitted
 
+    def emit_unsigned_gt_target(
+        self,
+        instruction: str,
+        args: List[str],
+        current_pc: int,
+        labels: Dict[str, int],
+        constants: Dict[str, int],
+    ) -> List[str]:
+        target_token, temp_reg = self.parse_jump_target_args(args, instruction)
+        target_resolved = self.resolve_address_operand(target_token, labels, constants, instruction)
+        if target_resolved.value is None:
+            raise ValueError(f"{instruction} could not resolve operand {target_token}")
+
+        total_size = self.estimate_unsigned_gt_target_size(instruction, args, current_pc, labels, constants)
+        skip_addr = (current_pc + total_size) & 0xFFFF
+
+        emitted: List[str] = []
+        skip_low = skip_addr & 0xFF
+        skip_high = (skip_addr >> 8) & 0xFF
+        emitted.extend(self.emit_load_byte(temp_reg, skip_low))
+        emitted.append(self.encoder.encode_mov("PRL", temp_reg))
+        if skip_high == 0:
+            emitted.append(self.encoder.encode_mov("PRH", "ZERO"))
+        else:
+            emitted.extend(self.emit_load_byte(temp_reg, skip_high))
+            emitted.append(self.encoder.encode_mov("PRH", temp_reg))
+
+        emitted.append(self.encoder.encode_jump("JCC"))
+        emitted.append(self.encoder.encode_jump("JEQ"))
+
+        target_value = target_resolved.value & 0xFFFF
+        target_low = target_value & 0xFF
+        target_high = (target_value >> 8) & 0xFF
+        emitted.extend(self.emit_load_byte(temp_reg, target_low))
+        emitted.append(self.encoder.encode_mov("PRL", temp_reg))
+        if target_high == 0:
+            emitted.append(self.encoder.encode_mov("PRH", "ZERO"))
+        else:
+            emitted.extend(self.emit_load_byte(temp_reg, target_high))
+            emitted.append(self.encoder.encode_mov("PRH", temp_reg))
+        emitted.append(self.encoder.encode_jump("JMP"))
+        return emitted
+
     def estimate_size(
         self,
         instruction: str,
         args: List[str],
+        current_pc: int,
         labels: Dict[str, int],
         constants: Dict[str, int],
     ) -> Optional[int]:
@@ -320,6 +401,16 @@ class MacroExpander:
             if args:
                 return self.estimate_jump_with_target_size(instruction, args, labels, constants, ["JEQ", "JGT"])
             return 2
+
+        if instruction == "JLEU":
+            if args:
+                return self.estimate_jump_with_target_size(instruction, args, labels, constants, ["JCC", "JEQ"])
+            return 2
+
+        if instruction == "JGTU":
+            if not args:
+                raise ValueError("JGTU requires an explicit target operand under the current ISA")
+            return self.estimate_unsigned_gt_target_size(instruction, args, current_pc, labels, constants)
 
         if instruction == "RET":
             self.parse_ret_args(args)
@@ -352,6 +443,7 @@ class MacroExpander:
         parsed: "ParsedLine",
         instruction: str,
         args: List[str],
+        current_pc: int,
         labels: Dict[str, int],
         constants: Dict[str, int],
     ) -> Optional[List[str]]:
@@ -379,6 +471,19 @@ class MacroExpander:
                 self.encoder.encode_jump("JEQ"),
                 self.encoder.encode_special("JGT"),
             ]
+
+        if instruction == "JLEU":
+            if args:
+                return self.emit_jump_with_target(instruction, args, labels, constants, ["JCC", "JEQ"])
+            return [
+                self.encoder.encode_jump("JCC"),
+                self.encoder.encode_jump("JEQ"),
+            ]
+
+        if instruction == "JGTU":
+            if not args:
+                raise ValueError("JGTU requires an explicit target operand under the current ISA")
+            return self.emit_unsigned_gt_target(instruction, args, current_pc, labels, constants)
 
         if instruction == "RET":
             ret_mode = self.parse_ret_args(args)

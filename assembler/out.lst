@@ -1,126 +1,197 @@
-; Source: .\examples\fpga_jal_test_modern.asm
-0000  [12] mov prh, zero
+; Source: .\examples\fpga_add_uart.asm
+0000  [7] mov prh, zero
       0000  B4  MOV PRH, ZERO
-0001  [13] mov prl, zero
+0001  [8] mov prl, zero
       0001  AC  MOV PRL, ZERO
-0002  [14] mov marl, zero
+0002  [9] mov marl, zero
       0002  9C  MOV MARL, ZERO
-0003  [15] mov marh, zero
+0003  [10] mov marh, zero
       0003  A4  MOV MARH, ZERO
-0004  [17] ldi $UART_BASE_H
+0004  [12] ldi $UART_BASE_H
       0004  C9  LDL RA, #9
-0005  [18] mov marh, ra
+0005  [13] mov marh, ra
       0005  A0  MOV MARH, RA
-0006  [20] ldi $UART_CONTROL_L
+0006  [15] ldi $UART_CONTROL_L
       0006  C0  LDL RA, #0
       0007  32  LDH RA, #2
-0008  [21] mov marl, ra
+0008  [16] mov marl, ra
       0008  98  MOV MARL, RA
-0009  [22] ldi $UART_ENABLE_TX
-      0009  C5  LDL RA, #5
-000A  [23] mov m, ra
+0009  [18] ldi #0b00000111
+      0009  C7  LDL RA, #7
+000A  [19] mov m, ra
       000A  B8  MOV M, RA
-000B  [25] ldi $UART_BAUDSEL_L
+000B  [21] ldi $UART_BAUDSEL_L
       000B  C0  LDL RA, #0
       000C  31  LDH RA, #1
-000D  [26] mov marl, ra
+000D  [22] mov marl, ra
       000D  98  MOV MARL, RA
-000E  [27] ldi $UART_BAUD_9600
+000E  [24] ldi #2
       000E  C2  LDL RA, #2
-000F  [28] mov m, ra
+000F  [25] mov m, ra
       000F  B8  MOV M, RA
-0010  [1] pushstr "ARDA" :RD
-      0010  E1  LDL RD, #1
-      0011  3A  LDH RD, #2
-      0012  21  PUSH RD
-      0013  E4  LDL RD, #4
-      0014  3A  LDH RD, #2
-      0015  21  PUSH RD
-      0016  F2  LDL RD, #18
-      0017  3A  LDH RD, #2
-      0018  21  PUSH RD
-      0019  E1  LDL RD, #1
-      001A  3A  LDH RD, #2
-      001B  21  PUSH RD
-001C  [2] ldi rd, $ARDA_LEN
-      001C  E4  LDL RD, #4
-001D  [3] call send_len_func
-      001D  C1  LDL RA, #1
+0010  [28] ldi @wait_until_msg
+      0010  D4  LDL RA, #20
+0011  [29] mov prl, ra
+      0011  A8  MOV PRL, RA
+0012  [30] ldi $UART_BASE_H
+      0012  C9  LDL RA, #9
+0013  [31] mov marh, ra
+      0013  A0  MOV MARH, RA
+0014  [35] ldi $UART_RX_VALID_L
+      0014  C1  LDL RA, #1
+0015  [36] mov marl, ra
+      0015  98  MOV MARL, RA
+0016  [37] mov rd, m
+      0016  8F  MOV RD, M
+0017  [38] ldi #1
+      0017  C1  LDL RA, #1
+0018  [39] cmp ra
+      0018  78  CMP RA
+0019  [40] jne
+      0019  19  JNE
+001A  [42] ldi $UART_RX_DATA_L
+      001A  C0  LDL RA, #0
+001B  [43] mov marl, ra
+      001B  98  MOV MARL, RA
+001C  [44] mov rd, m
+      001C  8F  MOV RD, M
+001D  [46] call ascii_to_number_func
+      001D  C6  LDL RA, #6
       001E  32  LDH RA, #2
       001F  A8  MOV PRL, RA
       0020  B4  MOV PRH, ZERO
       0021  07  JAL
-0022  [5] pushstr " NIDA\n" :RD
-      0022  EA  LDL RD, #10
-      0023  21  PUSH RD
-      0024  E1  LDL RD, #1
-      0025  3A  LDH RD, #2
-      0026  21  PUSH RD
-      0027  E4  LDL RD, #4
-      0028  3A  LDH RD, #2
-      0029  21  PUSH RD
-      002A  E9  LDL RD, #9
-      002B  3A  LDH RD, #2
-      002C  21  PUSH RD
-      002D  EE  LDL RD, #14
-      002E  3A  LDH RD, #2
-      002F  21  PUSH RD
-      0030  E0  LDL RD, #0
-      0031  39  LDH RD, #1
-      0032  21  PUSH RD
-0033  [6] ldi rd, $NIDA_LEN
-      0033  E6  LDL RD, #6
-0034  [7] call send_len_func
-      0034  C1  LDL RA, #1
-      0035  32  LDH RA, #2
-      0036  A8  MOV PRL, RA
-      0037  B4  MOV PRH, ZERO
-      0038  07  JAL
-0039  [49] ldi $SYS_LED_H
-      0039  CC  LDL RA, #12
-003A  [50] mov marh, ra
-      003A  A0  MOV MARH, RA
-003B  [51] ldi $SYS_LED_L
-      003B  C0  LDL RA, #0
-003C  [52] mov marl, ra
-      003C  98  MOV MARL, RA
-003D  [53] ldi #0x01
-      003D  C1  LDL RA, #1
-003E  [54] mov m, ra
-      003E  B8  MOV M, RA
-003F  [56] done: hlt
-      003F  01  HLT
-0040  [57] hlt
-      0040  01  HLT
-0041  [60] ldi $UART_TX_DATA_L
-      0041  D0  LDL RA, #16
-0042  [61] mov marl, ra
-      0042  98  MOV MARL, RA
-0043  [63] ldi $UART_BASE_H
-      0043  C9  LDL RA, #9
-0044  [64] mov marh, ra
-      0044  A0  MOV MARH, RA
-0045  [67] pop rb
-      0045  2A  POP RB
-0046  [68] mov m, rb
-      0046  BA  MOV M, RB
-0047  [70] subi #1
-      0047  69  SUBI #1
-0048  [71] mov rd, acc
-      0048  8B  MOV RD, ACC
-0049  [73] jeq send_done
-      0049  D3  LDL RA, #19
-      004A  32  LDH RA, #2
-      004B  A8  MOV PRL, RA
-      004C  B4  MOV PRH, ZERO
-      004D  18  JEQ
-004E  [74] jmp send_loop
-      004E  C5  LDL RA, #5
-      004F  32  LDH RA, #2
-      0050  A8  MOV PRL, RA
-      0051  B4  MOV PRH, ZERO
-      0052  1F  JMP
-0053  [76] send_done: ret
-      0053  AD  MOV PRL, LRL
-      0054  B6  MOV PRH, LRH
-      0055  1F  JMP
+0022  [48] mov rd, rb
+      0022  8A  MOV RD, RB
+0023  [49] ldi #10
+      0023  CA  LDL RA, #10
+0024  [50] cmp ra
+      0024  78  CMP RA
+0025  [51] jgeu main_loop
+      0025  D0  LDL RA, #16
+      0026  A8  MOV PRL, RA
+      0027  B4  MOV PRH, ZERO
+      0028  1A  JCS
+0029  [53] mov rd, rb
+      0029  8A  MOV RD, RB
+002A  [54] mov ra, rb
+      002A  82  MOV RA, RB
+002B  [55] call mul_func :RD
+      002B  F4  LDL RD, #20
+      002C  3A  LDH RD, #2
+      002D  A9  MOV PRL, RD
+      002E  B4  MOV PRH, ZERO
+      002F  07  JAL
+0030  [57] mov rd, rb
+      0030  8A  MOV RD, RB
+0031  [58] call number_to_ascii_func
+      0031  CD  LDL RA, #13
+      0032  32  LDH RA, #2
+      0033  A8  MOV PRL, RA
+      0034  B4  MOV PRH, ZERO
+      0035  07  JAL
+0036  [60] mov rd, rb
+      0036  8A  MOV RD, RB
+0037  [61] call send_char
+      0037  C0  LDL RA, #0
+      0038  32  LDH RA, #2
+      0039  A8  MOV PRL, RA
+      003A  B4  MOV PRH, ZERO
+      003B  07  JAL
+003C  [63] jmp main_loop
+      003C  D0  LDL RA, #16
+      003D  A8  MOV PRL, RA
+      003E  B4  MOV PRH, ZERO
+      003F  1F  JMP
+0040  [67] ldi $UART_TX_DATA_L
+      0040  D0  LDL RA, #16
+0041  [68] mov marl, ra
+      0041  98  MOV MARL, RA
+0042  [69] mov m, rd
+      0042  B9  MOV M, RD
+0043  [71] ret
+      0043  AD  MOV PRL, LRL
+      0044  B6  MOV PRH, LRH
+      0045  1F  JMP
+0046  [76] ldi $NUMBER_OFFSET
+      0046  D0  LDL RA, #16
+      0047  31  LDH RA, #1
+0048  [77] sub ra
+      0048  60  SUB RA
+0049  [78] mov rb, acc
+      0049  93  MOV RB, ACC
+004A  [79] ret
+      004A  AD  MOV PRL, LRL
+      004B  B6  MOV PRH, LRH
+      004C  1F  JMP
+004D  [83] ldi $NUMBER_OFFSET
+      004D  D0  LDL RA, #16
+      004E  31  LDH RA, #1
+004F  [84] add ra
+      004F  40  ADD RA
+0050  [85] mov rb, acc
+      0050  93  MOV RB, ACC
+0051  [86] ret
+      0051  AD  MOV PRL, LRL
+      0052  B6  MOV PRH, LRH
+      0053  1F  JMP
+0054  [92] clr rd
+      0054  8C  MOV RD, ZERO
+0055  [96] push ra
+      0055  20  PUSH RA
+0056  [97] ldi LOW(@mul_done)
+      0056  D0  LDL RA, #16
+      0057  33  LDH RA, #3
+0058  [98] mov prl, ra
+      0058  A8  MOV PRL, RA
+0059  [99] ldi HIGH(@mul_done)
+      0059  C0  LDL RA, #0
+005A  [100] mov prh, ra
+      005A  B0  MOV PRH, RA
+005B  [101] pop ra
+      005B  28  POP RA
+005C  [104] push rd
+      005C  21  PUSH RD
+005D  [105] mov rd, ra
+      005D  88  MOV RD, RA
+005E  [106] cmp zero
+      005E  7C  CMP ZERO
+005F  [107] pop rd
+      005F  29  POP RD
+0060  [108] jeq
+      0060  18  JEQ
+0061  [111] add rb
+      0061  42  ADD RB
+0062  [112] mov rd, acc
+      0062  8B  MOV RD, ACC
+0063  [115] push rd
+      0063  21  PUSH RD
+0064  [116] mov rd, ra
+      0064  88  MOV RD, RA
+0065  [117] subi #1
+      0065  69  SUBI #1
+0066  [118] mov ra, acc
+      0066  83  MOV RA, ACC
+0067  [119] pop rd
+      0067  29  POP RD
+0068  [122] push ra
+      0068  20  PUSH RA
+0069  [123] ldi LOW(@mul_check)
+      0069  D5  LDL RA, #21
+      006A  32  LDH RA, #2
+006B  [124] mov prl, ra
+      006B  A8  MOV PRL, RA
+006C  [125] ldi HIGH(@mul_check)
+      006C  C0  LDL RA, #0
+006D  [126] mov prh, ra
+      006D  B0  MOV PRH, RA
+006E  [127] pop ra
+      006E  28  POP RA
+006F  [128] jmp
+      006F  1F  JMP
+0070  [131] mov rb, rd
+      0070  91  MOV RB, RD
+0071  [132] ret
+      0071  AD  MOV PRL, LRL
+      0072  B6  MOV PRH, LRH
+      0073  1F  JMP

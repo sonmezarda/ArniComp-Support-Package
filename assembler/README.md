@@ -260,6 +260,7 @@ PUSHSTR "OK"
 
 JLE
 JGE
+JLEU
 ```
 
 Conditional and unconditional jumps may also take an absolute target label or constant address as assembler pseudoinstructions:
@@ -270,6 +271,8 @@ JNE loop :RD
 JMP target
 JLE finish
 JGE retry :RD
+JLEU done
+JGTU retry :RD
 ```
 
 ### Jump encoding
@@ -295,6 +298,13 @@ When a jump takes a target operand, the assembler treats it as a pseudoinstructi
 - then emits the requested jump instruction
 
 Default temporary register is `RA`; `:RD` is also supported.
+
+Unsigned notes:
+
+- `JGEU` and `JLTU` are aliases for the real jump instructions `JCS` and `JCC`
+- `JLEU` is an assembler macro and expands to `JCC` followed by `JEQ`
+- `JGTU` is supported only with an explicit target operand such as `JGTU done` or `JGTU done :RD`
+  - under the current ISA there is no safe bare `JGTU` form that preserves the existing `PRH:PRL` target
 
 ## Bit Slices
 
@@ -362,6 +372,8 @@ JEQ done
 JNE loop :RD
 JLE finish
 JGE retry :RD
+JLEU done
+JGTU retry :RD
 ```
 
 These expand to:

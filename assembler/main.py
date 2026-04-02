@@ -419,9 +419,10 @@ ASSEMBLY SYNTAX:
     PUSH src                    ; Push source value
     POP dest                    ; Pop into destination
     JEQ, JNE, JCS, JCC, JMI, JVS, JLT, JMP, JGT
-    JLE, JGE                    ; Assembler macros
+    JLE, JGE, JLEU             ; Assembler macros
     JZ, JNZ, JC, JNC, JN, JV,
     JGEU, JLTU, JLTS            ; Jump aliases
+    JGTU target[:RA|:RD]        ; Unsigned greater-than target macro
     NOP, HLT, INC #1|#2, DEC #1|#2, JAL
 
 REGISTERS:
@@ -473,6 +474,8 @@ NOTES:
       JEQ=000, JNE=001, JCS=010, JCC=011, JMI=100, JVS=101, JLT=110, JMP=111.
     - JLE expands to JEQ + JLT.
     - JGE expands to JEQ + JGT.
+    - JLEU expands to JCC + JEQ.
+    - JGTU is supported only with an explicit target operand.
     - ADD #imm and SUB #imm are not accepted; use ADDI / SUBI.
 """
         print(help_text)

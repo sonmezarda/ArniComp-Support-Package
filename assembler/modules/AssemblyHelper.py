@@ -758,7 +758,7 @@ class AssemblyHelper:
             low_byte = resolved.value & 0xFF
             return 1 if low_byte <= 31 else 2
 
-        macro_size = self.macro_expander.estimate_size(instruction, args, labels, constants)
+        macro_size = self.macro_expander.estimate_size(instruction, args, current_pc, labels, constants)
         if macro_size is not None:
             return macro_size
 
@@ -926,7 +926,7 @@ class AssemblyHelper:
 
         if instruction == "LDI":
             return self.emit_ldi(parsed, args, labels, constants)
-        macro_emitted = self.macro_expander.emit(parsed, instruction, args, labels, constants)
+        macro_emitted = self.macro_expander.emit(parsed, instruction, args, current_pc, labels, constants)
         if macro_emitted is not None:
             return macro_emitted
         layout_emitted = self.layout_directives.emit(parsed, instruction, args, current_pc, labels, constants)

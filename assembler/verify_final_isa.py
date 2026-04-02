@@ -131,9 +131,12 @@ def main():
         ("JEQ target default RA", ["JEQ done", "done:", "NOP"], ["C4", "A8", "B4", "18", "00"]),
         ("JMP target with RD", ["JMP done :RD", "done:", "NOP"], ["E4", "A9", "B4", "1F", "00"]),
         ("JLE target macro", ["JLE done", "done:", "NOP"], ["C5", "A8", "B4", "18", "1E", "00"]),
+        ("JLEU macro", ["JLEU"], ["1B", "18"]),
+        ("JLEU target macro", ["JLEU done", "done:", "NOP"], ["C5", "A8", "B4", "1B", "18", "00"]),
         ("JGT opcode", ["JGT"], ["06"]),
         ("JLE macro", ["JLE"], ["18", "1E"]),
         ("JGE macro", ["JGE"], ["18", "06"]),
+        ("JGTU target macro", ["JGTU done", "done:", "NOP"], ["C9", "A8", "B4", "1B", "18", "C9", "A8", "B4", "1F", "00"]),
         ("JZ alias", ["JZ"], ["18"]),
         ("JGEU alias", ["JGEU"], ["1A"]),
         (
@@ -268,6 +271,11 @@ def main():
             "JMPA bad suffix",
             ["JMPA target :RB", "target:", "NOP"],
             "temporary register suffix must be :RA or :RD",
+        ),
+        (
+            "JGTU bare not supported",
+            ["JGTU"],
+            "requires an explicit target operand",
         ),
         (
             "RET bad mode",
