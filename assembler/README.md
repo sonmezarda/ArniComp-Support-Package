@@ -9,11 +9,13 @@ Final ISA assembler for ArniComp's 8-bit CPU.
 - `label:` definitions with iterative address resolution
 - labels can share a line with an instruction, for example `done: HLT`
 - `.include "path"` support with relative-path resolution
+- `.import "path" symbol1, symbol2` for selected function-library imports
 - `.repeat N { ... }` preprocessing blocks
 - helper functions: `LOW(...)`, `HIGH(...)`, `BYTE0(...)`, `BYTE1(...)`, `BITS(...)`
 - layout directives: `.org`, `.align`, `.fill`
 - conditional assembly: `.define`, `.if`, `.else`, `.endif`
 - optional listing/debug output for assembled source
+- function-calling guide and scratch-page include
 - `PUSHSTR "text"[, trailingValue] [:RA|:RD]`
 - Final ISA encoder plus a small disassembler
 - Pseudoinstructions:
@@ -24,6 +26,18 @@ Final ISA assembler for ArniComp's 8-bit CPU.
   - `RET`
   - `RET :STACK`
   - `PUSHI value [:RA|:RD]`
+
+## Function Guide
+
+Recommended function-calling conventions and nested-call notes are documented here:
+
+- [FUNCTION_GUIDE.md](/d:/Projects/ArniComp-Support-Package/assembler/FUNCTION_GUIDE.md)
+
+Recommended scratch-page include:
+
+```assembly
+.include "../includes/function_abi.asm"
+```
 
 ## Constants
 
@@ -60,6 +74,47 @@ Notes:
 - Includes are expanded before constant extraction and label resolution.
 - Relative paths are resolved from the file that contains the `.include`.
 - Recursive include chains are rejected with a clear error.
+
+## Function Library Imports
+
+Use `.include` for textual inclusion such as constants and shared setup fragments.
+
+Use `.import` when you want to pull in only selected functions from a library file and place them at the end of the assembled program.
+
+Main source:
+
+```assembly
+.include "../includes/uart.inc"
+.import "../lib/math.asm" mul_func
+.import "../lib/convert.asm" ascii_to_number_func, number_to_ascii_func
+```
+
+Library source:
+
+```assembly
+.export mul_func
+.func
+mul_func:
+    ; function body
+    ret
+.endfunc
+```
+
+Rules:
+
+- only explicitly imported symbols are appended
+- imported function bodies are appended after the main source, not in place
+- imported files may use `.include`, `.define`, `.if`, and `.repeat`
+- `.func` blocks may not be nested
+- the first meaningful line inside a `.func` block must be a label
+- `.export name` must match the entry label of a `.func` block
+- duplicate imports are emitted only once
+
+Why this exists:
+
+- the CPU starts execution at `0x0000`
+- placing imported function bodies inline could make the program start inside a library routine
+- appending imported functions keeps the main entry flow at the front of program ROM
 
 ## Repeat Blocks
 

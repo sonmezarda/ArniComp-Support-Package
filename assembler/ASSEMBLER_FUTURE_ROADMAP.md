@@ -22,6 +22,7 @@ This document captures proposed quality-of-life and power-user features for the 
 - [x] `.org/.align/.fill`
 - [x] conditional assembly
 - [x] listing/debug output
+- [x] selected function-library imports
 
 ## Internal Refactor Direction
 
@@ -477,6 +478,39 @@ Status:
 - Implemented
 - Supported through `assemble ... --listing file.lst`
 - Current output is source-oriented and shows final emitted bytes for each source line
+
+### 11. Selected Function Imports
+
+Provide a function-library import path that is distinct from textual `.include`.
+
+Example:
+
+```asm
+.import "../lib/math.asm" mul_func, square_func
+```
+
+Library file structure:
+
+```asm
+.export mul_func
+.func
+mul_func:
+    ...
+    ret
+.endfunc
+```
+
+Behavior:
+
+- only selected exported functions are imported
+- imported functions are appended after the main source
+- imported files may still use `.include`
+- duplicate imports are emitted only once
+
+Status:
+
+- Implemented
+- Uses `.export`, `.func`, `.endfunc`, and `.import`
 
 ## Proposed Priority Order
 

@@ -338,6 +338,47 @@ def main():
     )
     passed += 1
 
+    assemble_file_case(
+        "import selected function with nested include",
+        '.import "lib/math.asm" mul_func\nstart: NOP\n',
+        ["00", "C5", "AD", "B6", "1F"],
+        include_files={
+            "lib/math.asm": (
+                '.include "defs.inc"\n'
+                '.export mul_func\n'
+                '.func\n'
+                'mul_func:\n'
+                '    ldi $VALUE\n'
+                '    ret\n'
+                '.endfunc\n'
+                '.export unused_func\n'
+                '.func\n'
+                'unused_func:\n'
+                '    hlt\n'
+                '.endfunc\n'
+            ),
+            "lib/defs.inc": "equ VALUE 5\n",
+        },
+    )
+    passed += 1
+
+    assemble_file_case(
+        "import duplicate function only once",
+        '.import "lib/math.asm" mul_func\n.import "lib/math.asm" mul_func\nstart: NOP\n',
+        ["00", "C5", "AD", "B6", "1F"],
+        include_files={
+            "lib/math.asm": (
+                ".export mul_func\n"
+                ".func\n"
+                "mul_func:\n"
+                "    ldi #5\n"
+                "    ret\n"
+                ".endfunc\n"
+            ),
+        },
+    )
+    passed += 1
+
     assemble_case(
         "repeat block",
         [
@@ -413,6 +454,36 @@ def main():
         "include missing file",
         '.include "missing.inc"\nNOP\n',
         "Included file not found",
+    )
+    passed += 1
+
+    expect_file_error(
+        "import missing export",
+        '.import "lib/math.asm" mul_func\nNOP\n',
+        "is not exported",
+        include_files={
+            "lib/math.asm": (
+                ".func\n"
+                "mul_func:\n"
+                "    ret\n"
+                ".endfunc\n"
+            ),
+        },
+    )
+    passed += 1
+
+    expect_file_error(
+        "import func requires label",
+        '.import "lib/math.asm" mul_func\nNOP\n',
+        "first line after .func must be a label",
+        include_files={
+            "lib/math.asm": (
+                ".export mul_func\n"
+                ".func\n"
+                "    nop\n"
+                ".endfunc\n"
+            ),
+        },
     )
     passed += 1
 

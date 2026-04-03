@@ -14,6 +14,7 @@ from typing import Dict, List, Optional, Tuple
 from .LayoutDirectiveHandler import LayoutDirectiveHandler
 from .MacroExpander import MacroExpander
 from .Preprocessor import Preprocessor
+from .FunctionImportResolver import FunctionImportResolver
 
 
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), "..", "config", "config.json")
@@ -194,6 +195,12 @@ class AssemblyHelper:
             comment_char=self.comment_char,
             source_line_factory=lambda line_number, text, src: SourceLine(line_number, text, source_name=src),
             expression_evaluator=lambda expr, vars=None: self.evaluate_expression(expr, vars),
+        )
+        self.import_resolver = FunctionImportResolver(
+            comment_char=self.comment_char,
+            constant_keyword=self.constant_keyword,
+            source_line_factory=lambda line_number, text, src: SourceLine(line_number, text, source_name=src),
+            preprocessor_expand=lambda raw_lines, source_name: self.preprocessor.expand(raw_lines, source_name=source_name),
         )
 
     def format_line_ref(self, source_line: SourceLine) -> str:
@@ -942,6 +949,7 @@ class AssemblyHelper:
         self.last_warnings = []
         self.last_listing = []
         expanded_lines = self.preprocessor.expand(raw_lines, source_name=source_name)
+        expanded_lines = self.import_resolver.resolve_imports(expanded_lines)
         lines = self.clean_source_lines(expanded_lines)
         constants, lines = self.extract_constants(lines)
         labels = self.build_labels(lines, constants)

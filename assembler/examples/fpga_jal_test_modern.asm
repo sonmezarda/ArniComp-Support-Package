@@ -1,4 +1,4 @@
-.include "../includes/uart.inc"
+.include "../includes/uart_constants.inc"
 
 equ SYS_LED_H 0x0C
 equ SYS_LED_L 0x00

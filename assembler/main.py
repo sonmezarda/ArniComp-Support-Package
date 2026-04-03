@@ -400,6 +400,10 @@ ASSEMBLY SYNTAX:
     ; Comments start with semicolon
     equ CONSTANT_NAME value     ; Define constants
     label:                      ; Define labels
+    .include "file.asm"         ; Textual include
+    .import "lib.asm" fn1, fn2  ; Import selected functions to program end
+    .export NAME                ; Library export marker
+    .func / .endfunc            ; Library function block
     
     LDL RA|RD, value            ; Load low 5 bits (0-31 or [4:0] slice)
     LDH RA|RD, value            ; Load high 3 bits (0-7 or [7:5] slice)

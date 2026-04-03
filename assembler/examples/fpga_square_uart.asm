@@ -1,4 +1,5 @@
-.include "../includes/uart.inc"
+.include "../includes/uart_constants.asm"
+.import "../lib/math.asm" mul_u8
 
 equ NUMBER_OFFSET 0x30
 ; gets 1 byte number from uart. returns number^2
@@ -51,8 +52,7 @@ main_loop:
         jgeu main_loop
         
         mov rd, rb
-        mov ra, rb
-        call mul_func :RD ; rb = rd*rb
+        call mul_u8 ; rb = rd*rb
 
         mov rd, rb
         call number_to_ascii_func ; rb = ascii to send
@@ -85,49 +85,4 @@ number_to_ascii_func:
     mov rb, acc
     ret
 
-; mul_func
-; in : RA=a, RB=b
-; out: RB=a*b (low 8 bits)
-mul_func:
-    clr rd
-
-    mul_check:
-        ; PR <- mul_done
-        push ra
-        ldi LOW(@mul_done)
-        mov prl, ra
-        ldi HIGH(@mul_done)
-        mov prh, ra
-        pop ra
-
-        ; if (RA == 0) goto mul_done
-        push rd
-        mov rd, ra
-        cmp zero
-        pop rd
-        jeq
-
-        ; RD = RD + RB
-        add rb
-        mov rd, acc
-
-        ; RA = RA - 1
-        push rd
-        mov rd, ra
-        subi #1
-        mov ra, acc
-        pop rd
-
-        ; PR <- mul_check
-        push ra
-        ldi LOW(@mul_check)
-        mov prl, ra
-        ldi HIGH(@mul_check)
-        mov prh, ra
-        pop ra
-        jmp
-
-    mul_done:
-        mov rb, rd
-        ret
 
