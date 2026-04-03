@@ -31,6 +31,17 @@ LABEL_CHAR = config["special_chars"]["label"]
 CONSTANT_KEYWORD = config["keywords"]["constant"]
 SLICE_RE = re.compile(r"^(?P<base>.+?)\[(?P<hi>\d+):(?P<lo>\d+)\]$")
 
+PUSH_SOURCES = {
+    "RA": "000",
+    "RD": "001",
+    "RB": "010",
+    "ACC": "011",
+    "MARH": "100",
+    "LRL": "101",
+    "LRH": "110",
+    "MARL": "111",
+}
+
 
 @dataclass(frozen=True)
 class SourceLine:
@@ -117,11 +128,16 @@ class InstructionEncoder:
             "CMP": "01111",
             "XOR": "00001",
             "AND": "00010",
-            "PUSH": "00100",
         }
         if operation not in prefixes:
             raise ValueError(f"Unknown source-form instruction: {operation}")
         return f"{prefixes[operation]}{SOURCES[src]}"
+
+    @staticmethod
+    def encode_push_source(src: str) -> str:
+        if src not in PUSH_SOURCES:
+            raise ValueError(f"Invalid source register for PUSH: {src}")
+        return f"00100{PUSH_SOURCES[src]}"
 
     @staticmethod
     def encode_immediate_op(operation: str, immediate: int) -> str:
@@ -716,6 +732,16 @@ class AssemblyHelper:
             return token_upper
         raise ValueError(f"{instruction} source must be one of {list(SOURCES.keys()) + ['0', '#0']}, got {token}")
 
+    def parse_push_source(self, token: str) -> str:
+        token_upper = token.upper()
+        if token_upper in {"ZERO", "0", "#0"}:
+            raise ValueError("PUSH ZERO is no longer supported; use PUSH MARH or CLR RA + PUSH RA")
+        if token_upper == "M":
+            raise ValueError("PUSH M is no longer supported; use PUSH MARL if you want to preserve the memory address low byte")
+        if token_upper not in PUSH_SOURCES:
+            raise ValueError(f"PUSH source must be one of {list(PUSH_SOURCES.keys())}, got {token}")
+        return token_upper
+
     def parse_small_immediate(
         self,
         token: str,
@@ -897,7 +923,13 @@ class AssemblyHelper:
             src = self.parse_source(args[1], "MOV")
             return self.encoder.encode_mov(dest, src)
 
-        if instruction in {"ADD", "ADC", "NOT", "SUB", "SBC", "CMP", "XOR", "AND", "PUSH"}:
+        if instruction == "PUSH":
+            if len(args) != 1:
+                raise ValueError(f"PUSH requires 1 argument, got {len(args)}")
+            src = self.parse_push_source(args[0])
+            return self.encoder.encode_push_source(src)
+
+        if instruction in {"ADD", "ADC", "NOT", "SUB", "SBC", "CMP", "XOR", "AND"}:
             if len(args) != 1:
                 raise ValueError(f"{instruction} requires 1 argument, got {len(args)}")
             src = self.parse_source(args[0], instruction)
@@ -1051,7 +1083,7 @@ class AssemblyHelper:
             return name or f"??? {binary_code}"
         if binary_code.startswith("00100"):
             src_bits = binary_code[5:8]
-            src = next((name for name, bits in SOURCES.items() if bits == src_bits), None)
+            src = next((name for name, bits in PUSH_SOURCES.items() if bits == src_bits), None)
             return f"PUSH {src}" if src else f"??? {binary_code}"
         if binary_code.startswith("00101"):
             dest_bits = binary_code[5:8]

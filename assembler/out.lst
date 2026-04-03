@@ -135,67 +135,67 @@
       0052  1F  JMP
 
 ; Source: D:\Projects\ArniComp-Support-Package\assembler\lib\math.asm
-0053  [19] mov ra, rb
+0053  [21] mov ra, rb
       0053  82  MOV RA, RB
-0054  [20] mov rb, rd
+0054  [22] mov rb, rd
       0054  91  MOV RB, RD
-0055  [21] clr rd
+0055  [23] clr rd
       0055  8C  MOV RD, ZERO
-0056  [25] push ra
+0056  [27] push ra
       0056  20  PUSH RA
-0057  [26] ldi LOW(@mul_u8_done)
+0057  [28] ldi LOW(@mul_u8_done)
       0057  D1  LDL RA, #17
       0058  33  LDH RA, #3
-0059  [27] mov prl, ra
+0059  [29] mov prl, ra
       0059  A8  MOV PRL, RA
-005A  [28] ldi HIGH(@mul_u8_done)
+005A  [30] ldi HIGH(@mul_u8_done)
       005A  C0  LDL RA, #0
-005B  [29] mov prh, ra
+005B  [31] mov prh, ra
       005B  B0  MOV PRH, RA
-005C  [30] pop ra
+005C  [32] pop ra
       005C  28  POP RA
-005D  [33] push rd
+005D  [35] push rd
       005D  21  PUSH RD
-005E  [34] mov rd, ra
+005E  [36] mov rd, ra
       005E  88  MOV RD, RA
-005F  [35] cmp zero
+005F  [37] cmp zero
       005F  7C  CMP ZERO
-0060  [36] pop rd
+0060  [38] pop rd
       0060  29  POP RD
-0061  [37] jeq
+0061  [39] jeq
       0061  18  JEQ
-0062  [40] add rb
+0062  [42] add rb
       0062  42  ADD RB
-0063  [41] mov rd, acc
+0063  [43] mov rd, acc
       0063  8B  MOV RD, ACC
-0064  [44] push rd
+0064  [46] push rd
       0064  21  PUSH RD
-0065  [45] mov rd, ra
+0065  [47] mov rd, ra
       0065  88  MOV RD, RA
-0066  [46] subi #1
+0066  [48] subi #1
       0066  69  SUBI #1
-0067  [47] mov ra, acc
+0067  [49] mov ra, acc
       0067  83  MOV RA, ACC
-0068  [48] pop rd
+0068  [50] pop rd
       0068  29  POP RD
-0069  [51] push ra
+0069  [53] push ra
       0069  20  PUSH RA
-006A  [52] ldi LOW(@mul_u8_check)
+006A  [54] ldi LOW(@mul_u8_check)
       006A  D6  LDL RA, #22
       006B  32  LDH RA, #2
-006C  [53] mov prl, ra
+006C  [55] mov prl, ra
       006C  A8  MOV PRL, RA
-006D  [54] ldi HIGH(@mul_u8_check)
+006D  [56] ldi HIGH(@mul_u8_check)
       006D  C0  LDL RA, #0
-006E  [55] mov prh, ra
+006E  [57] mov prh, ra
       006E  B0  MOV PRH, RA
-006F  [56] pop ra
+006F  [58] pop ra
       006F  28  POP RA
-0070  [57] jmp
+0070  [59] jmp
       0070  1F  JMP
-0071  [60] mov rb, rd
+0071  [62] mov rb, rd
       0071  91  MOV RB, RD
-0072  [61] ret
+0072  [63] ret
       0072  AD  MOV PRL, LRL
       0073  B6  MOV PRH, LRH
       0074  1F  JMP

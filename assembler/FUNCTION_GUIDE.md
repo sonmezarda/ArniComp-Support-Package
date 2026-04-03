@@ -25,14 +25,37 @@ The goal is not to imitate a large-system ABI. The goal is to make hand-written 
 - 8-bit return value:
   - `RB`
 - 16-bit return value:
-  - `RB` = low byte
-  - `RD` = high byte
+  - `RD` = low byte
+  - `RB` = high byte
 
 ### Extra arguments
 
 - first argument: `RB`
 - second argument: `RD`
 - further arguments: stack or scratch memory
+
+### Multi-byte register pairs
+
+For 16-bit values stored in registers, use little-endian register order:
+
+- `RD` = low byte
+- `RB` = high byte
+
+This is recommended because:
+
+- the ALU naturally consumes `RD`
+- low-byte arithmetic usually happens first
+- `ADD` then `ADC` chains become shorter and cheaper
+
+Example:
+
+```assembly
+; 16-bit value 0x1234
+ldi #0x34
+mov rd, ra
+ldi #0x12
+mov rb, ra
+```
 
 ## Register Preservation Rules
 
@@ -69,10 +92,11 @@ Default assumption:
 - functions do **not** preserve `RA`
 - functions do **not** preserve `RD`
 - functions return their main result in `RB`
+- for 16-bit returns, functions should return `RD` low and `RB` high
 
 This is intentional. `RA` and `RD` are both heavily used by the current ISA and by assembler-generated code.
 
-## Why `RB` Is The Preferred Argument / Return Register
+## Why `RB` Is The Preferred 8-bit Argument / Return Register
 
 - `RA` is frequently overwritten by `LDI`, `CALL`, `JMPA`, target-taking jumps, and other helper patterns
 - `RD` is the ALU's left-hand operand and is frequently used for compare/arithmetic setup
@@ -100,6 +124,25 @@ number_to_ascii_func:
 ; in : RB = a, RD = b
 ; out: RB = a*b (low 8 bits)
 mul_func:
+    ...
+    ret
+```
+
+For 16-bit values, the recommended pair is still:
+
+- `RD` = low byte
+- `RB` = high byte
+
+So a 16-bit add routine is naturally documented like this:
+
+```assembly
+; in :
+;   RD = a_lo
+;   RB = a_hi
+; out:
+;   RD = sum_lo
+;   RB = sum_hi
+add_u16_func:
     ...
     ret
 ```
@@ -201,6 +244,13 @@ That means:
 - it is fine for non-reentrant helper code
 - recursive code must use it carefully
 - nested routines should document which scratch slots they use
+- stack use is perfectly valid when it simplifies the routine, but core math helpers should avoid stack/scratch traffic when a register-only implementation is practical
+
+Library note:
+
+- the current `.import` system does not auto-resolve function-to-function dependencies
+- exported library routines should therefore prefer to be self-contained when practical
+- if a routine intentionally calls another imported helper, the caller must import both
 
 ## Included Scratch Symbols
 
@@ -256,10 +306,29 @@ Or, when scratch memory is used:
 ;   F_W0_HI_L
 ```
 
+Example 16-bit header:
+
+```assembly
+; add_u16_scratch
+; in :
+;   RD = a_lo
+;   RB = a_hi
+;   [F_TMP_BASE_H:F_W0_LO_L] = b_lo
+;   [F_TMP_BASE_H:F_W0_HI_L] = b_hi
+; out:
+;   RD = sum_lo
+;   RB = sum_hi
+; clobbers:
+;   RA, ACC, flags, MARL, MARH
+; scratch:
+;   none
+```
+
 ## Practical Summary
 
 - use `RB` for the primary argument and primary return
-- use `RD` for the second argument or 16-bit return high byte
+- use `RD` for the second argument
+- use `RD` low / `RB` high for 16-bit register pairs and 16-bit returns
 - treat `RA` as volatile scratch
 - assume `RD` is caller-saved unless the function contract says otherwise
 - save `LRL/LRH` before nested `CALL`s

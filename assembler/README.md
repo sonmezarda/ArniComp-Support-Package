@@ -85,16 +85,16 @@ Main source:
 
 ```assembly
 .include "../includes/uart.inc"
-.import "../lib/math.asm" mul_func
+.import "../lib/math.asm" mul_u8
 .import "../lib/convert.asm" ascii_to_number_func, number_to_ascii_func
 ```
 
 Library source:
 
 ```assembly
-.export mul_func
+.export mul_u8
 .func
-mul_func:
+mul_u8:
     ; function body
     ret
 .endfunc
@@ -109,6 +109,7 @@ Rules:
 - the first meaningful line inside a `.func` block must be a label
 - `.export name` must match the entry label of a `.func` block
 - duplicate imports are emitted only once
+- imported routines should be self-contained, or you should explicitly import any helper routines they call
 
 Why this exists:
 
@@ -252,6 +253,10 @@ AND RB
 
 ```assembly
 PUSH RA
+PUSH MARL
+PUSH MARH
+PUSH LRL
+PUSH LRH
 POP RD
 
 NOP
@@ -549,6 +554,40 @@ Behavior:
 - Default temporary register is `RA`.
 - `:RD` selects `RD` as the temporary register.
 
+## PUSH Source Mapping
+
+The global source register map is unchanged for `MOV`, ALU operations, and other source-form instructions:
+
+- `ZERO` is still a valid source for `MOV` and ALU operations
+- `M` is still a valid source for `MOV` and ALU operations
+- `LRL` and `LRH` remain normal global sources
+
+`PUSH` is the one exception. It uses this instruction-specific source set:
+
+- `RA`
+- `RD`
+- `RB`
+- `ACC`
+- `MARH`
+- `LRL`
+- `LRH`
+- `MARL`
+
+That means:
+
+- `PUSH MARH` reuses the old `PUSH ZERO` encoding
+- `PUSH MARL` reuses the old `PUSH M` encoding
+- `PUSH ZERO`, `PUSH 0`, `PUSH #0`, and `PUSH M` are no longer accepted
+
+Practical examples:
+
+```assembly
+push marl
+push marh
+push lrl
+push lrh
+```
+
 ## Commands
 
 ```bash
@@ -621,4 +660,6 @@ python verify_final_isa.py
 - `JMP` now uses jump-condition bits `111`.
 - `JLE` is supported as an assembler macro and expands to `JEQ` followed by `JLT`.
 - `JGE` is supported as an assembler macro and expands to `JEQ` followed by `JGT`.
+- `PUSH ZERO` and `PUSH M` are no longer source-compatible.
+- Use `PUSH MARH` and `PUSH MARL` instead.
 - Legacy mnemonics outside the final ISA, such as `SMSBRA`, `INX`, and the old `JGT/JGE/JLE` semantics, are no longer accepted.

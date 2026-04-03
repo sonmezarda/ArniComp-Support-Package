@@ -1,7 +1,6 @@
 `timescale 1ns/1ps
 
-// Test for Memory operations (MOV M,src and MOV dst,M)
-module tb_memory;
+module tb_lr_stack;
 
     logic clk = 0;
     logic rst_n = 0;
@@ -14,7 +13,7 @@ module tb_memory;
     always #5000 clk = ~clk;
 
     arnicomp_top #(
-        .PROG_MEM_FILE("sim/tb_memory.mem")
+        .PROG_MEM_FILE("sim/tb_lr_stack.mem")
     ) dut (
         .clk(clk),
         .rst_n(rst_n),
@@ -55,12 +54,8 @@ module tb_memory;
     endtask
 
     initial begin
-        $dumpfile("wave_memory.vcd");
-        $dumpvars(0, tb_memory);
-
-        $display("\n========================================");
-        $display("ArniComp Memory Operation Tests");
-        $display("========================================\n");
+        $dumpfile("wave_lr_stack.vcd");
+        $dumpvars(0, tb_lr_stack);
 
         rst_n = 0;
         repeat(5) @(posedge clk);
@@ -70,26 +65,19 @@ module tb_memory;
         wait_for_halt();
 
         $display("\n--- Final Register State ---");
-        $display("RA   = 0x%02X", dut.reg_a_out);
-        $display("RD   = 0x%02X", dut.reg_d_out);
         $display("RB   = 0x%02X", dut.reg_b_out);
-        $display("ACC  = 0x%02X", dut.acc_out);
-        $display("MARL = 0x%02X", dut.marl_out);
-        $display("MARH = 0x%02X", dut.marh_out);
+        $display("SP   = 0x%04X", dut.sp_out);
+        $display("PC   = 0x%04X", dut.pc_addr);
 
         $display("\n--- Checking Expected Values ---\n");
-        
-        // Test:
-        // - Save MARL/MARH on stack via PUSH MARL / PUSH MARH
-        // - Clobber MAR
-        // - Restore it with POP MARH / POP MARL
-        // - Verify normal memory write/read still uses restored MAR
-        // - Verify INC #1 still advances full MAR afterwards
-        
-        check_reg("RB", dut.reg_b_out, 8'h55);  // Read from memory[0x0123]
-        check_reg("RD", dut.reg_d_out, 8'hAA);  // Read from memory[0x0124]
-        check_reg("MARL", dut.marl_out, 8'h24);
-        check_reg("MARH", dut.marh_out, 8'h01);
+        check_reg("RB", dut.reg_b_out, 8'h5A);
+        if (dut.sp_out === 16'h0000) begin
+            $display("  [PASS] SP restored to 0x0000");
+            pass_count++;
+        end else begin
+            $display("  [FAIL] SP = 0x%04X (expected 0x0000)", dut.sp_out);
+            fail_count++;
+        end
 
         $display("\n========================================");
         $display("Test Summary: %0d passed, %0d failed", pass_count, fail_count);

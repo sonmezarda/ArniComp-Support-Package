@@ -47,6 +47,8 @@ logic [15:0] lr_out;
 logic [15:0] pc_addr;
 logic [15:0] sp_out;
 logic [15:0] active_stack_addr;
+logic        is_push_instr;
+logic [7:0]  stack_wdata;
 
 logic reg_a_we;
 logic reg_b_we;
@@ -63,10 +65,17 @@ logic [7:0] ldh_bus;
 // Stack grows upward with PUSH writing at SP then incrementing.
 // POP must therefore read from SP-1 before the stack pointer register is updated.
 assign active_stack_addr = control_pins.inc_dec_sel ? (sp_out - 16'd1) : sp_out;
+assign is_push_instr = exec_instr[7:3] == 5'b00100;
 assign mem_addr = control_pins.sp_sel ? active_stack_addr : {marh_out, marl_out};
-assign mem_wdata = bus;
+// PUSH uses a small instruction-specific source remap:
+// 100 encodes MARH and 111 encodes MARL for stack saves.
+assign stack_wdata =
+    (is_push_instr && control_pins.ssel == 3'b100) ? marh_out :
+    (is_push_instr && control_pins.ssel == 3'b111) ? marl_out :
+    bus;
+assign mem_wdata = control_pins.sp_sel ? stack_wdata : bus;
 assign mem_wen = mem_we;
-assign mem_ren = control_pins.oe && (control_pins.ssel == 3'b111);
+assign mem_ren = control_pins.oe && (control_pins.ssel == 3'b111) && !is_push_instr;
 
 control_pkg::ctrl_t control_pins;
 

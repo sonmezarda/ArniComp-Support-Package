@@ -503,7 +503,7 @@ class MacroExpander:
             value_token, temp_reg = self.parse_pushi_args(args)
             pseudo_parsed = parsed
             emitted = self.helper.emit_ldi(pseudo_parsed, [temp_reg, value_token], labels, constants)
-            emitted.append(self.encoder.encode_source_op("PUSH", temp_reg))
+            emitted.append(self.encoder.encode_push_source(temp_reg))
             return emitted
 
         if instruction == "PUSHSTR":
@@ -513,12 +513,12 @@ class MacroExpander:
 
             for token in reversed(trailing_values):
                 emitted.extend(self.helper.emit_ldi(parsed, [temp_reg, token], labels, constants))
-                emitted.append(self.encoder.encode_source_op("PUSH", temp_reg))
+                emitted.append(self.encoder.encode_push_source(temp_reg))
 
             for ch in reversed(literal):
                 char_token = repr(ch)
                 emitted.extend(self.helper.emit_ldi(parsed, [temp_reg, char_token], labels, constants))
-                emitted.append(self.encoder.encode_source_op("PUSH", temp_reg))
+                emitted.append(self.encoder.encode_push_source(temp_reg))
 
             return emitted
 

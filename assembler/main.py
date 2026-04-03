@@ -438,6 +438,13 @@ REGISTERS:
     M                           ; Memory[MARH:MARL]
     ZERO / 0 / #0               ; Zero-source alias for MOV
 
+    PUSH-SPECIFIC SOURCES:
+        RA, RD, RB, ACC
+        MARH                    ; Reuses old PUSH ZERO encoding
+        LRL, LRH
+        MARL                    ; Reuses old PUSH M encoding
+        NOTE: PUSH ZERO / PUSH 0 / PUSH #0 / PUSH M are not supported
+
     NUMBER FORMATS:
         #10         Decimal
         #0x10       Hexadecimal

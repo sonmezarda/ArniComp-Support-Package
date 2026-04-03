@@ -118,6 +118,11 @@ def main():
         ("AND RD", ["AND RD"], ["11"]),
         ("XOR RA", ["XOR RA"], ["08"]),
         ("PUSH RA", ["PUSH RA"], ["20"]),
+        ("PUSH ACC", ["PUSH ACC"], ["23"]),
+        ("PUSH MARH", ["PUSH MARH"], ["24"]),
+        ("PUSH LRL", ["PUSH LRL"], ["25"]),
+        ("PUSH LRH", ["PUSH LRH"], ["26"]),
+        ("PUSH MARL", ["PUSH MARL"], ["27"]),
         ("POP RD", ["POP RD"], ["29"]),
         ("INC #1", ["INC #1"], ["02"]),
         ("INC #2", ["INC #2"], ["03"]),
@@ -286,6 +291,21 @@ def main():
             "PUSHI bad suffix",
             ["PUSHI #1 :RB"],
             "temporary register suffix must be :RA or :RD",
+        ),
+        (
+            "PUSH ZERO removed",
+            ["PUSH ZERO"],
+            "PUSH ZERO is no longer supported",
+        ),
+        (
+            "PUSH zero alias removed",
+            ["PUSH #0"],
+            "PUSH ZERO is no longer supported",
+        ),
+        (
+            "PUSH M removed",
+            ["PUSH M"],
+            "PUSH M is no longer supported",
         ),
         (
             "PUSHI bad slice width",
@@ -582,6 +602,20 @@ def main():
             "00",
         ],
         mode="both",
+    )
+    passed += 1
+
+    assert_listing_case(
+        "listing push remap disassembly",
+        [
+            "PUSH MARH",
+            "PUSH MARL",
+        ],
+        [
+            "0000  24  PUSH MARH",
+            "0001  27  PUSH MARL",
+        ],
+        mode="asm",
     )
     passed += 1
 

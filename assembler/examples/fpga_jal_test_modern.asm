@@ -12,15 +12,15 @@ setup:
     mov prh, zero
     mov prl, zero
     mov marl, zero
-    mov marh, zero
-
+    mov marh, zero  
+                    
     ldi $UART_BASE_H
     mov marh, ra
 
     ldi $UART_CONTROL_L
     mov marl, ra
-    ldi $UART_ENABLE_TX
-    mov m, ra
+    ldi $UART_ENABLE_TX 
+    mov m, ra 
 
     ldi $UART_BAUDSEL_L
     mov marl, ra
