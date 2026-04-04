@@ -3,7 +3,7 @@
 module program_memory #(
     parameter int ADDR_WIDTH = 16,
     parameter int DATA_WIDTH = 8,
-    parameter int MEM_SIZE   = 512,  
+    parameter int MEM_SIZE   = 512,
     parameter string MEM_FILE = ""
 )(
     input  logic                    clk,
@@ -11,7 +11,12 @@ module program_memory #(
     output logic [DATA_WIDTH-1:0]   data
 );
 
-    // 256 bytes program memory - fits in BSRAM
+    localparam int MEM_ADDR_WIDTH = (MEM_SIZE <= 2) ? 1 : $clog2(MEM_SIZE);
+
+    logic [DATA_WIDTH-1:0] mem [0:MEM_SIZE-1];
+    wire [MEM_ADDR_WIDTH-1:0] mem_addr = addr[MEM_ADDR_WIDTH-1:0];
+
+    // Program memory contents are loaded from a hex file at synthesis/simulation time.
     logic [DATA_WIDTH-1:0] mem [0:MEM_SIZE-1];
 
     initial begin
@@ -20,9 +25,9 @@ module program_memory #(
         end
     end
 
-    // Synchronous read for BSRAM inference
+    // Synchronous read is the pattern Gowin is most likely to infer as block ROM.
     always_ff @(posedge clk) begin
-        data <= mem[addr[7:0]];
+        data <= mem[mem_addr];
     end
 
 endmodule

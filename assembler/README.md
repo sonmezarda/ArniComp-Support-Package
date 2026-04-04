@@ -594,6 +594,8 @@ push lrh
 python main.py assemble program.asm output.txt
 python main.py assemble program.asm output.txt --listing program.lst --listing-mode both
 python main.py createsvhex program.asm program.mem --listing program.lst --listing-mode asm
+python main.py createsvmi program.asm program.mi --depth 2048 --listing program.lst --listing-mode asm
+python main.py creategowinprom program.asm ../verilog/src/gowin_prom/gowin_prom.v --depth 2048
 python main.py disassemble program.txt output.asm
 python main.py createbin program.txt program.bin
 python main.py load program.bin
@@ -602,11 +604,13 @@ python main.py help
 
 ## Listing Output
 
-`assemble` and `createsvhex` can optionally emit a listing/debug file:
+`assemble`, `createsvhex`, `createsvmi`, and `creategowinprom` can optionally emit a listing/debug file:
 
 ```bash
 python main.py assemble program.asm output.txt --listing program.lst --listing-mode both
 python main.py createsvhex program.asm program.mem --listing program.lst --listing-mode asm
+python main.py createsvmi program.asm program.mi --depth 2048 --listing program.lst --listing-mode asm
+python main.py creategowinprom program.asm ../verilog/src/gowin_prom/gowin_prom.v --depth 2048 --listing program.lst --listing-mode asm
 ```
 
 Supported modes:

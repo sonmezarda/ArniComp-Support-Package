@@ -10,12 +10,15 @@ Usage:
     python main.py createbin <input.txt> [output.bin]
     python main.py createihex <input.asm> [output.hex]
     python main.py createsvhex <input.asm> [output.mem] [--listing output.lst] [--listing-mode hex|asm|both]
+    python main.py createsvmi <input.asm> [output.mi] [--depth N] [--listing output.lst] [--listing-mode hex|asm|both]
+    python main.py creategowinprom <input.asm> <gowin_prom.v> [--depth N] [--listing output.lst] [--listing-mode hex|asm|both]
     python main.py load <binary.bin>
     python main.py help
 """
 
 import sys
 import os
+import re
 from typing import Optional
 
 from modules.AssemblyHelper import AssemblyHelper
@@ -282,6 +285,168 @@ class AssemblerCLI:
         except Exception as e:
             print(f"Error creating SystemVerilog HEX file: {e}")
             sys.exit(1)
+
+    def create_svmi(
+        self,
+        input_file: str,
+        output_file: Optional[str] = None,
+        depth: Optional[int] = None,
+        listing_file: Optional[str] = None,
+        listing_mode: str = "hex",
+    ) -> None:
+        """Convert assembly file to Gowin MI format for pROM initialization"""
+        if output_file is None:
+            base_name = os.path.splitext(input_file)[0]
+            output_file = f"{base_name}.mi"
+
+        try:
+            with open(input_file, 'r') as f:
+                raw_lines = f.readlines()
+        except FileNotFoundError:
+            print(f"Error: Input file '{input_file}' not found")
+            sys.exit(1)
+
+        try:
+            binary_lines, labels, constants = self.helper.convert_to_machine_code(raw_lines, source_name=input_file)
+            warnings = self.helper.last_warnings
+            byte_values = [format(int(binline, 2) & 0xFF, "02X") for binline in binary_lines]
+
+            if depth is not None:
+                if depth <= 0:
+                    raise ValueError("--depth must be a positive integer")
+                if len(byte_values) > depth:
+                    raise ValueError(
+                        f"Program has {len(byte_values)} bytes but requested depth is {depth}"
+                    )
+                byte_values.extend(["00"] * (depth - len(byte_values)))
+
+            address_depth = max(len(byte_values), 1)
+
+            with open(output_file, 'w', encoding='utf-8') as f:
+                f.write("#File_format=Hex\n")
+                f.write(f"#Address_depth={address_depth}\n")
+                f.write("#Data_width=8\n")
+                for hex_line in byte_values:
+                    f.write(f"{hex_line}\n")
+
+            if listing_file:
+                with open(listing_file, 'w', encoding='utf-8') as f:
+                    f.writelines(self.helper.format_listing(listing_mode))
+
+            print("MI file created successfully!")
+            print(f"  Input: {input_file}")
+            print(f"  Output: {output_file}")
+            print(f"  Instructions: {len(binary_lines)}")
+            if depth is not None:
+                print(f"  Padded depth: {depth}")
+            print("  Format: Gowin MI (for pROM initialization)")
+            print(f"  Warnings: {len(warnings)}")
+
+            if labels:
+                print(f"  Labels: {len(labels)}")
+            if constants:
+                print(f"  Constants: {len(constants)}")
+            if warnings:
+                print("\n  Warnings:")
+                for warning in warnings:
+                    print(f"    {warning}")
+            if listing_file:
+                print(f"  Listing: {listing_file}")
+
+        except Exception as e:
+            print(f"Error creating Gowin MI file: {e}")
+            sys.exit(1)
+
+    def create_gowin_prom(
+        self,
+        input_file: str,
+        output_file: str,
+        depth: int = 2048,
+        listing_file: Optional[str] = None,
+        listing_mode: str = "hex",
+    ) -> None:
+        """Patch Gowin_pROM INIT_RAM_xx defparams in a generated gowin_prom.v file."""
+        try:
+            with open(input_file, 'r') as f:
+                raw_lines = f.readlines()
+        except FileNotFoundError:
+            print(f"Error: Input file '{input_file}' not found")
+            sys.exit(1)
+
+        try:
+            with open(output_file, 'r', encoding='utf-8') as f:
+                prom_text = f.read()
+        except FileNotFoundError:
+            print(f"Error: Gowin pROM file '{output_file}' not found")
+            sys.exit(1)
+
+        try:
+            binary_lines, labels, constants = self.helper.convert_to_machine_code(raw_lines, source_name=input_file)
+            warnings = self.helper.last_warnings
+            byte_values = [format(int(binline, 2) & 0xFF, "02X") for binline in binary_lines]
+
+            if depth <= 0:
+                raise ValueError("--depth must be a positive integer")
+            if len(byte_values) > depth:
+                raise ValueError(
+                    f"Program has {len(byte_values)} bytes but requested depth is {depth}"
+                )
+
+            byte_values.extend(["00"] * (depth - len(byte_values)))
+
+            if depth % 32 != 0:
+                raise ValueError("--depth must be a multiple of 32 for Gowin pROM INIT_RAM blocks")
+
+            init_count = depth // 32
+            init_lines = []
+            for block_index in range(init_count):
+                chunk = byte_values[block_index * 32:(block_index + 1) * 32]
+                hex_payload = "".join(reversed(chunk))
+                init_lines.append(
+                    f"defparam prom_inst_0.INIT_RAM_{block_index:02X} = 256'h{hex_payload};"
+                )
+
+            new_init_block = "\n".join(init_lines)
+            pattern = re.compile(
+                r"defparam\s+prom_inst_0\.INIT_RAM_00\s*=.*?;\n(?:defparam\s+prom_inst_0\.INIT_RAM_[0-9A-F]{2}\s*=.*?;\n?)*",
+                re.DOTALL,
+            )
+
+            if not pattern.search(prom_text):
+                raise ValueError("Could not find existing prom_inst_0.INIT_RAM_00... block in Gowin pROM file")
+
+            updated_text = pattern.sub(new_init_block + "\n", prom_text, count=1)
+
+            with open(output_file, 'w', encoding='utf-8') as f:
+                f.write(updated_text)
+
+            if listing_file:
+                with open(listing_file, 'w', encoding='utf-8') as f:
+                    f.writelines(self.helper.format_listing(listing_mode))
+
+            print("Gowin pROM file updated successfully!")
+            print(f"  Input: {input_file}")
+            print(f"  Output: {output_file}")
+            print(f"  Instructions: {len(binary_lines)}")
+            print(f"  Padded depth: {depth}")
+            print(f"  INIT blocks written: {init_count}")
+            print("  Format: prom_inst_0.INIT_RAM_00..XX defparams")
+            print(f"  Warnings: {len(warnings)}")
+
+            if labels:
+                print(f"  Labels: {len(labels)}")
+            if constants:
+                print(f"  Constants: {len(constants)}")
+            if warnings:
+                print("\n  Warnings:")
+                for warning in warnings:
+                    print(f"    {warning}")
+            if listing_file:
+                print(f"  Listing: {listing_file}")
+
+        except Exception as e:
+            print(f"Error updating Gowin pROM file: {e}")
+            sys.exit(1)
     
     def load_to_eeprom(self, bin_file: str) -> None:
         """Load a binary file to EEPROM"""
@@ -376,6 +541,14 @@ COMMANDS:
     createsvhex <input.asm> [output.mem] [--listing output.lst] [--listing-mode hex|asm|both]
         Assemble and convert to SystemVerilog HEX format
         Example: python main.py createsvhex program.asm program.mem --listing program.lst --listing-mode asm
+
+    createsvmi <input.asm> [output.mi] [--depth N] [--listing output.lst] [--listing-mode hex|asm|both]
+        Assemble and convert to Gowin MI format for pROM initialization
+        Example: python main.py createsvmi program.asm program.mi --depth 2048 --listing program.lst --listing-mode asm
+
+    creategowinprom <input.asm> <gowin_prom.v> [--depth N] [--listing output.lst] [--listing-mode hex|asm|both]
+        Assemble and patch Gowin_pROM INIT_RAM_xx defparams directly
+        Example: python main.py creategowinprom program.asm ../verilog/src/gowin_prom/gowin_prom.v --depth 2048
 
     load <binary.bin>
         Load a binary file to EEPROM
@@ -494,12 +667,13 @@ NOTES:
 
 def main():
     """Main entry point for the CLI"""
-    def parse_assemble_args(arguments):
+    def parse_assemble_args(arguments, allow_depth: bool = False):
         if not arguments:
             raise ValueError("Input file required")
 
         input_file = arguments[0]
         output_file = None
+        depth = None
         listing_file = None
         listing_mode = "hex"
         index = 1
@@ -522,6 +696,20 @@ def main():
                 index += 2
                 continue
 
+            if token == "--depth":
+                if not allow_depth:
+                    raise ValueError("--depth is not supported for this command")
+                if index + 1 >= len(arguments):
+                    raise ValueError("--depth requires a positive integer value")
+                try:
+                    depth = int(arguments[index + 1])
+                except ValueError as exc:
+                    raise ValueError("--depth requires a positive integer value") from exc
+                if depth <= 0:
+                    raise ValueError("--depth requires a positive integer value")
+                index += 2
+                continue
+
             if output_file is None:
                 output_file = token
                 index += 1
@@ -529,7 +717,7 @@ def main():
 
             raise ValueError(f"Unexpected assemble argument: {token}")
 
-        return input_file, output_file, listing_file, listing_mode
+        return input_file, output_file, depth, listing_file, listing_mode
 
     # Parse command line arguments
     if len(sys.argv) < 2:
@@ -553,7 +741,7 @@ def main():
             sys.exit(1)
 
         try:
-            input_file, output_file, listing_file, listing_mode = parse_assemble_args(sys.argv[2:])
+            input_file, output_file, _, listing_file, listing_mode = parse_assemble_args(sys.argv[2:])
         except ValueError as e:
             print(f"Error: {e}")
             print("Usage: python main.py assemble <input.asm> [output.txt] [--listing output.lst] [--listing-mode hex|asm|both]")
@@ -597,12 +785,42 @@ def main():
             print("Usage: python main.py createsvhex <input.asm> [output.mem] [--listing output.lst] [--listing-mode hex|asm|both]")
             sys.exit(1)
         try:
-            input_file, output_file, listing_file, listing_mode = parse_assemble_args(sys.argv[2:])
+            input_file, output_file, _, listing_file, listing_mode = parse_assemble_args(sys.argv[2:])
         except ValueError as e:
             print(f"Error: {e}")
             print("Usage: python main.py createsvhex <input.asm> [output.mem] [--listing output.lst] [--listing-mode hex|asm|both]")
             sys.exit(1)
         cli.create_svhex(input_file, output_file, listing_file, listing_mode)
+
+    elif command == "createsvmi":
+        if len(sys.argv) < 3:
+            print("Error: Input file required")
+            print("Usage: python main.py createsvmi <input.asm> [output.mi] [--depth N] [--listing output.lst] [--listing-mode hex|asm|both]")
+            sys.exit(1)
+        try:
+            input_file, output_file, depth, listing_file, listing_mode = parse_assemble_args(sys.argv[2:], allow_depth=True)
+        except ValueError as e:
+            print(f"Error: {e}")
+            print("Usage: python main.py createsvmi <input.asm> [output.mi] [--depth N] [--listing output.lst] [--listing-mode hex|asm|both]")
+            sys.exit(1)
+        cli.create_svmi(input_file, output_file, depth, listing_file, listing_mode)
+
+    elif command == "creategowinprom":
+        if len(sys.argv) < 4:
+            print("Error: Input assembly file and Gowin pROM file required")
+            print("Usage: python main.py creategowinprom <input.asm> <gowin_prom.v> [--depth N] [--listing output.lst] [--listing-mode hex|asm|both]")
+            sys.exit(1)
+        try:
+            input_file, output_file, depth, listing_file, listing_mode = parse_assemble_args(sys.argv[2:], allow_depth=True)
+        except ValueError as e:
+            print(f"Error: {e}")
+            print("Usage: python main.py creategowinprom <input.asm> <gowin_prom.v> [--depth N] [--listing output.lst] [--listing-mode hex|asm|both]")
+            sys.exit(1)
+        if output_file is None:
+            print("Error: Gowin pROM file path required")
+            print("Usage: python main.py creategowinprom <input.asm> <gowin_prom.v> [--depth N] [--listing output.lst] [--listing-mode hex|asm|both]")
+            sys.exit(1)
+        cli.create_gowin_prom(input_file, output_file, depth or 2048, listing_file, listing_mode)
 
     elif command == "load":
         if len(sys.argv) < 3:

@@ -60,9 +60,7 @@ module tang_nano_9k_top (
 
     logic [7:0] debug_led;
 
-    arnicomp_soc_top #(
-        .PROG_MEM_FILE("rom/program.mem")
-    ) soc (
+    arnicomp_soc_top_gowin soc (
         .cpu_clk(cpu_clk),
         .uart_clk(clk),
         .rst_n(rst_n_debounced),
