@@ -36,7 +36,7 @@ main_loop:
         ldi $UART_RX_VALID_L
         mov marl, ra ; mem_addr = rx valid
         mov rd, m    ; rd = mem[rx_valid]
-        ldi #1
+        ldi #1       
         cmp ra       ; rd == ra
         jne          ; jmp if rx_valid != 1 
 
@@ -54,21 +54,31 @@ main_loop:
         mov rd, rb
         call mul_u8 ; rb = rd*rb
 
-        mov rd, rb
-        call number_to_ascii_func ; rb = ascii to send
+        call get_3_digit ; stack top: ones, then tens, then hundreds
 
-        mov rd, rb
-        call send_char
+        pop rb ; ones
+        pop ra ; tens
+        pop rd ; hundreds
+        push rb ; keep ones for later
+        push ra ; keep tens for later
+
+        ldi $UART_TX_DATA_L
+        mov marl, ra
+
+        call number_to_ascii_func
+        mov m, rb
+
+        pop rd ; tens
+        call number_to_ascii_func
+        mov m, rb
+
+        pop rd ; ones
+        call number_to_ascii_func
+        mov m, rb
 
         jmp main_loop
 
 
-send_char: ; rd = char to send
-    ldi $UART_TX_DATA_L
-    mov marl, ra
-    mov m, rd
-
-    ret
 
 ascii_to_number_func: 
 ; rd = ascii to convert; rb = return number (converted number)
@@ -85,4 +95,51 @@ number_to_ascii_func:
     mov rb, acc
     ret
 
+get_3_digit:
+; rb = 1 byte unsigned number
+; pushes hundreds, tens, ones to stack
+    mov rd, rb
+    mov rb, zero ; rb = counter
+    get_3_digit_loop:
+        ldi #100
+        cmp ra ; ra, rd
+
+        jltu get_3_digit_exit
+        
+        ; sub 100 and count
+        ldi #100
+        sub ra   ; acc = rd - ra ; number-100
+        push acc ; acc = rd - 100 ; new number
+        mov rd, rb
+        addi #1  ; acc = rb + 1
+        mov rb, acc ; rb = rb + 1
+        pop rd      ; rd = new number
+
+        jmp get_3_digit_loop
+
+    get_3_digit_exit:
+        push rb ; rb = 100 count
+        mov rb, zero
+    get_2_digit_loop:
+        ldi #10
+        cmp ra  
+
+        jltu get_2_digit_exit
+
+
+        ; sub 10 and count
+        ldi #10
+        sub ra
+        push acc    ; acc = rd - 10 ; new number
+        mov rd, rb
+        addi #1
+        mov rb, acc ; rb = rb + 1
+        pop rd      ; rd = new number
+        jmp get_2_digit_loop
+
+    get_2_digit_exit:
+        push rb ; rb = 10 count
+        push rd ; rd = remainder (1 count)
+
+    ret
 

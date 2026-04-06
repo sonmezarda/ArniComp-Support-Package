@@ -56,7 +56,7 @@
 001C  [45] mov rd, m
       001C  8F  MOV RD, M
 001D  [47] call ascii_to_number_func
-      001D  C5  LDL RA, #5
+      001D  D5  LDL RA, #21
       001E  32  LDH RA, #2
       001F  A8  MOV PRL, RA
       0020  B4  MOV PRH, ZERO
@@ -75,127 +75,231 @@
 0029  [54] mov rd, rb
       0029  8A  MOV RD, RB
 002A  [55] call mul_u8
-      002A  D3  LDL RA, #19
-      002B  32  LDH RA, #2
+      002A  D4  LDL RA, #20
+      002B  34  LDH RA, #4
       002C  A8  MOV PRL, RA
       002D  B4  MOV PRH, ZERO
       002E  07  JAL
-002F  [57] mov rd, rb
-      002F  8A  MOV RD, RB
-0030  [58] call number_to_ascii_func
-      0030  CC  LDL RA, #12
-      0031  32  LDH RA, #2
-      0032  A8  MOV PRL, RA
-      0033  B4  MOV PRH, ZERO
-      0034  07  JAL
-0035  [60] mov rd, rb
-      0035  8A  MOV RD, RB
-0036  [61] call send_char
-      0036  DF  LDL RA, #31
-      0037  31  LDH RA, #1
-      0038  A8  MOV PRL, RA
-      0039  B4  MOV PRH, ZERO
-      003A  07  JAL
-003B  [63] jmp main_loop
-      003B  D0  LDL RA, #16
-      003C  A8  MOV PRL, RA
-      003D  B4  MOV PRH, ZERO
-      003E  1F  JMP
-003F  [67] ldi $UART_TX_DATA_L
-      003F  D0  LDL RA, #16
-0040  [68] mov marl, ra
-      0040  98  MOV MARL, RA
-0041  [69] mov m, rd
-      0041  B9  MOV M, RD
-0042  [71] ret
-      0042  AD  MOV PRL, LRL
-      0043  B6  MOV PRH, LRH
-      0044  1F  JMP
-0045  [76] ldi $NUMBER_OFFSET
-      0045  D0  LDL RA, #16
-      0046  31  LDH RA, #1
-0047  [77] sub ra
-      0047  60  SUB RA
-0048  [78] mov rb, acc
-      0048  93  MOV RB, ACC
-0049  [79] ret
-      0049  AD  MOV PRL, LRL
-      004A  B6  MOV PRH, LRH
-      004B  1F  JMP
-004C  [83] ldi $NUMBER_OFFSET
-      004C  D0  LDL RA, #16
-      004D  31  LDH RA, #1
-004E  [84] add ra
-      004E  40  ADD RA
-004F  [85] mov rb, acc
-      004F  93  MOV RB, ACC
-0050  [86] ret
-      0050  AD  MOV PRL, LRL
-      0051  B6  MOV PRH, LRH
-      0052  1F  JMP
+002F  [57] call get_3_digit
+      002F  C3  LDL RA, #3
+      0030  33  LDH RA, #3
+      0031  A8  MOV PRL, RA
+      0032  B4  MOV PRH, ZERO
+      0033  07  JAL
+0034  [59] pop rd
+      0034  29  POP RD
+0035  [60] pop ra
+      0035  28  POP RA
+0036  [61] pop rb
+      0036  2A  POP RB
+0037  [62] push rb
+      0037  22  PUSH RB
+0038  [63] push ra
+      0038  20  PUSH RA
+0039  [66] call number_to_ascii_func
+      0039  DC  LDL RA, #28
+      003A  32  LDH RA, #2
+      003B  A8  MOV PRL, RA
+      003C  B4  MOV PRH, ZERO
+      003D  07  JAL
+003E  [67] ldi $UART_TX_DATA_L
+      003E  D0  LDL RA, #16
+003F  [68] mov marl, ra
+      003F  98  MOV MARL, RA
+0040  [69] mov m, rd
+      0040  B9  MOV M, RD
+0041  [71] pop rd
+      0041  29  POP RD
+0042  [72] call number_to_ascii_func
+      0042  DC  LDL RA, #28
+      0043  32  LDH RA, #2
+      0044  A8  MOV PRL, RA
+      0045  B4  MOV PRH, ZERO
+      0046  07  JAL
+0047  [73] mov marl, ra
+      0047  98  MOV MARL, RA
+0048  [74] mov m, rd
+      0048  B9  MOV M, RD
+0049  [76] pop rd
+      0049  29  POP RD
+004A  [77] call number_to_ascii_func
+      004A  DC  LDL RA, #28
+      004B  32  LDH RA, #2
+      004C  A8  MOV PRL, RA
+      004D  B4  MOV PRH, ZERO
+      004E  07  JAL
+004F  [78] mov marl, ra
+      004F  98  MOV MARL, RA
+0050  [79] mov m, rd
+      0050  B9  MOV M, RD
+0051  [81] jmp main_loop
+      0051  D0  LDL RA, #16
+      0052  A8  MOV PRL, RA
+      0053  B4  MOV PRH, ZERO
+      0054  1F  JMP
+0055  [88] ldi $NUMBER_OFFSET
+      0055  D0  LDL RA, #16
+      0056  31  LDH RA, #1
+0057  [89] sub ra
+      0057  60  SUB RA
+0058  [90] mov rb, acc
+      0058  93  MOV RB, ACC
+0059  [91] ret
+      0059  AD  MOV PRL, LRL
+      005A  B6  MOV PRH, LRH
+      005B  1F  JMP
+005C  [95] ldi $NUMBER_OFFSET
+      005C  D0  LDL RA, #16
+      005D  31  LDH RA, #1
+005E  [96] add ra
+      005E  40  ADD RA
+005F  [97] mov rb, acc
+      005F  93  MOV RB, ACC
+0060  [98] ret
+      0060  AD  MOV PRL, LRL
+      0061  B6  MOV PRH, LRH
+      0062  1F  JMP
+0063  [103] mov rd, rb
+      0063  8A  MOV RD, RB
+0064  [104] mov rb, zero
+      0064  94  MOV RB, ZERO
+0065  [106] ldi #100
+      0065  C4  LDL RA, #4
+      0066  33  LDH RA, #3
+0067  [107] cmp ra
+      0067  78  CMP RA
+0068  [109] jltu get_3_digit_exit
+      0068  DA  LDL RA, #26
+      0069  33  LDH RA, #3
+      006A  A8  MOV PRL, RA
+      006B  B4  MOV PRH, ZERO
+      006C  1B  JCC
+006D  [112] ldi #100
+      006D  C4  LDL RA, #4
+      006E  33  LDH RA, #3
+006F  [113] sub ra
+      006F  60  SUB RA
+0070  [114] push acc
+      0070  23  PUSH ACC
+0071  [115] mov rd, rb
+      0071  8A  MOV RD, RB
+0072  [116] addi #1
+      0072  49  ADDI #1
+0073  [117] mov rb, acc
+      0073  93  MOV RB, ACC
+0074  [118] pop rd
+      0074  29  POP RD
+0075  [120] jmp get_3_digit_loop
+      0075  C5  LDL RA, #5
+      0076  33  LDH RA, #3
+      0077  A8  MOV PRL, RA
+      0078  B4  MOV PRH, ZERO
+      0079  1F  JMP
+007A  [123] push rb
+      007A  22  PUSH RB
+007B  [124] mov rb, zero
+      007B  94  MOV RB, ZERO
+007C  [126] ldi #10
+      007C  CA  LDL RA, #10
+007D  [127] cmp ra
+      007D  78  CMP RA
+007E  [129] jltu get_2_digit_exit
+      007E  CF  LDL RA, #15
+      007F  34  LDH RA, #4
+      0080  A8  MOV PRL, RA
+      0081  B4  MOV PRH, ZERO
+      0082  1B  JCC
+0083  [133] ldi #10
+      0083  CA  LDL RA, #10
+0084  [134] sub ra
+      0084  60  SUB RA
+0085  [135] push acc
+      0085  23  PUSH ACC
+0086  [136] mov rd, rb
+      0086  8A  MOV RD, RB
+0087  [137] addi #1
+      0087  49  ADDI #1
+0088  [138] mov rb, acc
+      0088  93  MOV RB, ACC
+0089  [139] pop rd
+      0089  29  POP RD
+008A  [140] jmp get_2_digit_loop
+      008A  DC  LDL RA, #28
+      008B  33  LDH RA, #3
+      008C  A8  MOV PRL, RA
+      008D  B4  MOV PRH, ZERO
+      008E  1F  JMP
+008F  [143] push rb
+      008F  22  PUSH RB
+0090  [144] push rd
+      0090  21  PUSH RD
+0091  [146] ret
+      0091  AD  MOV PRL, LRL
+      0092  B6  MOV PRH, LRH
+      0093  1F  JMP
 
 ; Source: D:\Projects\ArniComp-Support-Package\assembler\lib\math.asm
-0053  [21] mov ra, rb
-      0053  82  MOV RA, RB
-0054  [22] mov rb, rd
-      0054  91  MOV RB, RD
-0055  [23] clr rd
-      0055  8C  MOV RD, ZERO
-0056  [27] push ra
-      0056  20  PUSH RA
-0057  [28] ldi LOW(@mul_u8_done)
-      0057  D1  LDL RA, #17
-      0058  33  LDH RA, #3
-0059  [29] mov prl, ra
-      0059  A8  MOV PRL, RA
-005A  [30] ldi HIGH(@mul_u8_done)
-      005A  C0  LDL RA, #0
-005B  [31] mov prh, ra
-      005B  B0  MOV PRH, RA
-005C  [32] pop ra
-      005C  28  POP RA
-005D  [35] push rd
-      005D  21  PUSH RD
-005E  [36] mov rd, ra
-      005E  88  MOV RD, RA
-005F  [37] cmp zero
-      005F  7C  CMP ZERO
-0060  [38] pop rd
-      0060  29  POP RD
-0061  [39] jeq
-      0061  18  JEQ
-0062  [42] add rb
-      0062  42  ADD RB
-0063  [43] mov rd, acc
-      0063  8B  MOV RD, ACC
-0064  [46] push rd
-      0064  21  PUSH RD
-0065  [47] mov rd, ra
-      0065  88  MOV RD, RA
-0066  [48] subi #1
-      0066  69  SUBI #1
-0067  [49] mov ra, acc
-      0067  83  MOV RA, ACC
-0068  [50] pop rd
-      0068  29  POP RD
-0069  [53] push ra
-      0069  20  PUSH RA
-006A  [54] ldi LOW(@mul_u8_check)
-      006A  D6  LDL RA, #22
-      006B  32  LDH RA, #2
-006C  [55] mov prl, ra
-      006C  A8  MOV PRL, RA
-006D  [56] ldi HIGH(@mul_u8_check)
-      006D  C0  LDL RA, #0
-006E  [57] mov prh, ra
-      006E  B0  MOV PRH, RA
-006F  [58] pop ra
-      006F  28  POP RA
-0070  [59] jmp
-      0070  1F  JMP
-0071  [62] mov rb, rd
-      0071  91  MOV RB, RD
-0072  [63] ret
-      0072  AD  MOV PRL, LRL
-      0073  B6  MOV PRH, LRH
-      0074  1F  JMP
+0094  [21] mov ra, rb
+      0094  82  MOV RA, RB
+0095  [22] mov rb, rd
+      0095  91  MOV RB, RD
+0096  [23] clr rd
+      0096  8C  MOV RD, ZERO
+0097  [27] push ra
+      0097  20  PUSH RA
+0098  [28] ldi LOW(@mul_u8_done)
+      0098  D2  LDL RA, #18
+      0099  35  LDH RA, #5
+009A  [29] mov prl, ra
+      009A  A8  MOV PRL, RA
+009B  [30] ldi HIGH(@mul_u8_done)
+      009B  C0  LDL RA, #0
+009C  [31] mov prh, ra
+      009C  B0  MOV PRH, RA
+009D  [32] pop ra
+      009D  28  POP RA
+009E  [35] push rd
+      009E  21  PUSH RD
+009F  [36] mov rd, ra
+      009F  88  MOV RD, RA
+00A0  [37] cmp zero
+      00A0  7C  CMP ZERO
+00A1  [38] pop rd
+      00A1  29  POP RD
+00A2  [39] jeq
+      00A2  18  JEQ
+00A3  [42] add rb
+      00A3  42  ADD RB
+00A4  [43] mov rd, acc
+      00A4  8B  MOV RD, ACC
+00A5  [46] push rd
+      00A5  21  PUSH RD
+00A6  [47] mov rd, ra
+      00A6  88  MOV RD, RA
+00A7  [48] subi #1
+      00A7  69  SUBI #1
+00A8  [49] mov ra, acc
+      00A8  83  MOV RA, ACC
+00A9  [50] pop rd
+      00A9  29  POP RD
+00AA  [53] push ra
+      00AA  20  PUSH RA
+00AB  [54] ldi LOW(@mul_u8_check)
+      00AB  D7  LDL RA, #23
+      00AC  34  LDH RA, #4
+00AD  [55] mov prl, ra
+      00AD  A8  MOV PRL, RA
+00AE  [56] ldi HIGH(@mul_u8_check)
+      00AE  C0  LDL RA, #0
+00AF  [57] mov prh, ra
+      00AF  B0  MOV PRH, RA
+00B0  [58] pop ra
+      00B0  28  POP RA
+00B1  [59] jmp
+      00B1  1F  JMP
+00B2  [62] mov rb, rd
+      00B2  91  MOV RB, RD
+00B3  [63] ret
+      00B3  AD  MOV PRL, LRL
+      00B4  B6  MOV PRH, LRH
+      00B5  1F  JMP
