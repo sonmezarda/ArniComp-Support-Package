@@ -1,305 +1,228 @@
-; Source: .\examples\fpga_square_uart.asm
-0000  [8] mov prh, zero
-      0000  B4  MOV PRH, ZERO
-0001  [9] mov prl, zero
+; Source: .\examples\fpga\gpio_pwm_1khz_sweep_demo.asm
+0000  [29] CLR RA
+      0000  84  MOV RA, ZERO
+0001  [30] CLR PRL
       0001  AC  MOV PRL, ZERO
-0002  [10] mov marl, zero
-      0002  9C  MOV MARL, ZERO
-0003  [11] mov marh, zero
-      0003  A4  MOV MARH, ZERO
-0004  [13] ldi $UART_BASE_H
-      0004  C9  LDL RA, #9
-0005  [14] mov marh, ra
-      0005  A0  MOV MARH, RA
-0006  [16] ldi $UART_CONTROL_L
-      0006  C0  LDL RA, #0
-      0007  32  LDH RA, #2
-0008  [17] mov marl, ra
+0002  [31] CLR PRH
+      0002  B4  MOV PRH, ZERO
+0003  [32] CLR MARL
+      0003  9C  MOV MARL, ZERO
+0004  [33] CLR MARH
+      0004  A4  MOV MARH, ZERO
+0005  [35] LDI $GPIO_BASE_H
+      0005  C8  LDL RA, #8
+0006  [36] MOV MARH, RA
+      0006  A0  MOV MARH, RA
+0007  [39] LDI $GPIO0_PWM_PERIOD_LO
+      0007  C8  LDL RA, #8
+0008  [40] MOV MARL, RA
       0008  98  MOV MARL, RA
-0009  [19] ldi #0b00000111
-      0009  C7  LDL RA, #7
-000A  [20] mov m, ra
-      000A  B8  MOV M, RA
-000B  [22] ldi $UART_BAUDSEL_L
-      000B  C0  LDL RA, #0
-      000C  31  LDH RA, #1
-000D  [23] mov marl, ra
+0009  [41] LDI $PWM_PERIOD_LO
+      0009  D7  LDL RA, #23
+      000A  33  LDH RA, #3
+000B  [42] MOV M, RA
+      000B  B8  MOV M, RA
+000C  [44] LDI $GPIO0_PWM_PERIOD_MI
+      000C  C9  LDL RA, #9
+000D  [45] MOV MARL, RA
       000D  98  MOV MARL, RA
-000E  [25] ldi #2
-      000E  C2  LDL RA, #2
-000F  [26] mov m, ra
-      000F  B8  MOV M, RA
-0010  [29] ldi @wait_until_msg
-      0010  D4  LDL RA, #20
-0011  [30] mov prl, ra
-      0011  A8  MOV PRL, RA
-0012  [31] ldi $UART_BASE_H
-      0012  C9  LDL RA, #9
-0013  [32] mov marh, ra
-      0013  A0  MOV MARH, RA
-0014  [36] ldi $UART_RX_VALID_L
-      0014  C1  LDL RA, #1
-0015  [37] mov marl, ra
-      0015  98  MOV MARL, RA
-0016  [38] mov rd, m
-      0016  8F  MOV RD, M
-0017  [39] ldi #1
-      0017  C1  LDL RA, #1
-0018  [40] cmp ra
-      0018  78  CMP RA
-0019  [41] jne
-      0019  19  JNE
-001A  [43] ldi $UART_RX_DATA_L
-      001A  C0  LDL RA, #0
-001B  [44] mov marl, ra
-      001B  98  MOV MARL, RA
-001C  [45] mov rd, m
-      001C  8F  MOV RD, M
-001D  [47] call ascii_to_number_func
-      001D  D5  LDL RA, #21
-      001E  32  LDH RA, #2
-      001F  A8  MOV PRL, RA
-      0020  B4  MOV PRH, ZERO
-      0021  07  JAL
-0022  [49] mov rd, rb
-      0022  8A  MOV RD, RB
-0023  [50] ldi #10
-      0023  CA  LDL RA, #10
-0024  [51] cmp ra
-      0024  78  CMP RA
-0025  [52] jgeu main_loop
-      0025  D0  LDL RA, #16
-      0026  A8  MOV PRL, RA
-      0027  B4  MOV PRH, ZERO
-      0028  1A  JCS
-0029  [54] mov rd, rb
-      0029  8A  MOV RD, RB
-002A  [55] call mul_u8
-      002A  D4  LDL RA, #20
-      002B  34  LDH RA, #4
-      002C  A8  MOV PRL, RA
-      002D  B4  MOV PRH, ZERO
-      002E  07  JAL
-002F  [57] call get_3_digit
-      002F  C3  LDL RA, #3
-      0030  33  LDH RA, #3
-      0031  A8  MOV PRL, RA
-      0032  B4  MOV PRH, ZERO
-      0033  07  JAL
-0034  [59] pop rd
-      0034  29  POP RD
-0035  [60] pop ra
-      0035  28  POP RA
-0036  [61] pop rb
-      0036  2A  POP RB
-0037  [62] push rb
-      0037  22  PUSH RB
-0038  [63] push ra
-      0038  20  PUSH RA
-0039  [66] call number_to_ascii_func
-      0039  DC  LDL RA, #28
-      003A  32  LDH RA, #2
-      003B  A8  MOV PRL, RA
-      003C  B4  MOV PRH, ZERO
-      003D  07  JAL
-003E  [67] ldi $UART_TX_DATA_L
-      003E  D0  LDL RA, #16
-003F  [68] mov marl, ra
-      003F  98  MOV MARL, RA
-0040  [69] mov m, rd
-      0040  B9  MOV M, RD
-0041  [71] pop rd
-      0041  29  POP RD
-0042  [72] call number_to_ascii_func
-      0042  DC  LDL RA, #28
-      0043  32  LDH RA, #2
-      0044  A8  MOV PRL, RA
-      0045  B4  MOV PRH, ZERO
-      0046  07  JAL
-0047  [73] mov marl, ra
-      0047  98  MOV MARL, RA
-0048  [74] mov m, rd
-      0048  B9  MOV M, RD
-0049  [76] pop rd
-      0049  29  POP RD
-004A  [77] call number_to_ascii_func
-      004A  DC  LDL RA, #28
-      004B  32  LDH RA, #2
-      004C  A8  MOV PRL, RA
-      004D  B4  MOV PRH, ZERO
-      004E  07  JAL
-004F  [78] mov marl, ra
-      004F  98  MOV MARL, RA
-0050  [79] mov m, rd
-      0050  B9  MOV M, RD
-0051  [81] jmp main_loop
-      0051  D0  LDL RA, #16
-      0052  A8  MOV PRL, RA
-      0053  B4  MOV PRH, ZERO
-      0054  1F  JMP
-0055  [88] ldi $NUMBER_OFFSET
-      0055  D0  LDL RA, #16
-      0056  31  LDH RA, #1
-0057  [89] sub ra
-      0057  60  SUB RA
-0058  [90] mov rb, acc
-      0058  93  MOV RB, ACC
-0059  [91] ret
-      0059  AD  MOV PRL, LRL
-      005A  B6  MOV PRH, LRH
-      005B  1F  JMP
-005C  [95] ldi $NUMBER_OFFSET
-      005C  D0  LDL RA, #16
-      005D  31  LDH RA, #1
-005E  [96] add ra
-      005E  40  ADD RA
-005F  [97] mov rb, acc
-      005F  93  MOV RB, ACC
-0060  [98] ret
-      0060  AD  MOV PRL, LRL
-      0061  B6  MOV PRH, LRH
-      0062  1F  JMP
-0063  [103] mov rd, rb
-      0063  8A  MOV RD, RB
-0064  [104] mov rb, zero
-      0064  94  MOV RB, ZERO
-0065  [106] ldi #100
-      0065  C4  LDL RA, #4
-      0066  33  LDH RA, #3
-0067  [107] cmp ra
-      0067  78  CMP RA
-0068  [109] jltu get_3_digit_exit
-      0068  DA  LDL RA, #26
-      0069  33  LDH RA, #3
-      006A  A8  MOV PRL, RA
-      006B  B4  MOV PRH, ZERO
-      006C  1B  JCC
-006D  [112] ldi #100
-      006D  C4  LDL RA, #4
-      006E  33  LDH RA, #3
-006F  [113] sub ra
-      006F  60  SUB RA
-0070  [114] push acc
-      0070  23  PUSH ACC
-0071  [115] mov rd, rb
-      0071  8A  MOV RD, RB
-0072  [116] addi #1
-      0072  49  ADDI #1
-0073  [117] mov rb, acc
-      0073  93  MOV RB, ACC
-0074  [118] pop rd
-      0074  29  POP RD
-0075  [120] jmp get_3_digit_loop
-      0075  C5  LDL RA, #5
-      0076  33  LDH RA, #3
-      0077  A8  MOV PRL, RA
-      0078  B4  MOV PRH, ZERO
-      0079  1F  JMP
-007A  [123] push rb
-      007A  22  PUSH RB
-007B  [124] mov rb, zero
-      007B  94  MOV RB, ZERO
-007C  [126] ldi #10
-      007C  CA  LDL RA, #10
-007D  [127] cmp ra
-      007D  78  CMP RA
-007E  [129] jltu get_2_digit_exit
-      007E  CF  LDL RA, #15
-      007F  34  LDH RA, #4
-      0080  A8  MOV PRL, RA
-      0081  B4  MOV PRH, ZERO
-      0082  1B  JCC
-0083  [133] ldi #10
-      0083  CA  LDL RA, #10
-0084  [134] sub ra
-      0084  60  SUB RA
-0085  [135] push acc
-      0085  23  PUSH ACC
-0086  [136] mov rd, rb
-      0086  8A  MOV RD, RB
-0087  [137] addi #1
-      0087  49  ADDI #1
-0088  [138] mov rb, acc
-      0088  93  MOV RB, ACC
-0089  [139] pop rd
-      0089  29  POP RD
-008A  [140] jmp get_2_digit_loop
-      008A  DC  LDL RA, #28
-      008B  33  LDH RA, #3
-      008C  A8  MOV PRL, RA
-      008D  B4  MOV PRH, ZERO
-      008E  1F  JMP
-008F  [143] push rb
-      008F  22  PUSH RB
-0090  [144] push rd
-      0090  21  PUSH RD
-0091  [146] ret
-      0091  AD  MOV PRL, LRL
-      0092  B6  MOV PRH, LRH
-      0093  1F  JMP
-
-; Source: D:\Projects\ArniComp-Support-Package\assembler\lib\math.asm
-0094  [21] mov ra, rb
-      0094  82  MOV RA, RB
-0095  [22] mov rb, rd
-      0095  91  MOV RB, RD
-0096  [23] clr rd
-      0096  8C  MOV RD, ZERO
-0097  [27] push ra
-      0097  20  PUSH RA
-0098  [28] ldi LOW(@mul_u8_done)
-      0098  D2  LDL RA, #18
-      0099  35  LDH RA, #5
-009A  [29] mov prl, ra
-      009A  A8  MOV PRL, RA
-009B  [30] ldi HIGH(@mul_u8_done)
-      009B  C0  LDL RA, #0
-009C  [31] mov prh, ra
-      009C  B0  MOV PRH, RA
-009D  [32] pop ra
-      009D  28  POP RA
-009E  [35] push rd
-      009E  21  PUSH RD
-009F  [36] mov rd, ra
-      009F  88  MOV RD, RA
-00A0  [37] cmp zero
-      00A0  7C  CMP ZERO
-00A1  [38] pop rd
-      00A1  29  POP RD
-00A2  [39] jeq
-      00A2  18  JEQ
-00A3  [42] add rb
-      00A3  42  ADD RB
-00A4  [43] mov rd, acc
-      00A4  8B  MOV RD, ACC
-00A5  [46] push rd
-      00A5  21  PUSH RD
-00A6  [47] mov rd, ra
-      00A6  88  MOV RD, RA
-00A7  [48] subi #1
-      00A7  69  SUBI #1
-00A8  [49] mov ra, acc
-      00A8  83  MOV RA, ACC
-00A9  [50] pop rd
-      00A9  29  POP RD
-00AA  [53] push ra
-      00AA  20  PUSH RA
-00AB  [54] ldi LOW(@mul_u8_check)
-      00AB  D7  LDL RA, #23
-      00AC  34  LDH RA, #4
-00AD  [55] mov prl, ra
-      00AD  A8  MOV PRL, RA
-00AE  [56] ldi HIGH(@mul_u8_check)
-      00AE  C0  LDL RA, #0
-00AF  [57] mov prh, ra
-      00AF  B0  MOV PRH, RA
-00B0  [58] pop ra
-      00B0  28  POP RA
-00B1  [59] jmp
-      00B1  1F  JMP
-00B2  [62] mov rb, rd
-      00B2  91  MOV RB, RD
-00B3  [63] ret
-      00B3  AD  MOV PRL, LRL
-      00B4  B6  MOV PRH, LRH
-      00B5  1F  JMP
+000E  [46] LDI $PWM_PERIOD_MI
+      000E  C9  LDL RA, #9
+      000F  33  LDH RA, #3
+0010  [47] MOV M, RA
+      0010  B8  MOV M, RA
+0011  [49] LDI $GPIO0_PWM_PERIOD_HI
+      0011  CA  LDL RA, #10
+0012  [50] MOV MARL, RA
+      0012  98  MOV MARL, RA
+0013  [51] LDI $PWM_PERIOD_HI
+      0013  C0  LDL RA, #0
+0014  [52] MOV M, RA
+      0014  B8  MOV M, RA
+0015  [55] LDI $GPIO_BIT1_DIR_L
+      0015  D1  LDL RA, #17
+      0016  31  LDH RA, #1
+0017  [56] MOV MARL, RA
+      0017  98  MOV MARL, RA
+0018  [57] LDI #1
+      0018  C1  LDL RA, #1
+0019  [58] MOV M, RA
+      0019  B8  MOV M, RA
+001A  [61] LDI $GPIO_BIT1_OUT_L
+      001A  C1  LDL RA, #1
+      001B  31  LDH RA, #1
+001C  [62] MOV MARL, RA
+      001C  98  MOV MARL, RA
+001D  [63] CLR RA
+      001D  84  MOV RA, ZERO
+001E  [64] MOV M, RA
+      001E  B8  MOV M, RA
+001F  [67] LDI $GPIO_BIT1_PWM_EN_L
+      001F  C1  LDL RA, #1
+      0020  32  LDH RA, #2
+0021  [68] MOV MARL, RA
+      0021  98  MOV MARL, RA
+0022  [69] LDI #1
+      0022  C1  LDL RA, #1
+0023  [70] MOV M, RA
+      0023  B8  MOV M, RA
+0024  [73] CLR RA
+      0024  84  MOV RA, ZERO
+0025  [74] MOV RD, RA
+      0025  88  MOV RD, RA
+0026  [75] MOV RB, RA
+      0026  90  MOV RB, RA
+0027  [79] LDI $GPIO_BIT1_DUTY_LO
+      0027  D2  LDL RA, #18
+      0028  32  LDH RA, #2
+0029  [80] MOV MARL, RA
+      0029  98  MOV MARL, RA
+002A  [81] MOV RA, RD
+      002A  81  MOV RA, RD
+002B  [82] MOV M, RA
+      002B  B8  MOV M, RA
+002C  [84] INC #1
+      002C  02  INC #1
+002D  [85] MOV RA, RB
+      002D  82  MOV RA, RB
+002E  [86] MOV M, RA
+      002E  B8  MOV M, RA
+002F  [89] CLR RA
+      002F  84  MOV RA, ZERO
+0030  [90] NOT RA
+      0030  58  NOT RA
+0031  [91] MOV RA, ACC
+      0031  83  MOV RA, ACC
+0032  [92] CMP RA
+      0032  78  CMP RA
+0033  [93] JNE inc_low
+      0033  C9  LDL RA, #9
+      0034  32  LDH RA, #2
+      0035  A8  MOV PRL, RA
+      0036  B4  MOV PRH, ZERO
+      0037  19  JNE
+0038  [96] MOV RD, RB
+      0038  8A  MOV RD, RB
+0039  [97] LDI $DUTY_HI_MAX
+      0039  CF  LDL RA, #15
+003A  [98] CMP RA
+      003A  78  CMP RA
+003B  [99] JEQ prep_ramp_down
+      003B  D0  LDL RA, #16
+      003C  32  LDH RA, #2
+      003D  A8  MOV PRL, RA
+      003E  B4  MOV PRH, ZERO
+      003F  18  JEQ
+0040  [102] ADDI #1
+      0040  49  ADDI #1
+0041  [103] MOV RB, ACC
+      0041  93  MOV RB, ACC
+0042  [104] CLR RA
+      0042  84  MOV RA, ZERO
+0043  [105] MOV RD, RA
+      0043  88  MOV RD, RA
+0044  [106] JMPA ramp_up
+      0044  C7  LDL RA, #7
+      0045  31  LDH RA, #1
+      0046  A8  MOV PRL, RA
+      0047  B4  MOV PRH, ZERO
+      0048  1F  JMP
+0049  [109] ADDI #1
+      0049  49  ADDI #1
+004A  [110] MOV RD, ACC
+      004A  8B  MOV RD, ACC
+004B  [111] JMPA ramp_up
+      004B  C7  LDL RA, #7
+      004C  31  LDH RA, #1
+      004D  A8  MOV PRL, RA
+      004E  B4  MOV PRH, ZERO
+      004F  1F  JMP
+0050  [114] CLR RA
+      0050  84  MOV RA, ZERO
+0051  [115] NOT RA
+      0051  58  NOT RA
+0052  [116] MOV RD, ACC
+      0052  8B  MOV RD, ACC
+0053  [117] LDI $DUTY_HI_MAX
+      0053  CF  LDL RA, #15
+0054  [118] MOV RB, RA
+      0054  90  MOV RB, RA
+0055  [119] JMPA ramp_down
+      0055  DA  LDL RA, #26
+      0056  32  LDH RA, #2
+      0057  A8  MOV PRL, RA
+      0058  B4  MOV PRH, ZERO
+      0059  1F  JMP
+005A  [123] LDI $GPIO_BIT1_DUTY_LO
+      005A  D2  LDL RA, #18
+      005B  32  LDH RA, #2
+005C  [124] MOV MARL, RA
+      005C  98  MOV MARL, RA
+005D  [125] MOV RA, RD
+      005D  81  MOV RA, RD
+005E  [126] MOV M, RA
+      005E  B8  MOV M, RA
+005F  [128] INC #1
+      005F  02  INC #1
+0060  [129] MOV RA, RB
+      0060  82  MOV RA, RB
+0061  [130] MOV M, RA
+      0061  B8  MOV M, RA
+0062  [133] CLR RA
+      0062  84  MOV RA, ZERO
+0063  [134] CMP RA
+      0063  78  CMP RA
+0064  [135] JEQ low_zero
+      0064  D0  LDL RA, #16
+      0065  33  LDH RA, #3
+      0066  A8  MOV PRL, RA
+      0067  B4  MOV PRH, ZERO
+      0068  18  JEQ
+0069  [136] SUBI #1
+      0069  69  SUBI #1
+006A  [137] MOV RD, ACC
+      006A  8B  MOV RD, ACC
+006B  [138] JMPA ramp_down
+      006B  DA  LDL RA, #26
+      006C  32  LDH RA, #2
+      006D  A8  MOV PRL, RA
+      006E  B4  MOV PRH, ZERO
+      006F  1F  JMP
+0070  [142] MOV RD, RB
+      0070  8A  MOV RD, RB
+0071  [143] CLR RA
+      0071  84  MOV RA, ZERO
+0072  [144] CMP RA
+      0072  78  CMP RA
+0073  [145] JEQ prep_ramp_up
+      0073  C2  LDL RA, #2
+      0074  34  LDH RA, #4
+      0075  A8  MOV PRL, RA
+      0076  B4  MOV PRH, ZERO
+      0077  18  JEQ
+0078  [148] SUBI #1
+      0078  69  SUBI #1
+0079  [149] MOV RB, ACC
+      0079  93  MOV RB, ACC
+007A  [150] CLR RA
+      007A  84  MOV RA, ZERO
+007B  [151] NOT RA
+      007B  58  NOT RA
+007C  [152] MOV RD, ACC
+      007C  8B  MOV RD, ACC
+007D  [153] JMPA ramp_down
+      007D  DA  LDL RA, #26
+      007E  32  LDH RA, #2
+      007F  A8  MOV PRL, RA
+      0080  B4  MOV PRH, ZERO
+      0081  1F  JMP
+0082  [156] CLR RD
+      0082  8C  MOV RD, ZERO
+0083  [157] CLR RB
+      0083  94  MOV RB, ZERO
+0084  [158] JMPA ramp_up
+      0084  C7  LDL RA, #7
+      0085  31  LDH RA, #1
+      0086  A8  MOV PRL, RA
+      0087  B4  MOV PRH, ZERO
+      0088  1F  JMP

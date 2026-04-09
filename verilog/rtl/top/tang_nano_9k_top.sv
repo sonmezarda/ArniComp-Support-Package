@@ -5,6 +5,7 @@ module tang_nano_9k_top (
     input  logic       rst_n,
     input  logic       btn_run,
     input  logic       uart_rx,
+    inout  tri   [7:0] gpio,
     output logic [5:0] led,
     output logic       uart_tx
 );
@@ -63,8 +64,10 @@ module tang_nano_9k_top (
     arnicomp_soc_top_gowin soc (
         .cpu_clk(cpu_clk),
         .uart_clk(clk),
+        .pwm_clk(clk),
         .rst_n(rst_n_debounced),
         .uart_rx(uart_rx),
+        .gpio(gpio),
         .uart_tx(uart_tx),
         .debug_led(debug_led)
     );

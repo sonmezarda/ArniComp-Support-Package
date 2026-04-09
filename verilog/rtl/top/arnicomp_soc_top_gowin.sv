@@ -3,13 +3,17 @@
 module arnicomp_soc_top_gowin #(
     parameter int RAM_SIZE = 2048,
     parameter int STACK_SIZE = 256,
+    parameter int GPIO_WIDTH = 8,
+    parameter int PWM_DUTY_WIDTH = 12,
     parameter logic [15:0] STACK_BASE_ADDR = 16'h0D00,
     parameter logic [15:0] STACK_END_ADDR  = 16'h0DFF
 )(
     input  logic       cpu_clk,
     input  logic       uart_clk,
+    input  logic       pwm_clk,
     input  logic       rst_n,
     input  logic       uart_rx,
+    inout  tri   [GPIO_WIDTH-1:0] gpio,
 
     output logic       uart_tx,
     output logic [7:0] debug_led
@@ -36,15 +40,22 @@ module arnicomp_soc_top_gowin #(
 
     logic [7:0]  ram_rdata;
     logic [7:0]  stack_rdata;
+    logic [7:0]  gpio_rdata;
     logic [7:0]  uart_rdata;
     logic [7:0]  sys_rdata;
     logic [7:0]  sys_led_reg_out;
+    logic [GPIO_WIDTH-1:0] gpio_in;
+    logic [GPIO_WIDTH-1:0] gpio_out;
+    logic [GPIO_WIDTH-1:0] gpio_oe;
     logic        ram_we;
     logic        stack_we;
+    logic        gpio_we;
+    logic        gpio_re;
     logic        uart_we;
     logic        uart_re;
     logic        sys_led_we;
     logic        sys_led_sel;
+    genvar       gpio_idx;
 
     arnicomp_top_gowin #(
         .STACK_PTR_RESET_VALUE(STACK_BASE_ADDR)
@@ -87,6 +98,8 @@ module arnicomp_soc_top_gowin #(
 
     assign ram_we      = mem_wen && ram_sel;
     assign stack_we    = mem_wen && stack_sel;
+    assign gpio_we     = mem_wen && gpio_sel;
+    assign gpio_re     = mem_ren && gpio_sel;
     assign uart_we     = mem_wen && uart_sel;
     assign uart_re     = mem_ren && uart_sel;
     assign sys_led_sel = sys_sel && (mem_addr[7:0] == SYS_LED_OFFSET);
@@ -110,6 +123,24 @@ module arnicomp_soc_top_gowin #(
         .addr(mem_addr),
         .data_in(mem_wdata),
         .data_out(stack_rdata)
+    );
+
+    gpio_peripheral #(
+        .GPIO_WIDTH(GPIO_WIDTH),
+        .PWM_DUTY_WIDTH(PWM_DUTY_WIDTH)
+    ) gpio_mmio (
+        .cpu_clk(cpu_clk),
+        .pwm_clk(pwm_clk),
+        .rst_n(rst_n),
+        .sel(gpio_sel),
+        .we(gpio_we),
+        .re(gpio_re),
+        .offset(mem_addr[7:0]),
+        .wdata(mem_wdata),
+        .gpio_in(gpio_in),
+        .rdata(gpio_rdata),
+        .gpio_out(gpio_out),
+        .gpio_oe(gpio_oe)
     );
 
     uart_peripheral uart_mmio (
@@ -139,10 +170,18 @@ module arnicomp_soc_top_gowin #(
 
     assign mem_rdata = ram_sel   ? ram_rdata   :
                        stack_sel ? stack_rdata :
+                       gpio_sel  ? gpio_rdata  :
                        uart_sel  ? uart_rdata  :
                        sys_sel   ? sys_rdata   :
                        8'h00;
 
     assign debug_led = sys_led_reg_out;
+
+    generate
+        for (gpio_idx = 0; gpio_idx < GPIO_WIDTH; gpio_idx = gpio_idx + 1) begin : gen_gpio_pads
+            assign gpio[gpio_idx] = gpio_oe[gpio_idx] ? gpio_out[gpio_idx] : 1'bz;
+            assign gpio_in[gpio_idx] = gpio[gpio_idx];
+        end
+    endgenerate
 
 endmodule

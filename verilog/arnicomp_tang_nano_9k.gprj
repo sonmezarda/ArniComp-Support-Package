@@ -21,6 +21,7 @@
         <File path="rtl/mem/data_memory.sv" type="file.verilog" enable="1"/>
         <File path="rtl/mem/memory_map_unit.sv" type="file.verilog" enable="1"/>
         <File path="rtl/mem/program_memory.sv" type="file.verilog" enable="1"/>
+        <File path="rtl/peripherals/gpio_peripheral.sv" type="file.verilog" enable="1"/>
         <File path="rtl/peripherals/uart_peripheral.sv" type="file.verilog" enable="1"/>
         <File path="rtl/pkg/control_pkg.sv" type="file.verilog" enable="1"/>
         <File path="rtl/top/arnicomp_soc_top.sv" type="file.verilog" enable="1"/>
