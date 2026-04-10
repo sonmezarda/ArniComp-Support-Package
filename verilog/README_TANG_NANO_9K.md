@@ -27,8 +27,8 @@
 | Signal | Tang Nano 9K Pin | Description |
 |--------|-----------------|-------------|
 | clk | 52 | 27MHz crystal oscillator |
-| rst_n | 3 | Button S1 (Reset, active low) |
-| btn_run | 4 | Button S2 (Run/Step) |
+| rst_n | 4 | Button S1 (Reset, active low) |
+| btn_run | 3 | Button S2 (Run/Step) |
 | led[0] | 10 | LED 0 (ACC bit 0) |
 | led[1] | 11 | LED 1 (ACC bit 1) |
 | led[2] | 13 | LED 2 (ACC bit 2) |
@@ -37,6 +37,9 @@
 | led[5] | 16 | LED 5 (ACC bit 5) |
 | uart_tx | 17 | UART TX (debug, optional) |
 | uart_rx | 18 | UART RX (debug, optional) |
+| gpio[0]..gpio[5] | 27..32 | General-purpose PMOD pins during Gowin I2C bring-up |
+| i2c_scl | 25 | PMOD pin reserved for Gowin I2C SCL |
+| i2c_sda | 26 | PMOD pin reserved for Gowin I2C SDA |
 
 ## Loading Your Program
 

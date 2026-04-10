@@ -1,217 +1,306 @@
-# ArniComp Assembly Quick Reference
+# ArniComp Assembler Quick Reference
 
 ## Syntax Rules
 
-### Prefixes
-- **`#`** - Direct numbers: `LDI #31`, `ADDI #7`, `LDI #0x10`, `LDI #0b0101`
-- **`$`** - Constants: `LDI $COUNTER`, `CMP $MAX`
-- **`@`** - Labels: `LDI @loop`, `LDI @loop.low`, `LDI @loop.high`
+- Comments start with `;`
+- Constants use `equ NAME expr`
+- Labels may stand alone or share a line with an instruction: `loop:` / `done: HLT`
+- Prefixes:
+  - `#` direct number or character literal: `#10`, `#0x2A`, `#0b1010`, `#'A'`
+  - `$` constant reference: `$COUNT`
+  - `@` label reference: `@loop`
+- Bit slices use `value[hi:lo]`:
+  - `@target[7:0]`
+  - `@target[15:8]`
+  - `$CONST[4:0]`
+  - `$CONST[7:5]`
+- Helper functions:
+  - `LOW(x)` / `BYTE0(x)`
+  - `HIGH(x)` / `BYTE1(x)`
+  - `BITS(x, hi, lo)`
 
-### Comments and Definitions
+## Preprocessor and Layout
+
 ```assembly
-; This is a comment
+.include "common.asm"
+.import "../lib/math.asm" mul_u8
 
-equ CONSTANT_NAME value
-equ MAX 100
-equ ADDR 0x20
+.repeat 4 {
+    NOP
+}
 
-label:
-    instruction
+.define FPGA 1
+.if FPGA
+    NOP
+.else
+    HLT
+.endif
+
+.fill 16
+.org 0x100, #0xFF
+.align 16
 ```
 
 ## Registers
 
-| Register | Description | Type |
-|----------|-------------|------|
-| RA | General purpose | Source & Dest |
-| RD | General purpose (ALU input) | Source & Dest |
-| RB | General purpose | Source & Dest |
-| ACC | Accumulator | Source only |
-| PCL | Program counter low | Source only |
-| PCH | Program counter high | Source only |
-| PRL | Program register low | Dest only |
-| PRH | Program register high | Dest only |
-| MARL | Memory address low | Dest only |
-| MARH | Memory address high | Dest only |
-| M | Memory[MARH:MARL] | Source & Dest |
+### Destinations
 
-## Instructions
+| Register | Notes |
+|----------|-------|
+| RA | General-purpose |
+| RD | General-purpose |
+| RB | General-purpose |
+| MARL | Memory address low |
+| MARH | Memory address high |
+| PRL | Program register low |
+| PRH | Program register high |
+| M | Memory at `[MARH:MARL]` |
 
-### Data Transfer
+### Sources
+
+| Register | Notes |
+|----------|-------|
+| RA | General-purpose |
+| RD | General-purpose |
+| RB | General-purpose |
+| ACC | ALU result / accumulator |
+| ZERO | Zero source |
+| LRL | Link register low |
+| LRH | Link register high |
+| M | Memory at `[MARH:MARL]` |
+
+Notes:
+
+- `0` and `#0` are accepted where a zero source alias is allowed.
+- `LDL` and `LDH` may target only `RA` or `RD`.
+
+### PUSH Source Set
+
+`PUSH` does not use the normal global source map. Valid `PUSH` sources are:
+
+- `RA`
+- `RD`
+- `RB`
+- `ACC`
+- `MARH`
+- `LRL`
+- `LRH`
+- `MARL`
+
+## Real ISA Instructions
+
+### Loads
+
 ```assembly
-LDI #value          ; Load immediate to RA (0-127)
-LDI @label          ; Load label low byte to RA (warns if SMSBRA/high byte is needed)
-LDI @label.low      ; Load low byte of label address
-LDI @label.high     ; Load high byte of label address
-MOV dest, src       ; Move from src to dest
+LDL RA, #5
+LDL RD, $CONST[4:0]
+LDH RA, #7
+LDH RD, @target[7:5]
 ```
 
-**MOV Restrictions**:
-- Cannot: `MOV RA, RA` / `MOV RD, RD` / `MOV RB, RB` / `MOV M, M`
+### Data Movement
 
-### Arithmetic
 ```assembly
-ADD src             ; ACC = RD + src
-SUB src             ; ACC = RD - src
-ADC src             ; ACC = RD + src + carry
-SBC src             ; ACC = RD - src - carry
-ADDI #value         ; ACC = ACC + value (0-7)
-SUBI #value         ; ACC = ACC - value (0-7)
+MOV RA, RD
+MOV MARL, RA
+MOV PRH, ZERO
+MOV M, RA
 ```
 
-**All sources allowed**: RA, RD, RB, ACC, PCL, PCH, M
+### Arithmetic and Logic
 
-### Logical
 ```assembly
-AND src             ; ACC = RD & src
-XOR src             ; ACC = RD ^ src (RA, RB, RD, ACC, M only)
-NOT src             ; ACC = ~src (RA, RB, ACC, RD, M only)
+ADD RA
+ADDI #3
+ADC M
+SUB RB
+SUBI #2
+SBC LRL
+CMP M
+NOT RA
+XOR RD
+AND RB
 ```
 
-### Comparison
+### Stack and Flow
+
 ```assembly
-CMP src             ; Compare src with RD (RA, M, ACC only)
+PUSH RA
+PUSH MARL
+PUSH MARH
+PUSH LRL
+PUSH LRH
+POP RD
+
+NOP
+HLT
+INC #1
+INC #2
+DEC #1
+DEC #2
+JAL
+
+JMP
+JEQ
+JNE
+JCS
+JCC
+JMI
+JVS
+JLT
+JGT
 ```
 
-### Jumps
+### Accepted Jump Aliases
+
+These are assembler aliases for real jump conditions:
+
 ```assembly
-JMP                 ; Unconditional jump
-JEQ                 ; Jump if equal (zero flag)
-JGT                 ; Jump if greater than
-JLT                 ; Jump if less than
-JGE                 ; Jump if greater or equal
-JLE                 ; Jump if less or equal
-JNE                 ; Jump if not equal
-JC                  ; Jump if carry
+JZ
+JNZ
+JC
+JNC
+JN
+JV
+JGEU
+JLTU
+JLTS
 ```
 
-**Jump Usage**:
-```assembly
-; Load target address before jumping
-LDI @target.low     ; Load target low byte
-MOV PRL, RA         ; Set program register low
-LDI @target.high    ; Load target high byte
-MOV PRH, RA         ; Set program register high
-JMP                 ; Execute jump
+## Pseudoinstructions and Macros
 
-target:
-    ; code here
+These expand into one or more real ISA instructions.
+
+```assembly
+LDI #10
+LDI 'A'
+LDI #'A'
+LDI RD, $CONST
+LDI RA, @label[7:0]
+
+CLR RA
+
+CALL target
+CALL target :RD
+JMPA target
+JMPA target :RD
+
+RET
+RET :STACK
+
+PUSHI #5
+PUSHI 'A' :RD
+PUSHSTR "OK"
+PUSHSTR "HELLO", '\0' :RD
+
+JLE
+JGE
+JLEU
 ```
 
-### Special
+Target-taking jump forms are also supported:
+
 ```assembly
-NOP                 ; No operation
-HLT                 ; Halt processor
-SMSBRA              ; Set MSB of RA to 1
-INX                 ; Increment MARL
+JMP target
+JEQ done
+JNE loop :RD
+JLE finish
+JGE retry :RD
+JLEU done
+JGTU retry :RD
 ```
+
+Notes:
+
+- Target-taking jumps load `PRL/PRH` with the target address, then emit the requested jump.
+- Default temporary register is `RA`; `:RD` is also supported.
+- `JGEU` and `JLTU` are aliases for `JCS` and `JCC`.
+- `JLEU` is a macro over `JCC` and `JEQ`.
+- `JGTU` is only valid with an explicit target operand.
+
+## Bit Slices and Address Loading
+
+```assembly
+equ CONST 0x1234
+
+LDL RA, $CONST[4:0]
+LDH RD, $CONST[7:5]
+
+LDL RA, @target[4:0]
+LDH RD, @target[7:5]
+
+LDI RA, #0x1234[15:8]
+LDI LOW(@target)
+LDI HIGH(@target)
+```
+
+Rules:
+
+- `LDL` accepts only 5-bit values or 5-bit slices.
+- `LDH` accepts only 3-bit values or 3-bit slices.
+- `LDI` and `PUSHI` accept an unsliced byte value or an explicit 8-bit slice.
+- Unsliced `LDI` operands above `0xFF` are truncated to the low byte with a warning.
 
 ## Common Patterns
 
-### Counting Loop
-```assembly
-equ MAX 10
+### Absolute Jump
 
-start:
-    LDI #0
-    MOV RD, RA
-    
-loop:
-    ADDI #1
-    MOV RD, ACC
-    LDI $MAX
-    CMP RA
-    JLT             ; Jump if still less than MAX
-    HLT
-    
-    LDI @loop.low
-    MOV PRL, RA
-    LDI @loop.high
-    MOV PRH, RA
-    JMP
+```assembly
+JMPA target
+
+; Manual equivalent
+LDI RA, @target[7:0]
+MOV PRL, RA
+LDI RA, @target[15:8]
+MOV PRH, RA
+JMP
 ```
 
-### Memory Access
-```assembly
-equ ADDR 0x20
+### Call and Return
 
-    ; Write to memory
-    LDI $ADDR
-    MOV MARL, RA
-    LDI #0
-    MOV MARH, RA
-    LDI #42
-    MOV M, RA
-    
-    ; Read from memory
-    MOV RA, M
+```assembly
+CALL worker
+RET
+RET :STACK
 ```
 
-### Conditional Execution
+## Common Pitfalls
+
 ```assembly
-    ; Compare two values
-    LDI #10
-    MOV RD, RA
-    LDI #20
-    CMP RA
-    JLT             ; Jump if 20 < 10 (false, continues)
-    
-    ; This executes because jump didn't happen
-    HLT
+@label.low          ; WRONG: old syntax
+@label.high         ; WRONG: old syntax
+ADD #1              ; WRONG: use ADDI
+SUB #1              ; WRONG: use SUBI
+PUSH ZERO           ; WRONG: not supported anymore
+PUSH M              ; WRONG: not supported anymore
+SMSBRA              ; WRONG: legacy mnemonic
+INX                 ; WRONG: legacy mnemonic
 ```
 
-## Number Formats
+Use these instead:
 
 ```assembly
-#10         ; Decimal
-#0x0A       ; Hexadecimal (0-9, A-F)
-#0b1010     ; Binary (0-1)
-```
-
-## Error Prevention
-
-### ❌ Common Mistakes
-```assembly
-LDI #$CONST         ; WRONG: don't combine # and $
-LDI #@label         ; WRONG: don't combine # and @
-MOV RA, RA          ; WRONG: forbidden same-register MOV
-LDI #200            ; WRONG: max is 127 (7-bit)
-ADDI #8             ; WRONG: max is 7 (3-bit)
-NOT PCL             ; WRONG: NOT doesn't support PCL
-CMP RD              ; WRONG: CMP only supports RA, M, ACC
-```
-
-### ✅ Correct Usage
-```assembly
-LDI $CONST          ; Correct: $ alone for constants
-LDI @label          ; Correct: bare label form, with warnings when extra bits/bytes are needed
-LDI @label.low      ; Correct: explicit low byte
-LDI @label.high     ; Correct: explicit high byte
-MOV RD, RA          ; Correct: different registers
-LDI #127            ; Correct: within 0-127
-ADDI #7             ; Correct: within 0-7
-NOT RA              ; Correct: RA is allowed
-CMP RA              ; Correct: RA is allowed
+@label[7:0]
+@label[15:8]
+ADDI #1
+SUBI #1
+PUSH MARH
+PUSH MARL
 ```
 
 ## CLI Commands
 
 ```bash
-# Assemble
-python3 main.py assemble input.asm [output.txt]
-
-# Disassemble
-python3 main.py disassemble input.txt [output.asm]
-
-# Create binary
-python3 main.py createbin input.txt [output.bin]
-
-# Load to EEPROM
-python3 main.py load program.bin
-
-# All-in-one
-python3 main.py loadasm program.asm
-
-# Help
-python3 main.py help
+python main.py assemble program.asm output.txt
+python main.py assemble program.asm output.txt --listing program.lst --listing-mode both
+python main.py createsvhex program.asm program.mem --listing program.lst --listing-mode asm
+python main.py createsvmi program.asm program.mi --depth 2048 --listing program.lst --listing-mode asm
+python main.py creategowinprom program.asm ../verilog/src/gowin_prom/gowin_prom.v --depth 2048
+python main.py disassemble program.txt output.asm
+python main.py createbin program.txt program.bin
+python main.py load program.bin
+python main.py loadasm program.asm
+python main.py help
 ```
+
+Listing modes: `hex`, `asm`, `both`

@@ -1,85 +1,484 @@
-; Source: .\examples\fpga\gpio_pwm_1khz_demo.asm
-0000  [33] CLR RA
-      0000  84  MOV RA, ZERO
-0001  [34] CLR PRL
+; Source: .\examples\fpga\i2c_control_phase_snapshot.asm
+0000  [54] mov prh, zero
+      0000  B4  MOV PRH, ZERO
+0001  [55] mov prl, zero
       0001  AC  MOV PRL, ZERO
-0002  [35] CLR PRH
-      0002  B4  MOV PRH, ZERO
-0003  [36] CLR MARL
-      0003  9C  MOV MARL, ZERO
-0004  [37] CLR MARH
-      0004  A4  MOV MARH, ZERO
-0005  [39] LDI $GPIO_BASE_H
-      0005  C8  LDL RA, #8
-0006  [40] MOV MARH, RA
+0002  [56] mov marl, zero
+      0002  9C  MOV MARL, ZERO
+0003  [57] mov marh, zero
+      0003  A4  MOV MARH, ZERO
+0004  [58] mov rb, zero
+      0004  94  MOV RB, ZERO
+0005  [60] ldi $SYS_LED_H
+      0005  CC  LDL RA, #12
+0006  [61] mov marh, ra
       0006  A0  MOV MARH, RA
-0007  [43] LDI $GPIO0_PWM_PERIOD_LO
-      0007  C8  LDL RA, #8
-0008  [44] MOV MARL, RA
+0007  [62] ldi $SYS_LED_L
+      0007  C0  LDL RA, #0
+0008  [63] mov marl, ra
       0008  98  MOV MARL, RA
-0009  [45] LDI $PWM_PERIOD_LO
-      0009  D7  LDL RA, #23
-      000A  33  LDH RA, #3
-000B  [46] MOV M, RA
-      000B  B8  MOV M, RA
-000C  [49] LDI $GPIO0_PWM_PERIOD_MI
-      000C  C9  LDL RA, #9
-000D  [50] MOV MARL, RA
+0009  [64] mov m, zero
+      0009  BC  MOV M, ZERO
+000A  [66] ldi $I2C_BASE_H
+      000A  CA  LDL RA, #10
+000B  [67] mov marh, ra
+      000B  A0  MOV MARH, RA
+000C  [69] ldi $I2C_PRESCALE_LO
+      000C  C0  LDL RA, #0
+000D  [70] mov marl, ra
       000D  98  MOV MARL, RA
-000E  [51] LDI $PWM_PERIOD_MI
-      000E  C9  LDL RA, #9
-      000F  33  LDH RA, #3
-0010  [52] MOV M, RA
+000E  [71] ldi $PRESCALE_100KHZ
+      000E  D5  LDL RA, #21
+      000F  31  LDH RA, #1
+0010  [72] mov m, ra
       0010  B8  MOV M, RA
-0011  [55] LDI $GPIO0_PWM_PERIOD_HI
-      0011  CA  LDL RA, #10
-0012  [56] MOV MARL, RA
+0011  [74] ldi $I2C_PRESCALE_HI
+      0011  C1  LDL RA, #1
+0012  [75] mov marl, ra
       0012  98  MOV MARL, RA
-0013  [57] LDI $PWM_PERIOD_HI
-      0013  C0  LDL RA, #0
-0014  [58] MOV M, RA
-      0014  B8  MOV M, RA
-0015  [61] LDI $GPIO_BIT1_DIR_L
-      0015  D1  LDL RA, #17
-      0016  31  LDH RA, #1
-0017  [62] MOV MARL, RA
-      0017  98  MOV MARL, RA
-0018  [63] LDI #1
-      0018  C1  LDL RA, #1
-0019  [64] MOV M, RA
-      0019  B8  MOV M, RA
-001A  [67] LDI $GPIO_BIT1_OUT_L
-      001A  C1  LDL RA, #1
-      001B  31  LDH RA, #1
-001C  [68] MOV MARL, RA
-      001C  98  MOV MARL, RA
-001D  [69] MOV M, ZERO
-      001D  BC  MOV M, ZERO
-001E  [72] LDI $GPIO_BIT1_DUTY_LO
-      001E  D2  LDL RA, #18
-      001F  32  LDH RA, #2
-0020  [73] MOV MARL, RA
-      0020  98  MOV MARL, RA
-0021  [74] LDI $DUTY_50_LO
-      0021  C0  LDL RA, #0
-0022  [75] MOV M, RA
+0013  [76] mov m, zero
+      0013  BC  MOV M, ZERO
+0014  [78] ldi $I2C_CONTROL
+      0014  C2  LDL RA, #2
+0015  [79] mov marl, ra
+      0015  98  MOV MARL, RA
+0016  [80] ldi $CTRL_ENABLE
+      0016  C0  LDL RA, #0
+      0017  34  LDH RA, #4
+0018  [81] mov m, ra
+      0018  B8  MOV M, RA
+0019  [84] ldi $I2C_TXR
+      0019  C3  LDL RA, #3
+001A  [85] mov marl, ra
+      001A  98  MOV MARL, RA
+001B  [86] ldi $OLED_ADDR_W
+      001B  D8  LDL RA, #24
+      001C  33  LDH RA, #3
+001D  [87] mov m, ra
+      001D  B8  MOV M, RA
+001E  [89] ldi $I2C_CR_SR
+      001E  C4  LDL RA, #4
+001F  [90] mov marl, ra
+      001F  98  MOV MARL, RA
+0020  [91] ldi $CMD_START_WRITE
+      0020  D0  LDL RA, #16
+      0021  34  LDH RA, #4
+0022  [92] mov m, ra
       0022  B8  MOV M, RA
-0023  [77] INC #1
-      0023  02  INC #1
-0024  [78] LDI $DUTY_50_HI
-      0024  C8  LDL RA, #8
-0025  [79] MOV M, RA
-      0025  B8  MOV M, RA
-0026  [82] LDI $GPIO_BIT1_PWM_EN_L
-      0026  C1  LDL RA, #1
-      0027  32  LDH RA, #2
-0028  [83] MOV MARL, RA
-      0028  98  MOV MARL, RA
-0029  [84] LDI #1
-      0029  C1  LDL RA, #1
-002A  [85] MOV M, RA
-      002A  B8  MOV M, RA
-002B  [87] HLT
-      002B  01  HLT
-002C  [88] HLT
-      002C  01  HLT
+0023  [94] call wait_done
+      0023  CE  LDL RA, #14
+      0024  37  LDH RA, #7
+      0025  A8  MOV PRL, RA
+      0026  B4  MOV PRH, ZERO
+      0027  07  JAL
+0028  [95] mov rd, rb
+      0028  8A  MOV RD, RB
+0029  [96] ldi $WAIT_TIMEOUT
+      0029  DF  LDL RA, #31
+      002A  37  LDH RA, #7
+002B  [97] cmp ra
+      002B  78  CMP RA
+002C  [98] jeq show_timeout
+      002C  D7  LDL RA, #23
+      002D  33  LDH RA, #3
+      002E  A8  MOV PRL, RA
+      002F  B4  MOV PRH, ZERO
+      0030  18  JEQ
+0031  [100] mov rd, rb
+      0031  8A  MOV RD, RB
+0032  [101] ldi $AL_MASK
+      0032  C0  LDL RA, #0
+      0033  31  LDH RA, #1
+0034  [102] and ra
+      0034  10  AND RA
+0035  [103] mov rd, acc
+      0035  8B  MOV RD, ACC
+0036  [104] cmp zero
+      0036  7C  CMP ZERO
+0037  [105] jne show_addr_failure
+      0037  C9  LDL RA, #9
+      0038  33  LDH RA, #3
+      0039  A8  MOV PRL, RA
+      003A  B4  MOV PRH, ZERO
+      003B  19  JNE
+003C  [107] mov rd, rb
+      003C  8A  MOV RD, RB
+003D  [108] ldi $RXACK_MASK
+      003D  C0  LDL RA, #0
+      003E  34  LDH RA, #4
+003F  [109] and ra
+      003F  10  AND RA
+0040  [110] mov rd, acc
+      0040  8B  MOV RD, ACC
+0041  [111] cmp zero
+      0041  7C  CMP ZERO
+0042  [112] jne show_addr_failure
+      0042  C9  LDL RA, #9
+      0043  33  LDH RA, #3
+      0044  A8  MOV PRL, RA
+      0045  B4  MOV PRH, ZERO
+      0046  19  JNE
+0047  [115] ldi $I2C_BASE_H
+      0047  CA  LDL RA, #10
+0048  [116] mov marh, ra
+      0048  A0  MOV MARH, RA
+0049  [117] ldi $I2C_TXR
+      0049  C3  LDL RA, #3
+004A  [118] mov marl, ra
+      004A  98  MOV MARL, RA
+004B  [119] ldi $OLED_CTRL_CMD
+      004B  C0  LDL RA, #0
+004C  [120] mov m, ra
+      004C  B8  MOV M, RA
+004D  [122] ldi $I2C_CR_SR
+      004D  C4  LDL RA, #4
+004E  [123] mov marl, ra
+      004E  98  MOV MARL, RA
+004F  [124] ldi $CMD_WRITE
+      004F  D0  LDL RA, #16
+0050  [125] mov m, ra
+      0050  B8  MOV M, RA
+0051  [127] call wait_done
+      0051  CE  LDL RA, #14
+      0052  37  LDH RA, #7
+      0053  A8  MOV PRL, RA
+      0054  B4  MOV PRH, ZERO
+      0055  07  JAL
+0056  [128] mov rd, rb
+      0056  8A  MOV RD, RB
+0057  [129] ldi $WAIT_TIMEOUT
+      0057  DF  LDL RA, #31
+      0058  37  LDH RA, #7
+0059  [130] cmp ra
+      0059  78  CMP RA
+005A  [131] jeq show_timeout
+      005A  D7  LDL RA, #23
+      005B  33  LDH RA, #3
+      005C  A8  MOV PRL, RA
+      005D  B4  MOV PRH, ZERO
+      005E  18  JEQ
+005F  [133] call issue_stop
+      005F  C2  LDL RA, #2
+      0060  37  LDH RA, #7
+      0061  A8  MOV PRL, RA
+      0062  B4  MOV PRH, ZERO
+      0063  07  JAL
+0064  [134] jmp capture_status
+      0064  DF  LDL RA, #31
+      0065  33  LDH RA, #3
+      0066  A8  MOV PRL, RA
+      0067  B4  MOV PRH, ZERO
+      0068  1F  JMP
+0069  [138] call pack_status_leds
+      0069  D3  LDL RA, #19
+      006A  34  LDH RA, #4
+      006B  A8  MOV PRL, RA
+      006C  B4  MOV PRH, ZERO
+      006D  07  JAL
+006E  [139] ldi rd, $LED_MARKER
+      006E  E0  LDL RD, #0
+      006F  39  LDH RD, #1
+0070  [140] add rb
+      0070  42  ADD RB
+0071  [141] mov rb, acc
+      0071  93  MOV RB, ACC
+0072  [142] jmp show_leds
+      0072  C9  LDL RA, #9
+      0073  34  LDH RA, #4
+      0074  A8  MOV PRL, RA
+      0075  B4  MOV PRH, ZERO
+      0076  1F  JMP
+0077  [145] ldi $LED_MARKER
+      0077  C0  LDL RA, #0
+      0078  31  LDH RA, #1
+0079  [146] mov rb, ra
+      0079  90  MOV RB, RA
+007A  [147] jmp show_leds
+      007A  C9  LDL RA, #9
+      007B  34  LDH RA, #4
+      007C  A8  MOV PRL, RA
+      007D  B4  MOV PRH, ZERO
+      007E  1F  JMP
+007F  [150] ldi $I2C_BASE_H
+      007F  CA  LDL RA, #10
+0080  [151] mov marh, ra
+      0080  A0  MOV MARH, RA
+0081  [152] ldi $I2C_CR_SR
+      0081  C4  LDL RA, #4
+0082  [153] mov marl, ra
+      0082  98  MOV MARL, RA
+0083  [154] mov rb, m
+      0083  97  MOV RB, M
+0084  [156] call pack_status_leds
+      0084  D3  LDL RA, #19
+      0085  34  LDH RA, #4
+      0086  A8  MOV PRL, RA
+      0087  B4  MOV PRH, ZERO
+      0088  07  JAL
+0089  [159] ldi $SYS_LED_H
+      0089  CC  LDL RA, #12
+008A  [160] mov marh, ra
+      008A  A0  MOV MARH, RA
+008B  [161] ldi $SYS_LED_L
+      008B  C0  LDL RA, #0
+008C  [162] mov marl, ra
+      008C  98  MOV MARL, RA
+008D  [163] mov m, rb
+      008D  BA  MOV M, RB
+008E  [166] jmpa done
+      008E  CE  LDL RA, #14
+      008F  34  LDH RA, #4
+      0090  A8  MOV PRL, RA
+      0091  B4  MOV PRH, ZERO
+      0092  1F  JMP
+0093  [171] push lrl
+      0093  25  PUSH LRL
+0094  [172] push lrh
+      0094  26  PUSH LRH
+0095  [174] ldi $RAM_BASE_H
+      0095  C0  LDL RA, #0
+0096  [175] mov marh, ra
+      0096  A0  MOV MARH, RA
+0097  [176] ldi $SCRATCH_STATUS_L
+      0097  C1  LDL RA, #1
+0098  [177] mov marl, ra
+      0098  98  MOV MARL, RA
+0099  [178] mov m, rb
+      0099  BA  MOV M, RB
+009A  [180] mov rb, zero
+      009A  94  MOV RB, ZERO
+009B  [182] mov ra, m
+      009B  87  MOV RA, M
+009C  [183] ldi rd, $IF_MASK
+      009C  E1  LDL RD, #1
+009D  [184] and ra
+      009D  10  AND RA
+009E  [185] mov ra, acc
+      009E  83  MOV RA, ACC
+009F  [186] cmp zero
+      009F  7C  CMP ZERO
+00A0  [187] jeq check_tip
+      00A0  C8  LDL RA, #8
+      00A1  35  LDH RA, #5
+      00A2  A8  MOV PRL, RA
+      00A3  B4  MOV PRH, ZERO
+      00A4  18  JEQ
+00A5  [188] ldi ra, $LED_IF
+      00A5  C1  LDL RA, #1
+00A6  [189] add rb
+      00A6  42  ADD RB
+00A7  [190] mov rb, acc
+      00A7  93  MOV RB, ACC
+00A8  [193] mov ra, m
+      00A8  87  MOV RA, M
+00A9  [194] ldi rd, $TIP_MASK
+      00A9  E2  LDL RD, #2
+00AA  [195] and ra
+      00AA  10  AND RA
+00AB  [196] mov ra, acc
+      00AB  83  MOV RA, ACC
+00AC  [197] cmp zero
+      00AC  7C  CMP ZERO
+00AD  [198] jeq check_busy
+      00AD  D5  LDL RA, #21
+      00AE  35  LDH RA, #5
+      00AF  A8  MOV PRL, RA
+      00B0  B4  MOV PRH, ZERO
+      00B1  18  JEQ
+00B2  [199] ldi ra, $LED_TIP
+      00B2  C2  LDL RA, #2
+00B3  [200] add rb
+      00B3  42  ADD RB
+00B4  [201] mov rb, acc
+      00B4  93  MOV RB, ACC
+00B5  [204] mov ra, m
+      00B5  87  MOV RA, M
+00B6  [205] ldi rd, $BUSY_MASK
+      00B6  E0  LDL RD, #0
+      00B7  3A  LDH RD, #2
+00B8  [206] and ra
+      00B8  10  AND RA
+00B9  [207] mov ra, acc
+      00B9  83  MOV RA, ACC
+00BA  [208] cmp zero
+      00BA  7C  CMP ZERO
+00BB  [209] jeq check_al
+      00BB  C3  LDL RA, #3
+      00BC  36  LDH RA, #6
+      00BD  A8  MOV PRL, RA
+      00BE  B4  MOV PRH, ZERO
+      00BF  18  JEQ
+00C0  [210] ldi ra, $LED_BUSY
+      00C0  C4  LDL RA, #4
+00C1  [211] add rb
+      00C1  42  ADD RB
+00C2  [212] mov rb, acc
+      00C2  93  MOV RB, ACC
+00C3  [215] mov ra, m
+      00C3  87  MOV RA, M
+00C4  [216] ldi rd, $AL_MASK
+      00C4  E0  LDL RD, #0
+      00C5  39  LDH RD, #1
+00C6  [217] and ra
+      00C6  10  AND RA
+00C7  [218] mov ra, acc
+      00C7  83  MOV RA, ACC
+00C8  [219] cmp zero
+      00C8  7C  CMP ZERO
+00C9  [220] jeq check_rxack
+      00C9  D1  LDL RA, #17
+      00CA  36  LDH RA, #6
+      00CB  A8  MOV PRL, RA
+      00CC  B4  MOV PRH, ZERO
+      00CD  18  JEQ
+00CE  [221] ldi ra, $LED_AL
+      00CE  C8  LDL RA, #8
+00CF  [222] add rb
+      00CF  42  ADD RB
+00D0  [223] mov rb, acc
+      00D0  93  MOV RB, ACC
+00D1  [226] mov ra, m
+      00D1  87  MOV RA, M
+00D2  [227] ldi rd, $RXACK_MASK
+      00D2  E0  LDL RD, #0
+      00D3  3C  LDH RD, #4
+00D4  [228] and ra
+      00D4  10  AND RA
+00D5  [229] mov ra, acc
+      00D5  83  MOV RA, ACC
+00D6  [230] cmp zero
+      00D6  7C  CMP ZERO
+00D7  [231] jeq pack_done
+      00D7  DF  LDL RA, #31
+      00D8  36  LDH RA, #6
+      00D9  A8  MOV PRL, RA
+      00DA  B4  MOV PRH, ZERO
+      00DB  18  JEQ
+00DC  [232] ldi ra, $LED_RXACK
+      00DC  D0  LDL RA, #16
+00DD  [233] add rb
+      00DD  42  ADD RB
+00DE  [234] mov rb, acc
+      00DE  93  MOV RB, ACC
+00DF  [237] ret :stack
+      00DF  2E  POP PRH
+      00E0  2D  POP PRL
+      00E1  1F  JMP
+00E2  [240] push lrl
+      00E2  25  PUSH LRL
+00E3  [241] push lrh
+      00E3  26  PUSH LRH
+00E4  [243] ldi $I2C_BASE_H
+      00E4  CA  LDL RA, #10
+00E5  [244] mov marh, ra
+      00E5  A0  MOV MARH, RA
+00E6  [245] ldi $I2C_CR_SR
+      00E6  C4  LDL RA, #4
+00E7  [246] mov marl, ra
+      00E7  98  MOV MARL, RA
+00E8  [247] ldi $CMD_STOP_ONLY
+      00E8  C0  LDL RA, #0
+      00E9  32  LDH RA, #2
+00EA  [248] mov m, ra
+      00EA  B8  MOV M, RA
+00EB  [249] ret :stack
+      00EB  2E  POP PRH
+      00EC  2D  POP PRL
+      00ED  1F  JMP
+00EE  [253] push lrl
+      00EE  25  PUSH LRL
+00EF  [254] push lrh
+      00EF  26  PUSH LRH
+00F0  [256] ldi $RAM_BASE_H
+      00F0  C0  LDL RA, #0
+00F1  [257] mov marh, ra
+      00F1  A0  MOV MARH, RA
+00F2  [258] ldi $SCRATCH_COUNT_L
+      00F2  C0  LDL RA, #0
+00F3  [259] mov marl, ra
+      00F3  98  MOV MARL, RA
+00F4  [260] ldi $WAIT_COUNT
+      00F4  C8  LDL RA, #8
+      00F5  36  LDH RA, #6
+00F6  [261] mov m, ra
+      00F6  B8  MOV M, RA
+00F7  [264] ldi $I2C_BASE_H
+      00F7  CA  LDL RA, #10
+00F8  [265] mov marh, ra
+      00F8  A0  MOV MARH, RA
+00F9  [266] ldi $I2C_CR_SR
+      00F9  C4  LDL RA, #4
+00FA  [267] mov marl, ra
+      00FA  98  MOV MARL, RA
+00FB  [268] mov rb, m
+      00FB  97  MOV RB, M
+00FC  [270] mov rd, rb
+      00FC  8A  MOV RD, RB
+00FD  [271] ldi $AL_MASK
+      00FD  C0  LDL RA, #0
+      00FE  31  LDH RA, #1
+00FF  [272] and ra
+      00FF  10  AND RA
+0100  [273] mov rd, acc
+      0100  8B  MOV RD, ACC
+0101  [274] cmp zero
+      0101  7C  CMP ZERO
+0102  [275] jne wait_done_ok
+      0102  C6  LDL RA, #6
+      0103  31  LDH RA, #1
+      0104  A8  MOV PRL, RA
+      0105  C1  LDL RA, #1
+      0106  B0  MOV PRH, RA
+      0107  19  JNE
+0108  [277] mov rd, rb
+      0108  8A  MOV RD, RB
+0109  [278] ldi $TIP_MASK
+      0109  C2  LDL RA, #2
+010A  [279] and ra
+      010A  10  AND RA
+010B  [280] mov rd, acc
+      010B  8B  MOV RD, ACC
+010C  [281] cmp zero
+      010C  7C  CMP ZERO
+010D  [282] jeq wait_done_ok
+      010D  C6  LDL RA, #6
+      010E  31  LDH RA, #1
+      010F  A8  MOV PRL, RA
+      0110  C1  LDL RA, #1
+      0111  B0  MOV PRH, RA
+      0112  18  JEQ
+0113  [284] ldi $RAM_BASE_H
+      0113  C0  LDL RA, #0
+0114  [285] mov marh, ra
+      0114  A0  MOV MARH, RA
+0115  [286] ldi $SCRATCH_COUNT_L
+      0115  C0  LDL RA, #0
+0116  [287] mov marl, ra
+      0116  98  MOV MARL, RA
+0117  [288] mov rd, m
+      0117  8F  MOV RD, M
+0118  [289] subi #1
+      0118  69  SUBI #1
+0119  [290] mov rd, acc
+      0119  8B  MOV RD, ACC
+011A  [291] mov m, rd
+      011A  B9  MOV M, RD
+011B  [292] jne wait_done_loop
+      011B  D7  LDL RA, #23
+      011C  37  LDH RA, #7
+      011D  A8  MOV PRL, RA
+      011E  B4  MOV PRH, ZERO
+      011F  19  JNE
+0120  [294] ldi $WAIT_TIMEOUT
+      0120  DF  LDL RA, #31
+      0121  37  LDH RA, #7
+0122  [295] mov rb, ra
+      0122  90  MOV RB, RA
+0123  [296] ret :stack
+      0123  2E  POP PRH
+      0124  2D  POP PRL
+      0125  1F  JMP
+0126  [299] ret :stack
+      0126  2E  POP PRH
+      0127  2D  POP PRL
+      0128  1F  JMP

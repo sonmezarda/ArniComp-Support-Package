@@ -13,6 +13,8 @@ module arnicomp_soc_top_gowin #(
     input  logic       pwm_clk,
     input  logic       rst_n,
     input  logic       uart_rx,
+    inout  tri         i2c_scl,
+    inout  tri         i2c_sda,
     inout  tri   [GPIO_WIDTH-1:0] gpio,
 
     output logic       uart_tx,
@@ -42,6 +44,7 @@ module arnicomp_soc_top_gowin #(
     logic [7:0]  stack_rdata;
     logic [7:0]  gpio_rdata;
     logic [7:0]  uart_rdata;
+    logic [7:0]  i2c_rdata;
     logic [7:0]  sys_rdata;
     logic [7:0]  sys_led_reg_out;
     logic [GPIO_WIDTH-1:0] gpio_in;
@@ -53,6 +56,8 @@ module arnicomp_soc_top_gowin #(
     logic        gpio_re;
     logic        uart_we;
     logic        uart_re;
+    logic        i2c_we;
+    logic        i2c_re;
     logic        sys_led_we;
     logic        sys_led_sel;
     genvar       gpio_idx;
@@ -102,6 +107,8 @@ module arnicomp_soc_top_gowin #(
     assign gpio_re     = mem_ren && gpio_sel;
     assign uart_we     = mem_wen && uart_sel;
     assign uart_re     = mem_ren && uart_sel;
+    assign i2c_we      = mem_wen && i2c_sel;
+    assign i2c_re      = mem_ren && i2c_sel;
     assign sys_led_sel = sys_sel && (mem_addr[7:0] == SYS_LED_OFFSET);
     assign sys_led_we  = mem_wen && sys_led_sel;
 
@@ -157,6 +164,20 @@ module arnicomp_soc_top_gowin #(
         .uart_tx(uart_tx)
     );
 
+    i2c_peripheral i2c_mmio (
+        .cpu_clk(cpu_clk),
+        .rst_n(rst_n),
+        .sel(i2c_sel),
+        .we(i2c_we),
+        .re(i2c_re),
+        .offset(mem_addr[7:0]),
+        .wdata(mem_wdata),
+        .i2c_scl(i2c_scl),
+        .i2c_sda(i2c_sda),
+        .rdata(i2c_rdata),
+        .i2c_int()
+    );
+
     reg_cell #(.W(8)) sys_led_reg (
         .clk(cpu_clk),
         .rst_n(rst_n),
@@ -172,6 +193,7 @@ module arnicomp_soc_top_gowin #(
                        stack_sel ? stack_rdata :
                        gpio_sel  ? gpio_rdata  :
                        uart_sel  ? uart_rdata  :
+                       i2c_sel   ? i2c_rdata   :
                        sys_sel   ? sys_rdata   :
                        8'h00;
 
