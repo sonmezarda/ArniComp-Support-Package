@@ -1,9 +1,9 @@
 ; ArniComp function ABI / scratch-page include
-; Recommended shared scratch page: 0x0E00..0x0E1F
+; Recommended shared scratch page: 0x0000..0x001F
 ; This page is a simple global convention, not an automatic stack frame.
 ; Recursive and nested-call-heavy code must use it carefully.
 
-equ F_TMP_BASE_H   0x0E
+equ F_TMP_BASE_H   0x00
 
 ; Single-byte scratch slots
 equ F_T0_L       0x00

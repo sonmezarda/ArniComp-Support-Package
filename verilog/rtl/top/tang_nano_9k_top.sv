@@ -7,12 +7,12 @@ module tang_nano_9k_top (
     input  logic       uart_rx,
     inout  tri         i2c_scl,
     inout  tri         i2c_sda,
-    inout  tri   [5:0] gpio,
+    inout  tri   [7:0] gpio,
     output logic [5:0] led,
     output logic       uart_tx
 );
 
-    localparam int CLK_DIV = 1;
+    localparam int CLK_DIV = 135;
     localparam int CLK_COUNTER_W = (CLK_DIV <= 1) ? 1 : $clog2(CLK_DIV);
 
     logic [CLK_COUNTER_W-1:0] clk_counter;
@@ -73,7 +73,7 @@ module tang_nano_9k_top (
     logic [7:0] debug_led;
 
     arnicomp_soc_top_gowin #(
-        .GPIO_WIDTH(6)
+        .GPIO_WIDTH(8)
     ) soc (
         .cpu_clk(cpu_clk),
         .uart_clk(clk),

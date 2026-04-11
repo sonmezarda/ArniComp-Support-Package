@@ -233,8 +233,14 @@ Recommended include:
 
 Recommended scratch page:
 
-- high byte: `0x0E`
-- address range reserved by convention: `0x0E00..0x0E1F`
+- high byte: `0x00`
+- address range reserved by convention: `0x0000..0x001F`
+
+Why this default:
+
+- this SoC maps writable data RAM starting at `0x0000`
+- using the first scratch page keeps helper code portable across the current examples and FPGA build
+- the old `0x0E00` suggestion is not valid on the current memory map
 
 This area is not automatic stack frame storage. It is a shared scratch page.
 
