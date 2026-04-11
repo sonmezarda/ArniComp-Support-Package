@@ -1,2841 +1,2986 @@
-; Source: examples/fpga/gpio_ssd1306_fill_screen.asm
-0000  [47] mov prh, zero
+; Source: examples/fpga/gpio_ssd1306_movement.asm
+0000  [28] mov prh, zero
       0000  B4  MOV PRH, ZERO
-0001  [48] mov prl, zero
+0001  [29] mov prl, zero
       0001  AC  MOV PRL, ZERO
-0002  [49] mov marl, zero
+0002  [30] mov marl, zero
       0002  9C  MOV MARL, ZERO
-0003  [50] mov marh, zero
+0003  [31] mov marh, zero
       0003  A4  MOV MARH, ZERO
-0004  [53] ldi $SYS_LED_H
+0004  [33] ldi $SYS_LED_H
       0004  CC  LDL RA, #12
-0005  [54] mov marh, ra
+0005  [34] mov marh, ra
       0005  A0  MOV MARH, RA
-0006  [55] ldi $SYS_LED_L
+0006  [35] ldi $SYS_LED_L
       0006  C0  LDL RA, #0
-0007  [56] mov marl, ra
+0007  [36] mov marl, ra
       0007  98  MOV MARL, RA
-0008  [57] mov m, zero
+0008  [37] mov m, zero
       0008  BC  MOV M, ZERO
-0009  [60] ldi $GPIO_BASE_H
-      0009  C8  LDL RA, #8
-000A  [61] mov marh, ra
-      000A  A0  MOV MARH, RA
-000B  [63] ldi $GPIO_OUT0_L
-      000B  C0  LDL RA, #0
-      000C  31  LDH RA, #1
-000D  [64] mov marl, ra
-      000D  98  MOV MARL, RA
-000E  [65] mov m, zero
-      000E  BC  MOV M, ZERO
-000F  [67] ldi $GPIO_OUT1_L
-      000F  C1  LDL RA, #1
-      0010  31  LDH RA, #1
-0011  [68] mov marl, ra
-      0011  98  MOV MARL, RA
-0012  [69] mov m, zero
-      0012  BC  MOV M, ZERO
-0013  [71] ldi $GPIO_DIR0_L
-      0013  D0  LDL RA, #16
-      0014  31  LDH RA, #1
-0015  [72] mov marl, ra
-      0015  98  MOV MARL, RA
-0016  [73] mov m, zero
-      0016  BC  MOV M, ZERO
-0017  [75] ldi $GPIO_DIR1_L
-      0017  D1  LDL RA, #17
-      0018  31  LDH RA, #1
-0019  [76] mov marl, ra
-      0019  98  MOV MARL, RA
-001A  [77] mov m, zero
-      001A  BC  MOV M, ZERO
-001B  [79] call delay_short
-      001B  DD  LDL RA, #29
-      001C  30  LDH RA, #0
-      001D  A8  MOV PRL, RA
-      001E  C5  LDL RA, #5
-      001F  30  LDH RA, #0
+0009  [39] call oled_gpio_bus_init
+      0009  DA  LDL RA, #26
+      000A  36  LDH RA, #6
+      000B  A8  MOV PRL, RA
+      000C  B4  MOV PRH, ZERO
+      000D  07  JAL
+000E  [41] call oled_init_basic
+      000E  C9  LDL RA, #9
+      000F  36  LDH RA, #6
+      0010  A8  MOV PRL, RA
+      0011  C7  LDL RA, #7
+      0012  B0  MOV PRH, RA
+      0013  07  JAL
+0014  [42] mov rd, rb
+      0014  8A  MOV RD, RB
+0015  [43] cmp zero
+      0015  7C  CMP ZERO
+0016  [44] jne fail
+      0016  CB  LDL RA, #11
+      0017  36  LDH RA, #6
+      0018  A8  MOV PRL, RA
+      0019  B4  MOV PRH, ZERO
+      001A  19  JNE
+001B  [47] mov rb, zero
+      001B  94  MOV RB, ZERO
+001C  [48] call oled_fill_screen
+      001C  C7  LDL RA, #7
+      001D  32  LDH RA, #2
+      001E  A8  MOV PRL, RA
+      001F  C8  LDL RA, #8
       0020  B0  MOV PRH, RA
       0021  07  JAL
-0022  [80] nop
-      0022  00  NOP
-0023  [83] call oled_init_basic
-      0023  D7  LDL RA, #23
-      0024  35  LDH RA, #5
-      0025  A8  MOV PRL, RA
-      0026  C7  LDL RA, #7
-      0027  30  LDH RA, #0
-      0028  B0  MOV PRH, RA
-      0029  07  JAL
-002A  [84] mov rd, rb
-      002A  8A  MOV RD, RB
-002B  [85] cmp zero
-      002B  7C  CMP ZERO
-002C  [86] jne fail
-      002C  D0  LDL RA, #16
-      002D  33  LDH RA, #3
-      002E  A8  MOV PRL, RA
-      002F  C1  LDL RA, #1
-      0030  30  LDH RA, #0
-      0031  B0  MOV PRH, RA
-      0032  19  JNE
-0033  [89] ldi #0xB0
-      0033  D0  LDL RA, #16
-      0034  35  LDH RA, #5
-0035  [90] mov rb, ra
-      0035  90  MOV RB, RA
-0036  [91] call clear_page
-      0036  CA  LDL RA, #10
-      0037  32  LDH RA, #2
-      0038  A8  MOV PRL, RA
-      0039  C2  LDL RA, #2
-      003A  30  LDH RA, #0
-      003B  B0  MOV PRH, RA
-      003C  07  JAL
-003D  [92] mov rd, rb
-      003D  8A  MOV RD, RB
-003E  [93] cmp zero
+0022  [49] mov rd, rb
+      0022  8A  MOV RD, RB
+0023  [50] cmp zero
+      0023  7C  CMP ZERO
+0024  [51] jne fail
+      0024  CB  LDL RA, #11
+      0025  36  LDH RA, #6
+      0026  A8  MOV PRL, RA
+      0027  B4  MOV PRH, ZERO
+      0028  19  JNE
+0029  [56] ldi $GPIO_BASE_H
+      0029  C8  LDL RA, #8
+002A  [57] mov marh, ra
+      002A  A0  MOV MARH, RA
+002B  [58] ldi $BUTTON_GPIO_IN_L
+      002B  D2  LDL RA, #18
+002C  [59] mov marl, ra
+      002C  98  MOV MARL, RA
+002D  [60] mov rd, m
+      002D  8F  MOV RD, M
+002E  [61] cmp zero
+      002E  7C  CMP ZERO
+002F  [62] jne MAIN_LOOP__WAIT_UNTIL_IDLE
+      002F  C9  LDL RA, #9
+      0030  31  LDH RA, #1
+      0031  A8  MOV PRL, RA
+      0032  B4  MOV PRH, ZERO
+      0033  19  JNE
+0034  [64] call debounce_delay
+      0034  D2  LDL RA, #18
+      0035  35  LDH RA, #5
+      0036  A8  MOV PRL, RA
+      0037  B4  MOV PRH, ZERO
+      0038  07  JAL
+0039  [65] ldi $GPIO_BASE_H
+      0039  C8  LDL RA, #8
+003A  [66] mov marh, ra
+      003A  A0  MOV MARH, RA
+003B  [67] ldi $BUTTON_GPIO_IN_L
+      003B  D2  LDL RA, #18
+003C  [68] mov marl, ra
+      003C  98  MOV MARL, RA
+003D  [69] mov rd, m
+      003D  8F  MOV RD, M
+003E  [70] cmp zero
       003E  7C  CMP ZERO
-003F  [94] jne fail
-      003F  D0  LDL RA, #16
-      0040  33  LDH RA, #3
+003F  [71] jne MAIN_LOOP__WAIT_UNTIL_IDLE
+      003F  C9  LDL RA, #9
+      0040  31  LDH RA, #1
       0041  A8  MOV PRL, RA
-      0042  C1  LDL RA, #1
-      0043  30  LDH RA, #0
-      0044  B0  MOV PRH, RA
-      0045  19  JNE
-0046  [96] ldi #0xB1
-      0046  D1  LDL RA, #17
-      0047  35  LDH RA, #5
-0048  [97] mov rb, ra
-      0048  90  MOV RB, RA
-0049  [98] call clear_page
-      0049  CA  LDL RA, #10
-      004A  32  LDH RA, #2
-      004B  A8  MOV PRL, RA
-      004C  C2  LDL RA, #2
-      004D  30  LDH RA, #0
-      004E  B0  MOV PRH, RA
-      004F  07  JAL
-0050  [99] mov rd, rb
-      0050  8A  MOV RD, RB
-0051  [100] cmp zero
-      0051  7C  CMP ZERO
-0052  [101] jne fail
-      0052  D0  LDL RA, #16
-      0053  33  LDH RA, #3
-      0054  A8  MOV PRL, RA
-      0055  C1  LDL RA, #1
-      0056  30  LDH RA, #0
-      0057  B0  MOV PRH, RA
-      0058  19  JNE
-0059  [103] ldi #0xB2
-      0059  D2  LDL RA, #18
-      005A  35  LDH RA, #5
-005B  [104] mov rb, ra
-      005B  90  MOV RB, RA
-005C  [105] call clear_page
-      005C  CA  LDL RA, #10
-      005D  32  LDH RA, #2
-      005E  A8  MOV PRL, RA
-      005F  C2  LDL RA, #2
-      0060  30  LDH RA, #0
-      0061  B0  MOV PRH, RA
-      0062  07  JAL
-0063  [106] mov rd, rb
-      0063  8A  MOV RD, RB
-0064  [107] cmp zero
-      0064  7C  CMP ZERO
-0065  [108] jne fail
-      0065  D0  LDL RA, #16
-      0066  33  LDH RA, #3
-      0067  A8  MOV PRL, RA
-      0068  C1  LDL RA, #1
-      0069  30  LDH RA, #0
-      006A  B0  MOV PRH, RA
-      006B  19  JNE
-006C  [110] ldi #0xB3
-      006C  D3  LDL RA, #19
-      006D  35  LDH RA, #5
-006E  [111] mov rb, ra
-      006E  90  MOV RB, RA
-006F  [112] call clear_page
-      006F  CA  LDL RA, #10
-      0070  32  LDH RA, #2
-      0071  A8  MOV PRL, RA
-      0072  C2  LDL RA, #2
-      0073  30  LDH RA, #0
-      0074  B0  MOV PRH, RA
-      0075  07  JAL
-0076  [113] mov rd, rb
-      0076  8A  MOV RD, RB
-0077  [114] cmp zero
-      0077  7C  CMP ZERO
-0078  [115] jne fail
-      0078  D0  LDL RA, #16
-      0079  33  LDH RA, #3
-      007A  A8  MOV PRL, RA
-      007B  C1  LDL RA, #1
-      007C  30  LDH RA, #0
-      007D  B0  MOV PRH, RA
-      007E  19  JNE
-007F  [117] ldi #0xB4
-      007F  D4  LDL RA, #20
+      0042  B4  MOV PRH, ZERO
+      0043  19  JNE
+0044  [74] ldi $GPIO_BASE_H
+      0044  C8  LDL RA, #8
+0045  [75] mov marh, ra
+      0045  A0  MOV MARH, RA
+0046  [76] ldi $BUTTON_GPIO_IN_L
+      0046  D2  LDL RA, #18
+0047  [77] mov marl, ra
+      0047  98  MOV MARL, RA
+0048  [79] mov rd, m
+      0048  8F  MOV RD, M
+0049  [80] cmp zero
+      0049  7C  CMP ZERO
+004A  [81] jeq MAIN_LOOP__WAIT_UNTIL_BUTTON
+      004A  C4  LDL RA, #4
+      004B  32  LDH RA, #2
+      004C  A8  MOV PRL, RA
+      004D  B4  MOV PRH, ZERO
+      004E  18  JEQ
+004F  [83] call debounce_delay
+      004F  D2  LDL RA, #18
+      0050  35  LDH RA, #5
+      0051  A8  MOV PRL, RA
+      0052  B4  MOV PRH, ZERO
+      0053  07  JAL
+0054  [84] ldi $GPIO_BASE_H
+      0054  C8  LDL RA, #8
+0055  [85] mov marh, ra
+      0055  A0  MOV MARH, RA
+0056  [86] ldi $BUTTON_GPIO_IN_L
+      0056  D2  LDL RA, #18
+0057  [87] mov marl, ra
+      0057  98  MOV MARL, RA
+0058  [88] mov rd, m
+      0058  8F  MOV RD, M
+0059  [89] cmp zero
+      0059  7C  CMP ZERO
+005A  [90] jeq MAIN_LOOP__WAIT_UNTIL_BUTTON
+      005A  C4  LDL RA, #4
+      005B  32  LDH RA, #2
+      005C  A8  MOV PRL, RA
+      005D  B4  MOV PRH, ZERO
+      005E  18  JEQ
+005F  [94] ldi $SQ_COL_ADDR_H
+      005F  C0  LDL RA, #0
+0060  [95] mov marh, ra
+      0060  A0  MOV MARH, RA
+0061  [96] ldi $SQ_COL_ADDR_L
+      0061  C0  LDL RA, #0
+      0062  31  LDH RA, #1
+0063  [97] mov marl, ra
+      0063  98  MOV MARL, RA
+0064  [98] push marl
+      0064  27  PUSH MARL
+0065  [99] push marh
+      0065  24  PUSH MARH
+0066  [101] ldi #0xB0
+      0066  D0  LDL RA, #16
+      0067  35  LDH RA, #5
+0068  [102] mov rb, ra
+      0068  90  MOV RB, RA
+0069  [103] mov rd, m
+      0069  8F  MOV RD, M
+006A  [104] ldi #8
+      006A  C8  LDL RA, #8
+006B  [105] push ra
+      006B  20  PUSH RA
+006C  [106] call oled_clear_square
+      006C  D6  LDL RA, #22
+      006D  31  LDH RA, #1
+      006E  A8  MOV PRL, RA
+      006F  C9  LDL RA, #9
+      0070  B0  MOV PRH, RA
+      0071  07  JAL
+0072  [107] mov rd, rb
+      0072  8A  MOV RD, RB
+0073  [108] cmp zero
+      0073  7C  CMP ZERO
+0074  [109] jne fail
+      0074  CB  LDL RA, #11
+      0075  36  LDH RA, #6
+      0076  A8  MOV PRL, RA
+      0077  B4  MOV PRH, ZERO
+      0078  19  JNE
+0079  [111] pop marh
+      0079  2C  POP MARH
+007A  [112] pop marl
+      007A  2B  POP MARL
+007B  [113] mov rb, m
+      007B  97  MOV RB, M
+007C  [114] ldi rd, #8
+      007C  E8  LDL RD, #8
+007D  [115] add rb
+      007D  42  ADD RB
+007E  [116] mov m, acc
+      007E  BB  MOV M, ACC
+007F  [119] ldi #0xB0
+      007F  D0  LDL RA, #16
       0080  35  LDH RA, #5
-0081  [118] mov rb, ra
+0081  [120] mov rb, ra
       0081  90  MOV RB, RA
-0082  [119] call clear_page
-      0082  CA  LDL RA, #10
-      0083  32  LDH RA, #2
-      0084  A8  MOV PRL, RA
-      0085  C2  LDL RA, #2
-      0086  30  LDH RA, #0
-      0087  B0  MOV PRH, RA
-      0088  07  JAL
-0089  [120] mov rd, rb
-      0089  8A  MOV RD, RB
-008A  [121] cmp zero
-      008A  7C  CMP ZERO
-008B  [122] jne fail
-      008B  D0  LDL RA, #16
-      008C  33  LDH RA, #3
-      008D  A8  MOV PRL, RA
-      008E  C1  LDL RA, #1
-      008F  30  LDH RA, #0
-      0090  B0  MOV PRH, RA
+0082  [121] mov rd, m
+      0082  8F  MOV RD, M
+0083  [122] ldi #8
+      0083  C8  LDL RA, #8
+0084  [123] push ra
+      0084  20  PUSH RA
+0085  [124] call oled_draw_square
+      0085  D8  LDL RA, #24
+      0086  36  LDH RA, #6
+      0087  A8  MOV PRL, RA
+      0088  C8  LDL RA, #8
+      0089  B0  MOV PRH, RA
+      008A  07  JAL
+008B  [125] mov rd, rb
+      008B  8A  MOV RD, RB
+008C  [126] cmp zero
+      008C  7C  CMP ZERO
+008D  [127] jne fail
+      008D  CB  LDL RA, #11
+      008E  36  LDH RA, #6
+      008F  A8  MOV PRL, RA
+      0090  B4  MOV PRH, ZERO
       0091  19  JNE
-0092  [124] ldi #0xB5
-      0092  D5  LDL RA, #21
-      0093  35  LDH RA, #5
-0094  [125] mov rb, ra
-      0094  90  MOV RB, RA
-0095  [126] call clear_page
-      0095  CA  LDL RA, #10
-      0096  32  LDH RA, #2
-      0097  A8  MOV PRL, RA
-      0098  C2  LDL RA, #2
-      0099  30  LDH RA, #0
-      009A  B0  MOV PRH, RA
-      009B  07  JAL
-009C  [127] mov rd, rb
-      009C  8A  MOV RD, RB
-009D  [128] cmp zero
-      009D  7C  CMP ZERO
-009E  [129] jne fail
-      009E  D0  LDL RA, #16
-      009F  33  LDH RA, #3
-      00A0  A8  MOV PRL, RA
-      00A1  C1  LDL RA, #1
-      00A2  30  LDH RA, #0
-      00A3  B0  MOV PRH, RA
-      00A4  19  JNE
-00A5  [131] ldi #0xB6
-      00A5  D6  LDL RA, #22
-      00A6  35  LDH RA, #5
-00A7  [132] mov rb, ra
-      00A7  90  MOV RB, RA
-00A8  [133] call clear_page
-      00A8  CA  LDL RA, #10
-      00A9  32  LDH RA, #2
+0092  [130] ldi $GPIO_BASE_H
+      0092  C8  LDL RA, #8
+0093  [131] mov marh, ra
+      0093  A0  MOV MARH, RA
+0094  [132] ldi $BUTTON_GPIO_IN_L
+      0094  D2  LDL RA, #18
+0095  [133] mov marl, ra
+      0095  98  MOV MARL, RA
+0096  [134] mov rd, m
+      0096  8F  MOV RD, M
+0097  [135] cmp zero
+      0097  7C  CMP ZERO
+0098  [136] jne MAIN_LOOP__WAIT_UNTIL_RELEASE
+      0098  D2  LDL RA, #18
+      0099  34  LDH RA, #4
+      009A  A8  MOV PRL, RA
+      009B  B4  MOV PRH, ZERO
+      009C  19  JNE
+009D  [138] call debounce_delay
+      009D  D2  LDL RA, #18
+      009E  35  LDH RA, #5
+      009F  A8  MOV PRL, RA
+      00A0  B4  MOV PRH, ZERO
+      00A1  07  JAL
+00A2  [139] ldi $GPIO_BASE_H
+      00A2  C8  LDL RA, #8
+00A3  [140] mov marh, ra
+      00A3  A0  MOV MARH, RA
+00A4  [141] ldi $BUTTON_GPIO_IN_L
+      00A4  D2  LDL RA, #18
+00A5  [142] mov marl, ra
+      00A5  98  MOV MARL, RA
+00A6  [143] mov rd, m
+      00A6  8F  MOV RD, M
+00A7  [144] cmp zero
+      00A7  7C  CMP ZERO
+00A8  [145] jne MAIN_LOOP__WAIT_UNTIL_RELEASE
+      00A8  D2  LDL RA, #18
+      00A9  34  LDH RA, #4
       00AA  A8  MOV PRL, RA
-      00AB  C2  LDL RA, #2
-      00AC  30  LDH RA, #0
-      00AD  B0  MOV PRH, RA
-      00AE  07  JAL
-00AF  [134] mov rd, rb
-      00AF  8A  MOV RD, RB
-00B0  [135] cmp zero
-      00B0  7C  CMP ZERO
-00B1  [136] jne fail
-      00B1  D0  LDL RA, #16
-      00B2  33  LDH RA, #3
-      00B3  A8  MOV PRL, RA
-      00B4  C1  LDL RA, #1
-      00B5  30  LDH RA, #0
-      00B6  B0  MOV PRH, RA
-      00B7  19  JNE
-00B8  [138] ldi #0xB7
-      00B8  D7  LDL RA, #23
+      00AB  B4  MOV PRH, ZERO
+      00AC  19  JNE
+00AD  [148] jmp main_loop
+      00AD  C9  LDL RA, #9
+      00AE  31  LDH RA, #1
+      00AF  A8  MOV PRL, RA
+      00B0  B4  MOV PRH, ZERO
+      00B1  1F  JMP
+00B2  [151] push lrl
+      00B2  25  PUSH LRL
+00B3  [152] push lrh
+      00B3  26  PUSH LRH
+00B4  [153] ldi rd, $BUTTON_DEBOUNCE
+      00B4  E0  LDL RD, #0
+      00B5  3C  LDH RD, #4
+00B6  [155] subi #1
+      00B6  69  SUBI #1
+00B7  [156] mov rd, acc
+      00B7  8B  MOV RD, ACC
+00B8  [157] jne DEBOUNCE_DELAY__DEBOUNCE_LOOP
+      00B8  D6  LDL RA, #22
       00B9  35  LDH RA, #5
-00BA  [139] mov rb, ra
-      00BA  90  MOV RB, RA
-00BB  [140] call clear_page
-      00BB  CA  LDL RA, #10
-      00BC  32  LDH RA, #2
-      00BD  A8  MOV PRL, RA
-      00BE  C2  LDL RA, #2
-      00BF  30  LDH RA, #0
-      00C0  B0  MOV PRH, RA
-      00C1  07  JAL
-00C2  [141] mov rd, rb
-      00C2  8A  MOV RD, RB
-00C3  [142] cmp zero
-      00C3  7C  CMP ZERO
-00C4  [143] jne fail
-      00C4  D0  LDL RA, #16
-      00C5  33  LDH RA, #3
-      00C6  A8  MOV PRL, RA
-      00C7  C1  LDL RA, #1
-      00C8  30  LDH RA, #0
-      00C9  B0  MOV PRH, RA
-      00CA  19  JNE
-00CB  [146] ldi #0xB0
-      00CB  D0  LDL RA, #16
-      00CC  35  LDH RA, #5
-00CD  [147] mov rb, ra
-      00CD  90  MOV RB, RA
-00CE  [148] call fill_page_ff
-      00CE  DF  LDL RA, #31
-      00CF  34  LDH RA, #4
-      00D0  A8  MOV PRL, RA
-      00D1  C2  LDL RA, #2
-      00D2  30  LDH RA, #0
-      00D3  B0  MOV PRH, RA
-      00D4  07  JAL
-00D5  [149] mov rd, rb
-      00D5  8A  MOV RD, RB
-00D6  [150] cmp zero
-      00D6  7C  CMP ZERO
-00D7  [151] jne fail
-      00D7  D0  LDL RA, #16
-      00D8  33  LDH RA, #3
-      00D9  A8  MOV PRL, RA
-      00DA  C1  LDL RA, #1
-      00DB  30  LDH RA, #0
-      00DC  B0  MOV PRH, RA
-      00DD  19  JNE
-00DE  [153] ldi #0xB1
-      00DE  D1  LDL RA, #17
-      00DF  35  LDH RA, #5
-00E0  [154] mov rb, ra
-      00E0  90  MOV RB, RA
-00E1  [155] call fill_page_ff
-      00E1  DF  LDL RA, #31
-      00E2  34  LDH RA, #4
-      00E3  A8  MOV PRL, RA
-      00E4  C2  LDL RA, #2
-      00E5  30  LDH RA, #0
-      00E6  B0  MOV PRH, RA
-      00E7  07  JAL
-00E8  [156] mov rd, rb
-      00E8  8A  MOV RD, RB
-00E9  [157] cmp zero
-      00E9  7C  CMP ZERO
-00EA  [158] jne fail
-      00EA  D0  LDL RA, #16
-      00EB  33  LDH RA, #3
-      00EC  A8  MOV PRL, RA
-      00ED  C1  LDL RA, #1
-      00EE  30  LDH RA, #0
-      00EF  B0  MOV PRH, RA
-      00F0  19  JNE
-00F1  [160] ldi #0xB2
-      00F1  D2  LDL RA, #18
-      00F2  35  LDH RA, #5
-00F3  [161] mov rb, ra
-      00F3  90  MOV RB, RA
-00F4  [162] call fill_page_ff
-      00F4  DF  LDL RA, #31
-      00F5  34  LDH RA, #4
-      00F6  A8  MOV PRL, RA
-      00F7  C2  LDL RA, #2
-      00F8  30  LDH RA, #0
-      00F9  B0  MOV PRH, RA
-      00FA  07  JAL
-00FB  [163] mov rd, rb
-      00FB  8A  MOV RD, RB
-00FC  [164] cmp zero
-      00FC  7C  CMP ZERO
-00FD  [165] jne fail
-      00FD  D0  LDL RA, #16
+      00BA  A8  MOV PRL, RA
+      00BB  B4  MOV PRH, ZERO
+      00BC  19  JNE
+00BD  [158] ret :stack
+      00BD  2E  POP PRH
+      00BE  2D  POP PRL
+      00BF  1F  JMP
+00C0  [161] ldi $SYS_LED_H
+      00C0  CC  LDL RA, #12
+00C1  [162] mov marh, ra
+      00C1  A0  MOV MARH, RA
+00C2  [163] ldi $SYS_LED_L
+      00C2  C0  LDL RA, #0
+00C3  [164] mov marl, ra
+      00C3  98  MOV MARL, RA
+00C4  [165] ldi $LED_OK
+      00C4  C1  LDL RA, #1
+00C5  [166] mov m, ra
+      00C5  B8  MOV M, RA
+00C6  [167] jmpa done
+      00C6  D5  LDL RA, #21
+      00C7  36  LDH RA, #6
+      00C8  A8  MOV PRL, RA
+      00C9  B4  MOV PRH, ZERO
+      00CA  1F  JMP
+00CB  [170] ldi $SYS_LED_H
+      00CB  CC  LDL RA, #12
+00CC  [171] mov marh, ra
+      00CC  A0  MOV MARH, RA
+00CD  [172] ldi $SYS_LED_L
+      00CD  C0  LDL RA, #0
+00CE  [173] mov marl, ra
+      00CE  98  MOV MARL, RA
+00CF  [174] mov m, rb
+      00CF  BA  MOV M, RB
+00D0  [175] jmpa done
+      00D0  D5  LDL RA, #21
+      00D1  36  LDH RA, #6
+      00D2  A8  MOV PRL, RA
+      00D3  B4  MOV PRH, ZERO
+      00D4  1F  JMP
+00D5  [178] jmpa done
+      00D5  D5  LDL RA, #21
+      00D6  36  LDH RA, #6
+      00D7  A8  MOV PRL, RA
+      00D8  B4  MOV PRH, ZERO
+      00D9  1F  JMP
+
+; Source: /mnt/d/Projects/ArniComp-Support-Package/assembler/lib/oled_soft_i2c.asm
+00DA  [35] ldi $OLED_GPIO_BASE_H
+      00DA  C8  LDL RA, #8
+00DB  [36] mov marh, ra
+      00DB  A0  MOV MARH, RA
+00DC  [39] ldi $OLED_GPIO_OUT0_L
+      00DC  C0  LDL RA, #0
+      00DD  31  LDH RA, #1
+00DE  [40] mov marl, ra
+      00DE  98  MOV MARL, RA
+00DF  [41] mov m, zero
+      00DF  BC  MOV M, ZERO
+00E0  [43] ldi $OLED_GPIO_OUT1_L
+      00E0  C1  LDL RA, #1
+      00E1  31  LDH RA, #1
+00E2  [44] mov marl, ra
+      00E2  98  MOV MARL, RA
+00E3  [45] mov m, zero
+      00E3  BC  MOV M, ZERO
+00E4  [47] ldi $OLED_GPIO_DIR0_L
+      00E4  D0  LDL RA, #16
+      00E5  31  LDH RA, #1
+00E6  [48] mov marl, ra
+      00E6  98  MOV MARL, RA
+00E7  [49] mov m, zero
+      00E7  BC  MOV M, ZERO
+00E8  [51] ldi $OLED_GPIO_DIR1_L
+      00E8  D1  LDL RA, #17
+      00E9  31  LDH RA, #1
+00EA  [52] mov marl, ra
+      00EA  98  MOV MARL, RA
+00EB  [53] mov m, zero
+      00EB  BC  MOV M, ZERO
+00EC  [55] mov rb, zero
+      00EC  94  MOV RB, ZERO
+00ED  [56] ret
+      00ED  AD  MOV PRL, LRL
+      00EE  B6  MOV PRH, LRH
+      00EF  1F  JMP
+00F0  [73] push lrl
+      00F0  25  PUSH LRL
+00F1  [74] push lrh
+      00F1  26  PUSH LRH
+00F2  [76] ldi $F_TMP_BASE_H
+      00F2  C0  LDL RA, #0
+00F3  [77] mov marh, ra
+      00F3  A0  MOV MARH, RA
+00F4  [78] ldi $F_T0_L
+      00F4  C0  LDL RA, #0
+00F5  [79] mov marl, ra
+      00F5  98  MOV MARL, RA
+00F6  [80] mov m, rb
+      00F6  BA  MOV M, RB
+00F7  [82] call @OLED_WRITE_COMMAND__I2C_START
+      00F7  CE  LDL RA, #14
+      00F8  33  LDH RA, #3
+      00F9  A8  MOV PRL, RA
+      00FA  C1  LDL RA, #1
+      00FB  B0  MOV PRH, RA
+      00FC  07  JAL
+00FD  [84] ldi $OLED_ADDR_W
+      00FD  D8  LDL RA, #24
       00FE  33  LDH RA, #3
-      00FF  A8  MOV PRL, RA
-      0100  C1  LDL RA, #1
-      0101  30  LDH RA, #0
-      0102  B0  MOV PRH, RA
-      0103  19  JNE
-0104  [167] ldi #0xB3
-      0104  D3  LDL RA, #19
-      0105  35  LDH RA, #5
-0106  [168] mov rb, ra
-      0106  90  MOV RB, RA
-0107  [169] call fill_page_ff
-      0107  DF  LDL RA, #31
-      0108  34  LDH RA, #4
-      0109  A8  MOV PRL, RA
-      010A  C2  LDL RA, #2
-      010B  30  LDH RA, #0
-      010C  B0  MOV PRH, RA
-      010D  07  JAL
-010E  [170] mov rd, rb
-      010E  8A  MOV RD, RB
-010F  [171] cmp zero
-      010F  7C  CMP ZERO
-0110  [172] jne fail
-      0110  D0  LDL RA, #16
-      0111  33  LDH RA, #3
-      0112  A8  MOV PRL, RA
-      0113  C1  LDL RA, #1
-      0114  30  LDH RA, #0
-      0115  B0  MOV PRH, RA
-      0116  19  JNE
-0117  [174] ldi #0xB4
-      0117  D4  LDL RA, #20
-      0118  35  LDH RA, #5
-0119  [175] mov rb, ra
-      0119  90  MOV RB, RA
-011A  [176] call fill_page_ff
-      011A  DF  LDL RA, #31
-      011B  34  LDH RA, #4
-      011C  A8  MOV PRL, RA
-      011D  C2  LDL RA, #2
-      011E  30  LDH RA, #0
-      011F  B0  MOV PRH, RA
-      0120  07  JAL
-0121  [177] mov rd, rb
-      0121  8A  MOV RD, RB
-0122  [178] cmp zero
-      0122  7C  CMP ZERO
-0123  [179] jne fail
-      0123  D0  LDL RA, #16
-      0124  33  LDH RA, #3
-      0125  A8  MOV PRL, RA
-      0126  C1  LDL RA, #1
-      0127  30  LDH RA, #0
+00FF  [85] mov rb, ra
+      00FF  90  MOV RB, RA
+0100  [86] call @OLED_WRITE_COMMAND__SEND_BYTE
+      0100  CF  LDL RA, #15
+      0101  37  LDH RA, #7
+      0102  A8  MOV PRL, RA
+      0103  C1  LDL RA, #1
+      0104  B0  MOV PRH, RA
+      0105  07  JAL
+0106  [87] call @OLED_WRITE_COMMAND__READ_ACK
+      0106  DF  LDL RA, #31
+      0107  35  LDH RA, #5
+      0108  A8  MOV PRL, RA
+      0109  C1  LDL RA, #1
+      010A  B0  MOV PRH, RA
+      010B  07  JAL
+010C  [88] mov rd, rb
+      010C  8A  MOV RD, RB
+010D  [89] cmp zero
+      010D  7C  CMP ZERO
+010E  [90] jne @OLED_WRITE_COMMAND__FAIL_ADDR
+      010E  CD  LDL RA, #13
+      010F  32  LDH RA, #2
+      0110  A8  MOV PRL, RA
+      0111  C1  LDL RA, #1
+      0112  B0  MOV PRH, RA
+      0113  19  JNE
+0114  [92] ldi $OLED_CTRL_CMD
+      0114  C0  LDL RA, #0
+0115  [93] mov rb, ra
+      0115  90  MOV RB, RA
+0116  [94] call @OLED_WRITE_COMMAND__SEND_BYTE
+      0116  CF  LDL RA, #15
+      0117  37  LDH RA, #7
+      0118  A8  MOV PRL, RA
+      0119  C1  LDL RA, #1
+      011A  B0  MOV PRH, RA
+      011B  07  JAL
+011C  [95] call @OLED_WRITE_COMMAND__READ_ACK
+      011C  DF  LDL RA, #31
+      011D  35  LDH RA, #5
+      011E  A8  MOV PRL, RA
+      011F  C1  LDL RA, #1
+      0120  B0  MOV PRH, RA
+      0121  07  JAL
+0122  [96] mov rd, rb
+      0122  8A  MOV RD, RB
+0123  [97] cmp zero
+      0123  7C  CMP ZERO
+0124  [98] jne @OLED_WRITE_COMMAND__FAIL_CTRL
+      0124  D8  LDL RA, #24
+      0125  32  LDH RA, #2
+      0126  A8  MOV PRL, RA
+      0127  C1  LDL RA, #1
       0128  B0  MOV PRH, RA
       0129  19  JNE
-012A  [181] ldi #0xB5
-      012A  D5  LDL RA, #21
-      012B  35  LDH RA, #5
-012C  [182] mov rb, ra
-      012C  90  MOV RB, RA
-012D  [183] call fill_page_ff
-      012D  DF  LDL RA, #31
-      012E  34  LDH RA, #4
-      012F  A8  MOV PRL, RA
-      0130  C2  LDL RA, #2
-      0131  30  LDH RA, #0
-      0132  B0  MOV PRH, RA
-      0133  07  JAL
-0134  [184] mov rd, rb
-      0134  8A  MOV RD, RB
-0135  [185] cmp zero
-      0135  7C  CMP ZERO
-0136  [186] jne fail
-      0136  D0  LDL RA, #16
-      0137  33  LDH RA, #3
-      0138  A8  MOV PRL, RA
-      0139  C1  LDL RA, #1
-      013A  30  LDH RA, #0
-      013B  B0  MOV PRH, RA
-      013C  19  JNE
-013D  [188] ldi #0xB6
-      013D  D6  LDL RA, #22
-      013E  35  LDH RA, #5
-013F  [189] mov rb, ra
-      013F  90  MOV RB, RA
-0140  [190] call fill_page_ff
-      0140  DF  LDL RA, #31
-      0141  34  LDH RA, #4
-      0142  A8  MOV PRL, RA
-      0143  C2  LDL RA, #2
-      0144  30  LDH RA, #0
-      0145  B0  MOV PRH, RA
-      0146  07  JAL
-0147  [191] mov rd, rb
-      0147  8A  MOV RD, RB
-0148  [192] cmp zero
-      0148  7C  CMP ZERO
-0149  [193] jne fail
-      0149  D0  LDL RA, #16
-      014A  33  LDH RA, #3
-      014B  A8  MOV PRL, RA
-      014C  C1  LDL RA, #1
-      014D  30  LDH RA, #0
-      014E  B0  MOV PRH, RA
-      014F  19  JNE
-0150  [195] ldi #0xB7
-      0150  D7  LDL RA, #23
-      0151  35  LDH RA, #5
-0152  [196] mov rb, ra
-      0152  90  MOV RB, RA
-0153  [197] call fill_page_ff
-      0153  DF  LDL RA, #31
-      0154  34  LDH RA, #4
-      0155  A8  MOV PRL, RA
-      0156  C2  LDL RA, #2
-      0157  30  LDH RA, #0
-      0158  B0  MOV PRH, RA
-      0159  07  JAL
-015A  [198] mov rd, rb
-      015A  8A  MOV RD, RB
-015B  [199] cmp zero
-      015B  7C  CMP ZERO
-015C  [200] jne fail
-      015C  D0  LDL RA, #16
-      015D  33  LDH RA, #3
-      015E  A8  MOV PRL, RA
-      015F  C1  LDL RA, #1
-      0160  30  LDH RA, #0
-      0161  B0  MOV PRH, RA
-      0162  19  JNE
-0163  [203] ldi $SYS_LED_H
-      0163  CC  LDL RA, #12
-0164  [204] mov marh, ra
-      0164  A0  MOV MARH, RA
-0165  [205] ldi $SYS_LED_L
-      0165  C0  LDL RA, #0
-0166  [206] mov marl, ra
-      0166  98  MOV MARL, RA
-0167  [207] ldi $LED_OK
-      0167  C1  LDL RA, #1
-0168  [208] mov m, ra
-      0168  B8  MOV M, RA
-0169  [209] jmpa done
-      0169  CA  LDL RA, #10
-      016A  31  LDH RA, #1
-      016B  A8  MOV PRL, RA
-      016C  C5  LDL RA, #5
-      016D  30  LDH RA, #0
-      016E  B0  MOV PRH, RA
-      016F  1F  JMP
-0170  [212] ldi $SYS_LED_H
-      0170  CC  LDL RA, #12
-0171  [213] mov marh, ra
+012A  [100] ldi $F_TMP_BASE_H
+      012A  C0  LDL RA, #0
+012B  [101] mov marh, ra
+      012B  A0  MOV MARH, RA
+012C  [102] ldi $F_T0_L
+      012C  C0  LDL RA, #0
+012D  [103] mov marl, ra
+      012D  98  MOV MARL, RA
+012E  [104] mov rb, m
+      012E  97  MOV RB, M
+012F  [105] call @OLED_WRITE_COMMAND__SEND_BYTE
+      012F  CF  LDL RA, #15
+      0130  37  LDH RA, #7
+      0131  A8  MOV PRL, RA
+      0132  C1  LDL RA, #1
+      0133  B0  MOV PRH, RA
+      0134  07  JAL
+0135  [106] call @OLED_WRITE_COMMAND__READ_ACK
+      0135  DF  LDL RA, #31
+      0136  35  LDH RA, #5
+      0137  A8  MOV PRL, RA
+      0138  C1  LDL RA, #1
+      0139  B0  MOV PRH, RA
+      013A  07  JAL
+013B  [107] mov rd, rb
+      013B  8A  MOV RD, RB
+013C  [108] cmp zero
+      013C  7C  CMP ZERO
+013D  [109] jne @OLED_WRITE_COMMAND__FAIL_CMD
+      013D  C3  LDL RA, #3
+      013E  33  LDH RA, #3
+      013F  A8  MOV PRL, RA
+      0140  C1  LDL RA, #1
+      0141  B0  MOV PRH, RA
+      0142  19  JNE
+0143  [111] call @OLED_WRITE_COMMAND__I2C_STOP
+      0143  D9  LDL RA, #25
+      0144  34  LDH RA, #4
+      0145  A8  MOV PRL, RA
+      0146  C1  LDL RA, #1
+      0147  B0  MOV PRH, RA
+      0148  07  JAL
+0149  [112] mov rb, zero
+      0149  94  MOV RB, ZERO
+014A  [113] ret :stack
+      014A  2E  POP PRH
+      014B  2D  POP PRL
+      014C  1F  JMP
+014D  [116] call @OLED_WRITE_COMMAND__I2C_STOP
+      014D  D9  LDL RA, #25
+      014E  34  LDH RA, #4
+      014F  A8  MOV PRL, RA
+      0150  C1  LDL RA, #1
+      0151  B0  MOV PRH, RA
+      0152  07  JAL
+0153  [117] ldi $OLED_ERR_ADDR
+      0153  C2  LDL RA, #2
+0154  [118] mov rb, ra
+      0154  90  MOV RB, RA
+0155  [119] ret :stack
+      0155  2E  POP PRH
+      0156  2D  POP PRL
+      0157  1F  JMP
+0158  [122] call @OLED_WRITE_COMMAND__I2C_STOP
+      0158  D9  LDL RA, #25
+      0159  34  LDH RA, #4
+      015A  A8  MOV PRL, RA
+      015B  C1  LDL RA, #1
+      015C  B0  MOV PRH, RA
+      015D  07  JAL
+015E  [123] ldi $OLED_ERR_CTRL
+      015E  C3  LDL RA, #3
+015F  [124] mov rb, ra
+      015F  90  MOV RB, RA
+0160  [125] ret :stack
+      0160  2E  POP PRH
+      0161  2D  POP PRL
+      0162  1F  JMP
+0163  [128] call @OLED_WRITE_COMMAND__I2C_STOP
+      0163  D9  LDL RA, #25
+      0164  34  LDH RA, #4
+      0165  A8  MOV PRL, RA
+      0166  C1  LDL RA, #1
+      0167  B0  MOV PRH, RA
+      0168  07  JAL
+0169  [129] ldi $OLED_ERR_CMD
+      0169  C4  LDL RA, #4
+016A  [130] mov rb, ra
+      016A  90  MOV RB, RA
+016B  [131] ret :stack
+      016B  2E  POP PRH
+      016C  2D  POP PRL
+      016D  1F  JMP
+016E  [134] push lrl
+      016E  25  PUSH LRL
+016F  [135] push lrh
+      016F  26  PUSH LRH
+0170  [137] ldi $OLED_GPIO_BASE_H
+      0170  C8  LDL RA, #8
+0171  [138] mov marh, ra
       0171  A0  MOV MARH, RA
-0172  [214] ldi $SYS_LED_L
-      0172  C0  LDL RA, #0
-0173  [215] mov marl, ra
-      0173  98  MOV MARL, RA
-0174  [216] mov m, rb
-      0174  BA  MOV M, RB
-0175  [217] jmpa done
-      0175  CA  LDL RA, #10
-      0176  31  LDH RA, #1
-      0177  A8  MOV PRL, RA
-      0178  C5  LDL RA, #5
-      0179  30  LDH RA, #0
-      017A  B0  MOV PRH, RA
-      017B  1F  JMP
-017C  [222] push lrl
-      017C  25  PUSH LRL
-017D  [223] push lrh
-      017D  26  PUSH LRH
-017E  [225] ldi $RAM_BASE_H
-      017E  C0  LDL RA, #0
-017F  [226] mov marh, ra
-      017F  A0  MOV MARH, RA
-0180  [227] ldi $SCRATCH_BYTE_L
-      0180  C0  LDL RA, #0
-0181  [228] mov marl, ra
-      0181  98  MOV MARL, RA
-0182  [229] mov m, rb
-      0182  BA  MOV M, RB
-0183  [231] call i2c_start
-      0183  D0  LDL RA, #16
-      0184  31  LDH RA, #1
-      0185  A8  MOV PRL, RA
-      0186  C3  LDL RA, #3
-      0187  30  LDH RA, #0
-      0188  B0  MOV PRH, RA
-      0189  07  JAL
-018A  [233] ldi $OLED_ADDR_W
-      018A  D8  LDL RA, #24
-      018B  33  LDH RA, #3
-018C  [234] mov rb, ra
-      018C  90  MOV RB, RA
-018D  [235] call send_byte
-      018D  DB  LDL RA, #27
-      018E  35  LDH RA, #5
-      018F  A8  MOV PRL, RA
-      0190  C3  LDL RA, #3
-      0191  30  LDH RA, #0
-      0192  B0  MOV PRH, RA
-      0193  07  JAL
-0194  [236] call read_ack
-      0194  C7  LDL RA, #7
-      0195  34  LDH RA, #4
-      0196  A8  MOV PRL, RA
-      0197  C3  LDL RA, #3
-      0198  30  LDH RA, #0
-      0199  B0  MOV PRH, RA
-      019A  07  JAL
-019B  [237] mov rd, rb
-      019B  8A  MOV RD, RB
-019C  [238] cmp zero
-      019C  7C  CMP ZERO
-019D  [239] jne write_fail_addr
-      019D  C0  LDL RA, #0
-      019E  30  LDH RA, #0
-      019F  A8  MOV PRL, RA
-      01A0  C3  LDL RA, #3
-      01A1  30  LDH RA, #0
-      01A2  B0  MOV PRH, RA
-      01A3  19  JNE
-01A4  [241] ldi $OLED_CTRL_CMD
-      01A4  C0  LDL RA, #0
-01A5  [242] mov rb, ra
-      01A5  90  MOV RB, RA
-01A6  [243] call send_byte
-      01A6  DB  LDL RA, #27
-      01A7  35  LDH RA, #5
-      01A8  A8  MOV PRL, RA
-      01A9  C3  LDL RA, #3
-      01AA  30  LDH RA, #0
-      01AB  B0  MOV PRH, RA
-      01AC  07  JAL
-01AD  [244] call read_ack
-      01AD  C7  LDL RA, #7
-      01AE  34  LDH RA, #4
-      01AF  A8  MOV PRL, RA
-      01B0  C3  LDL RA, #3
-      01B1  30  LDH RA, #0
-      01B2  B0  MOV PRH, RA
-      01B3  07  JAL
-01B4  [245] mov rd, rb
-      01B4  8A  MOV RD, RB
-01B5  [246] cmp zero
-      01B5  7C  CMP ZERO
-01B6  [247] jne write_fail_ctrl
+0172  [139] ldi $OLED_GPIO_DIR0_L
+      0172  D0  LDL RA, #16
+      0173  31  LDH RA, #1
+0174  [140] mov marl, ra
+      0174  98  MOV MARL, RA
+0175  [141] mov m, zero
+      0175  BC  MOV M, ZERO
+0176  [142] ldi $OLED_GPIO_DIR1_L
+      0176  D1  LDL RA, #17
+      0177  31  LDH RA, #1
+0178  [143] mov marl, ra
+      0178  98  MOV MARL, RA
+0179  [144] mov m, zero
+      0179  BC  MOV M, ZERO
+017A  [145] call @OLED_WRITE_COMMAND__DELAY_SHORT
+      017A  CC  LDL RA, #12
+      017B  31  LDH RA, #1
+      017C  A8  MOV PRL, RA
+      017D  C3  LDL RA, #3
+      017E  B0  MOV PRH, RA
+      017F  07  JAL
+0180  [147] ldi $OLED_GPIO_DIR1_L
+      0180  D1  LDL RA, #17
+      0181  31  LDH RA, #1
+0182  [148] mov marl, ra
+      0182  98  MOV MARL, RA
+0183  [149] ldi $OLED_SDA_DRIVE_LOW
+      0183  C1  LDL RA, #1
+0184  [150] mov m, ra
+      0184  B8  MOV M, RA
+0185  [151] call @OLED_WRITE_COMMAND__DELAY_SHORT
+      0185  CC  LDL RA, #12
+      0186  31  LDH RA, #1
+      0187  A8  MOV PRL, RA
+      0188  C3  LDL RA, #3
+      0189  B0  MOV PRH, RA
+      018A  07  JAL
+018B  [153] ldi $OLED_GPIO_DIR0_L
+      018B  D0  LDL RA, #16
+      018C  31  LDH RA, #1
+018D  [154] mov marl, ra
+      018D  98  MOV MARL, RA
+018E  [155] ldi $OLED_SCL_DRIVE_LOW
+      018E  C1  LDL RA, #1
+018F  [156] mov m, ra
+      018F  B8  MOV M, RA
+0190  [157] call @OLED_WRITE_COMMAND__DELAY_SHORT
+      0190  CC  LDL RA, #12
+      0191  31  LDH RA, #1
+      0192  A8  MOV PRL, RA
+      0193  C3  LDL RA, #3
+      0194  B0  MOV PRH, RA
+      0195  07  JAL
+0196  [158] ret :stack
+      0196  2E  POP PRH
+      0197  2D  POP PRL
+      0198  1F  JMP
+0199  [161] push lrl
+      0199  25  PUSH LRL
+019A  [162] push lrh
+      019A  26  PUSH LRH
+019B  [164] ldi $OLED_GPIO_BASE_H
+      019B  C8  LDL RA, #8
+019C  [165] mov marh, ra
+      019C  A0  MOV MARH, RA
+019D  [167] ldi $OLED_GPIO_DIR1_L
+      019D  D1  LDL RA, #17
+      019E  31  LDH RA, #1
+019F  [168] mov marl, ra
+      019F  98  MOV MARL, RA
+01A0  [169] ldi $OLED_SDA_DRIVE_LOW
+      01A0  C1  LDL RA, #1
+01A1  [170] mov m, ra
+      01A1  B8  MOV M, RA
+01A2  [171] call @OLED_WRITE_COMMAND__DELAY_SHORT
+      01A2  CC  LDL RA, #12
+      01A3  31  LDH RA, #1
+      01A4  A8  MOV PRL, RA
+      01A5  C3  LDL RA, #3
+      01A6  B0  MOV PRH, RA
+      01A7  07  JAL
+01A8  [173] ldi $OLED_GPIO_DIR0_L
+      01A8  D0  LDL RA, #16
+      01A9  31  LDH RA, #1
+01AA  [174] mov marl, ra
+      01AA  98  MOV MARL, RA
+01AB  [175] mov m, zero
+      01AB  BC  MOV M, ZERO
+01AC  [176] call @OLED_WRITE_COMMAND__DELAY_SHORT
+      01AC  CC  LDL RA, #12
+      01AD  31  LDH RA, #1
+      01AE  A8  MOV PRL, RA
+      01AF  C3  LDL RA, #3
+      01B0  B0  MOV PRH, RA
+      01B1  07  JAL
+01B2  [178] ldi $OLED_GPIO_DIR1_L
+      01B2  D1  LDL RA, #17
+      01B3  31  LDH RA, #1
+01B4  [179] mov marl, ra
+      01B4  98  MOV MARL, RA
+01B5  [180] mov m, zero
+      01B5  BC  MOV M, ZERO
+01B6  [181] call @OLED_WRITE_COMMAND__DELAY_SHORT
       01B6  CC  LDL RA, #12
-      01B7  30  LDH RA, #0
+      01B7  31  LDH RA, #1
       01B8  A8  MOV PRL, RA
       01B9  C3  LDL RA, #3
-      01BA  30  LDH RA, #0
-      01BB  B0  MOV PRH, RA
-      01BC  19  JNE
-01BD  [249] ldi $RAM_BASE_H
-      01BD  C0  LDL RA, #0
-01BE  [250] mov marh, ra
-      01BE  A0  MOV MARH, RA
-01BF  [251] ldi $SCRATCH_BYTE_L
-      01BF  C0  LDL RA, #0
-01C0  [252] mov marl, ra
-      01C0  98  MOV MARL, RA
-01C1  [253] mov rb, m
-      01C1  97  MOV RB, M
-01C2  [255] call send_byte
-      01C2  DB  LDL RA, #27
-      01C3  35  LDH RA, #5
-      01C4  A8  MOV PRL, RA
-      01C5  C3  LDL RA, #3
-      01C6  30  LDH RA, #0
-      01C7  B0  MOV PRH, RA
-      01C8  07  JAL
-01C9  [256] call read_ack
-      01C9  C7  LDL RA, #7
-      01CA  34  LDH RA, #4
-      01CB  A8  MOV PRL, RA
-      01CC  C3  LDL RA, #3
-      01CD  30  LDH RA, #0
-      01CE  B0  MOV PRH, RA
-      01CF  07  JAL
-01D0  [257] mov rd, rb
-      01D0  8A  MOV RD, RB
-01D1  [258] cmp zero
-      01D1  7C  CMP ZERO
-01D2  [259] jne write_fail_cmd
-      01D2  D8  LDL RA, #24
-      01D3  30  LDH RA, #0
-      01D4  A8  MOV PRL, RA
-      01D5  C3  LDL RA, #3
-      01D6  30  LDH RA, #0
-      01D7  B0  MOV PRH, RA
-      01D8  19  JNE
-01D9  [261] call i2c_stop
-      01D9  DE  LDL RA, #30
-      01DA  32  LDH RA, #2
-      01DB  A8  MOV PRL, RA
-      01DC  C3  LDL RA, #3
-      01DD  30  LDH RA, #0
-      01DE  B0  MOV PRH, RA
-      01DF  07  JAL
-01E0  [262] mov rb, zero
-      01E0  94  MOV RB, ZERO
-01E1  [263] ret :stack
-      01E1  2E  POP PRH
-      01E2  2D  POP PRL
-      01E3  1F  JMP
-01E4  [267] push lrl
-      01E4  25  PUSH LRL
-01E5  [268] push lrh
-      01E5  26  PUSH LRH
-01E6  [270] call i2c_start
-      01E6  D0  LDL RA, #16
+      01BA  B0  MOV PRH, RA
+      01BB  07  JAL
+01BC  [182] ret :stack
+      01BC  2E  POP PRH
+      01BD  2D  POP PRL
+      01BE  1F  JMP
+01BF  [185] push lrl
+      01BF  25  PUSH LRL
+01C0  [186] push lrh
+      01C0  26  PUSH LRH
+01C1  [188] ldi $OLED_GPIO_BASE_H
+      01C1  C8  LDL RA, #8
+01C2  [189] mov marh, ra
+      01C2  A0  MOV MARH, RA
+01C3  [190] ldi $OLED_GPIO_DIR1_L
+      01C3  D1  LDL RA, #17
+      01C4  31  LDH RA, #1
+01C5  [191] mov marl, ra
+      01C5  98  MOV MARL, RA
+01C6  [192] mov m, zero
+      01C6  BC  MOV M, ZERO
+01C7  [193] call @OLED_WRITE_COMMAND__DELAY_SHORT
+      01C7  CC  LDL RA, #12
+      01C8  31  LDH RA, #1
+      01C9  A8  MOV PRL, RA
+      01CA  C3  LDL RA, #3
+      01CB  B0  MOV PRH, RA
+      01CC  07  JAL
+01CD  [195] ldi $OLED_GPIO_DIR0_L
+      01CD  D0  LDL RA, #16
+      01CE  31  LDH RA, #1
+01CF  [196] mov marl, ra
+      01CF  98  MOV MARL, RA
+01D0  [197] mov m, zero
+      01D0  BC  MOV M, ZERO
+01D1  [198] call @OLED_WRITE_COMMAND__DELAY_SHORT
+      01D1  CC  LDL RA, #12
+      01D2  31  LDH RA, #1
+      01D3  A8  MOV PRL, RA
+      01D4  C3  LDL RA, #3
+      01D5  B0  MOV PRH, RA
+      01D6  07  JAL
+01D7  [199] call @OLED_WRITE_COMMAND__DELAY_SHORT
+      01D7  CC  LDL RA, #12
+      01D8  31  LDH RA, #1
+      01D9  A8  MOV PRL, RA
+      01DA  C3  LDL RA, #3
+      01DB  B0  MOV PRH, RA
+      01DC  07  JAL
+01DD  [201] ldi $OLED_GPIO_IN1_L
+      01DD  D1  LDL RA, #17
+01DE  [202] mov marl, ra
+      01DE  98  MOV MARL, RA
+01DF  [203] mov rd, m
+      01DF  8F  MOV RD, M
+01E0  [204] mov rb, rd
+      01E0  91  MOV RB, RD
+01E1  [206] ldi $OLED_GPIO_DIR0_L
+      01E1  D0  LDL RA, #16
+      01E2  31  LDH RA, #1
+01E3  [207] mov marl, ra
+      01E3  98  MOV MARL, RA
+01E4  [208] ldi $OLED_SCL_DRIVE_LOW
+      01E4  C1  LDL RA, #1
+01E5  [209] mov m, ra
+      01E5  B8  MOV M, RA
+01E6  [210] call @OLED_WRITE_COMMAND__DELAY_SHORT
+      01E6  CC  LDL RA, #12
       01E7  31  LDH RA, #1
       01E8  A8  MOV PRL, RA
       01E9  C3  LDL RA, #3
-      01EA  30  LDH RA, #0
-      01EB  B0  MOV PRH, RA
-      01EC  07  JAL
-01ED  [272] ldi $OLED_ADDR_W
-      01ED  D8  LDL RA, #24
-      01EE  33  LDH RA, #3
-01EF  [273] mov rb, ra
-      01EF  90  MOV RB, RA
-01F0  [274] call send_byte
-      01F0  DB  LDL RA, #27
-      01F1  35  LDH RA, #5
-      01F2  A8  MOV PRL, RA
-      01F3  C3  LDL RA, #3
-      01F4  30  LDH RA, #0
-      01F5  B0  MOV PRH, RA
-      01F6  07  JAL
-01F7  [275] call read_ack
-      01F7  C7  LDL RA, #7
-      01F8  34  LDH RA, #4
+      01EA  B0  MOV PRH, RA
+      01EB  07  JAL
+01EC  [211] ret :stack
+      01EC  2E  POP PRH
+      01ED  2D  POP PRL
+      01EE  1F  JMP
+01EF  [214] push lrl
+      01EF  25  PUSH LRL
+01F0  [215] push lrh
+      01F0  26  PUSH LRH
+01F1  [217] mov rd, rb
+      01F1  8A  MOV RD, RB
+01F2  [218] ldi #0x80
+      01F2  C0  LDL RA, #0
+      01F3  34  LDH RA, #4
+01F4  [219] and ra
+      01F4  10  AND RA
+01F5  [220] mov rd, acc
+      01F5  8B  MOV RD, ACC
+01F6  [221] cmp zero
+      01F6  7C  CMP ZERO
+01F7  [222] jeq @OLED_WRITE_COMMAND__B7_ZERO
+      01F7  C9  LDL RA, #9
+      01F8  30  LDH RA, #0
       01F9  A8  MOV PRL, RA
-      01FA  C3  LDL RA, #3
-      01FB  30  LDH RA, #0
-      01FC  B0  MOV PRH, RA
-      01FD  07  JAL
-01FE  [276] mov rd, rb
-      01FE  8A  MOV RD, RB
-01FF  [277] cmp zero
-      01FF  7C  CMP ZERO
-0200  [278] jne write_fail_addr
-      0200  C0  LDL RA, #0
-      0201  30  LDH RA, #0
-      0202  A8  MOV PRL, RA
-      0203  C3  LDL RA, #3
+      01FA  C2  LDL RA, #2
+      01FB  B0  MOV PRH, RA
+      01FC  18  JEQ
+01FD  [223] call @OLED_WRITE_COMMAND__SEND_BIT_ONE
+      01FD  D3  LDL RA, #19
+      01FE  37  LDH RA, #7
+      01FF  A8  MOV PRL, RA
+      0200  C2  LDL RA, #2
+      0201  B0  MOV PRH, RA
+      0202  07  JAL
+0203  [224] jmp @OLED_WRITE_COMMAND__B6
+      0203  CF  LDL RA, #15
       0204  30  LDH RA, #0
-      0205  B0  MOV PRH, RA
-      0206  19  JNE
-0207  [280] ldi $OLED_CTRL_DATA
-      0207  C0  LDL RA, #0
-      0208  32  LDH RA, #2
-0209  [281] mov rb, ra
-      0209  90  MOV RB, RA
-020A  [282] call send_byte
-      020A  DB  LDL RA, #27
-      020B  35  LDH RA, #5
-      020C  A8  MOV PRL, RA
-      020D  C3  LDL RA, #3
-      020E  30  LDH RA, #0
-      020F  B0  MOV PRH, RA
-      0210  07  JAL
-0211  [283] call read_ack
-      0211  C7  LDL RA, #7
-      0212  34  LDH RA, #4
-      0213  A8  MOV PRL, RA
-      0214  C3  LDL RA, #3
-      0215  30  LDH RA, #0
-      0216  B0  MOV PRH, RA
-      0217  07  JAL
-0218  [284] mov rd, rb
-      0218  8A  MOV RD, RB
-0219  [285] cmp zero
-      0219  7C  CMP ZERO
-021A  [286] jne write_fail_ctrl
-      021A  CC  LDL RA, #12
-      021B  30  LDH RA, #0
-      021C  A8  MOV PRL, RA
-      021D  C3  LDL RA, #3
-      021E  30  LDH RA, #0
+      0205  A8  MOV PRL, RA
+      0206  C2  LDL RA, #2
+      0207  B0  MOV PRH, RA
+      0208  1F  JMP
+0209  [226] call @OLED_WRITE_COMMAND__SEND_BIT_ZERO
+      0209  C1  LDL RA, #1
+      020A  37  LDH RA, #7
+      020B  A8  MOV PRL, RA
+      020C  C2  LDL RA, #2
+      020D  B0  MOV PRH, RA
+      020E  07  JAL
+020F  [229] mov rd, rb
+      020F  8A  MOV RD, RB
+0210  [230] ldi #0x40
+      0210  C0  LDL RA, #0
+      0211  32  LDH RA, #2
+0212  [231] and ra
+      0212  10  AND RA
+0213  [232] mov rd, acc
+      0213  8B  MOV RD, ACC
+0214  [233] cmp zero
+      0214  7C  CMP ZERO
+0215  [234] jeq @OLED_WRITE_COMMAND__B6_ZERO
+      0215  C7  LDL RA, #7
+      0216  31  LDH RA, #1
+      0217  A8  MOV PRL, RA
+      0218  C2  LDL RA, #2
+      0219  B0  MOV PRH, RA
+      021A  18  JEQ
+021B  [235] call @OLED_WRITE_COMMAND__SEND_BIT_ONE
+      021B  D3  LDL RA, #19
+      021C  37  LDH RA, #7
+      021D  A8  MOV PRL, RA
+      021E  C2  LDL RA, #2
       021F  B0  MOV PRH, RA
-      0220  19  JNE
-0221  [288] mov rb, zero
-      0221  94  MOV RB, ZERO
-0222  [289] ret :stack
-      0222  2E  POP PRH
-      0223  2D  POP PRL
-      0224  1F  JMP
-0225  [293] nop
-      0225  00  NOP
-0226  [294] nop
-      0226  00  NOP
-0227  [295] nop
-      0227  00  NOP
-0228  [296] nop
-      0228  00  NOP
-0229  [297] nop
-      0229  00  NOP
-022A  [298] nop
-      022A  00  NOP
-022B  [299] nop
-      022B  00  NOP
-022C  [300] nop
-      022C  00  NOP
-022D  [305] push lrl
-      022D  25  PUSH LRL
-022E  [306] push lrh
-      022E  26  PUSH LRH
-022F  [308] call send_byte
-      022F  DB  LDL RA, #27
-      0230  35  LDH RA, #5
-      0231  A8  MOV PRL, RA
-      0232  C3  LDL RA, #3
-      0233  30  LDH RA, #0
-      0234  B0  MOV PRH, RA
-      0235  07  JAL
-0236  [309] call read_ack
-      0236  C7  LDL RA, #7
-      0237  34  LDH RA, #4
-      0238  A8  MOV PRL, RA
-      0239  C3  LDL RA, #3
-      023A  30  LDH RA, #0
-      023B  B0  MOV PRH, RA
-      023C  07  JAL
-023D  [310] mov rd, rb
-      023D  8A  MOV RD, RB
-023E  [311] cmp zero
-      023E  7C  CMP ZERO
-023F  [312] jne write_fail_data
-      023F  C4  LDL RA, #4
-      0240  31  LDH RA, #1
+      0220  07  JAL
+0221  [236] jmp @OLED_WRITE_COMMAND__B5
+      0221  CD  LDL RA, #13
+      0222  31  LDH RA, #1
+      0223  A8  MOV PRL, RA
+      0224  C2  LDL RA, #2
+      0225  B0  MOV PRH, RA
+      0226  1F  JMP
+0227  [238] call @OLED_WRITE_COMMAND__SEND_BIT_ZERO
+      0227  C1  LDL RA, #1
+      0228  37  LDH RA, #7
+      0229  A8  MOV PRL, RA
+      022A  C2  LDL RA, #2
+      022B  B0  MOV PRH, RA
+      022C  07  JAL
+022D  [241] mov rd, rb
+      022D  8A  MOV RD, RB
+022E  [242] ldi #0x20
+      022E  C0  LDL RA, #0
+      022F  31  LDH RA, #1
+0230  [243] and ra
+      0230  10  AND RA
+0231  [244] mov rd, acc
+      0231  8B  MOV RD, ACC
+0232  [245] cmp zero
+      0232  7C  CMP ZERO
+0233  [246] jeq @OLED_WRITE_COMMAND__B5_ZERO
+      0233  C5  LDL RA, #5
+      0234  32  LDH RA, #2
+      0235  A8  MOV PRL, RA
+      0236  C2  LDL RA, #2
+      0237  B0  MOV PRH, RA
+      0238  18  JEQ
+0239  [247] call @OLED_WRITE_COMMAND__SEND_BIT_ONE
+      0239  D3  LDL RA, #19
+      023A  37  LDH RA, #7
+      023B  A8  MOV PRL, RA
+      023C  C2  LDL RA, #2
+      023D  B0  MOV PRH, RA
+      023E  07  JAL
+023F  [248] jmp @OLED_WRITE_COMMAND__B4
+      023F  CB  LDL RA, #11
+      0240  32  LDH RA, #2
       0241  A8  MOV PRL, RA
-      0242  C3  LDL RA, #3
-      0243  30  LDH RA, #0
-      0244  B0  MOV PRH, RA
-      0245  19  JNE
-0246  [314] mov rb, zero
-      0246  94  MOV RB, ZERO
-0247  [315] ret :stack
-      0247  2E  POP PRH
-      0248  2D  POP PRL
-      0249  1F  JMP
-024A  [320] push lrl
-      024A  25  PUSH LRL
-024B  [321] push lrh
-      024B  26  PUSH LRH
-024C  [323] mov rd, zero
-      024C  8C  MOV RD, ZERO
-024D  [324] call oled_set_page_column
-      024D  CC  LDL RA, #12
-      024E  32  LDH RA, #2
-      024F  A8  MOV PRL, RA
-      0250  C8  LDL RA, #8
-      0251  30  LDH RA, #0
-      0252  B0  MOV PRH, RA
-      0253  07  JAL
-0254  [325] mov rd, rb
-      0254  8A  MOV RD, RB
-0255  [326] cmp zero
-      0255  7C  CMP ZERO
-0256  [327] jne page_fail
-      0256  D6  LDL RA, #22
+      0242  C2  LDL RA, #2
+      0243  B0  MOV PRH, RA
+      0244  1F  JMP
+0245  [250] call @OLED_WRITE_COMMAND__SEND_BIT_ZERO
+      0245  C1  LDL RA, #1
+      0246  37  LDH RA, #7
+      0247  A8  MOV PRL, RA
+      0248  C2  LDL RA, #2
+      0249  B0  MOV PRH, RA
+      024A  07  JAL
+024B  [253] mov rd, rb
+      024B  8A  MOV RD, RB
+024C  [254] ldi #0x10
+      024C  D0  LDL RA, #16
+024D  [255] and ra
+      024D  10  AND RA
+024E  [256] mov rd, acc
+      024E  8B  MOV RD, ACC
+024F  [257] cmp zero
+      024F  7C  CMP ZERO
+0250  [258] jeq @OLED_WRITE_COMMAND__B4_ZERO
+      0250  C2  LDL RA, #2
+      0251  33  LDH RA, #3
+      0252  A8  MOV PRL, RA
+      0253  C2  LDL RA, #2
+      0254  B0  MOV PRH, RA
+      0255  18  JEQ
+0256  [259] call @OLED_WRITE_COMMAND__SEND_BIT_ONE
+      0256  D3  LDL RA, #19
       0257  37  LDH RA, #7
       0258  A8  MOV PRL, RA
       0259  C2  LDL RA, #2
-      025A  30  LDH RA, #0
-      025B  B0  MOV PRH, RA
-      025C  19  JNE
-025D  [329] call begin_data_stream
-      025D  C4  LDL RA, #4
-      025E  37  LDH RA, #7
-      025F  A8  MOV PRL, RA
-      0260  C1  LDL RA, #1
-      0261  30  LDH RA, #0
-      0262  B0  MOV PRH, RA
-      0263  07  JAL
-0264  [330] mov rd, rb
-      0264  8A  MOV RD, RB
-0265  [331] cmp zero
-      0265  7C  CMP ZERO
-0266  [332] jne page_fail
-      0266  D6  LDL RA, #22
-      0267  37  LDH RA, #7
-      0268  A8  MOV PRL, RA
-      0269  C2  LDL RA, #2
-      026A  30  LDH RA, #0
-      026B  B0  MOV PRH, RA
-      026C  19  JNE
-026D  [334] ldi $RAM_BASE_H
-      026D  C0  LDL RA, #0
-026E  [335] mov marh, ra
-      026E  A0  MOV MARH, RA
-026F  [336] ldi $SCRATCH_COUNT_L
-      026F  C1  LDL RA, #1
-0270  [337] mov marl, ra
-      0270  98  MOV MARL, RA
-0271  [338] ldi #0x80
-      0271  C0  LDL RA, #0
-      0272  34  LDH RA, #4
-0273  [339] mov m, ra
-      0273  B8  MOV M, RA
-0274  [342] mov rb, zero
-      0274  94  MOV RB, ZERO
-0275  [343] call stream_data_byte
-      0275  CD  LDL RA, #13
-      0276  31  LDH RA, #1
-      0277  A8  MOV PRL, RA
-      0278  C2  LDL RA, #2
-      0279  30  LDH RA, #0
-      027A  B0  MOV PRH, RA
-      027B  07  JAL
-027C  [344] mov rd, rb
-      027C  8A  MOV RD, RB
-027D  [345] cmp zero
-      027D  7C  CMP ZERO
-027E  [346] jne page_fail
-      027E  D6  LDL RA, #22
-      027F  37  LDH RA, #7
-      0280  A8  MOV PRL, RA
-      0281  C2  LDL RA, #2
-      0282  30  LDH RA, #0
+      025A  B0  MOV PRH, RA
+      025B  07  JAL
+025C  [260] jmp @OLED_WRITE_COMMAND__B3
+      025C  C8  LDL RA, #8
+      025D  33  LDH RA, #3
+      025E  A8  MOV PRL, RA
+      025F  C2  LDL RA, #2
+      0260  B0  MOV PRH, RA
+      0261  1F  JMP
+0262  [262] call @OLED_WRITE_COMMAND__SEND_BIT_ZERO
+      0262  C1  LDL RA, #1
+      0263  37  LDH RA, #7
+      0264  A8  MOV PRL, RA
+      0265  C2  LDL RA, #2
+      0266  B0  MOV PRH, RA
+      0267  07  JAL
+0268  [265] mov rd, rb
+      0268  8A  MOV RD, RB
+0269  [266] ldi #0x08
+      0269  C8  LDL RA, #8
+026A  [267] and ra
+      026A  10  AND RA
+026B  [268] mov rd, acc
+      026B  8B  MOV RD, ACC
+026C  [269] cmp zero
+      026C  7C  CMP ZERO
+026D  [270] jeq @OLED_WRITE_COMMAND__B3_ZERO
+      026D  DF  LDL RA, #31
+      026E  33  LDH RA, #3
+      026F  A8  MOV PRL, RA
+      0270  C2  LDL RA, #2
+      0271  B0  MOV PRH, RA
+      0272  18  JEQ
+0273  [271] call @OLED_WRITE_COMMAND__SEND_BIT_ONE
+      0273  D3  LDL RA, #19
+      0274  37  LDH RA, #7
+      0275  A8  MOV PRL, RA
+      0276  C2  LDL RA, #2
+      0277  B0  MOV PRH, RA
+      0278  07  JAL
+0279  [272] jmp @OLED_WRITE_COMMAND__B2
+      0279  C5  LDL RA, #5
+      027A  34  LDH RA, #4
+      027B  A8  MOV PRL, RA
+      027C  C2  LDL RA, #2
+      027D  B0  MOV PRH, RA
+      027E  1F  JMP
+027F  [274] call @OLED_WRITE_COMMAND__SEND_BIT_ZERO
+      027F  C1  LDL RA, #1
+      0280  37  LDH RA, #7
+      0281  A8  MOV PRL, RA
+      0282  C2  LDL RA, #2
       0283  B0  MOV PRH, RA
-      0284  19  JNE
-0285  [348] ldi $RAM_BASE_H
-      0285  C0  LDL RA, #0
-0286  [349] mov marh, ra
-      0286  A0  MOV MARH, RA
-0287  [350] ldi $SCRATCH_COUNT_L
-      0287  C1  LDL RA, #1
-0288  [351] mov marl, ra
-      0288  98  MOV MARL, RA
-0289  [352] mov rd, m
-      0289  8F  MOV RD, M
-028A  [353] subi #1
-      028A  69  SUBI #1
-028B  [354] mov rd, acc
-      028B  8B  MOV RD, ACC
-028C  [355] mov m, rd
-      028C  B9  MOV M, RD
-028D  [356] jne clear_zero_loop
-      028D  D4  LDL RA, #20
-      028E  33  LDH RA, #3
-      028F  A8  MOV PRL, RA
-      0290  C2  LDL RA, #2
-      0291  30  LDH RA, #0
-      0292  B0  MOV PRH, RA
-      0293  19  JNE
-0294  [358] call i2c_stop
-      0294  DE  LDL RA, #30
-      0295  32  LDH RA, #2
-      0296  A8  MOV PRL, RA
-      0297  C3  LDL RA, #3
-      0298  30  LDH RA, #0
-      0299  B0  MOV PRH, RA
-      029A  07  JAL
-029B  [359] mov rb, zero
-      029B  94  MOV RB, ZERO
-029C  [360] ret :stack
-      029C  2E  POP PRH
-      029D  2D  POP PRL
-      029E  1F  JMP
-029F  [365] push lrl
-      029F  25  PUSH LRL
-02A0  [366] push lrh
-      02A0  26  PUSH LRH
-02A1  [368] mov rd, zero
-      02A1  8C  MOV RD, ZERO
-02A2  [369] call oled_set_page_column
-      02A2  CC  LDL RA, #12
-      02A3  32  LDH RA, #2
-      02A4  A8  MOV PRL, RA
-      02A5  C8  LDL RA, #8
-      02A6  30  LDH RA, #0
-      02A7  B0  MOV PRH, RA
-      02A8  07  JAL
-02A9  [370] mov rd, rb
-      02A9  8A  MOV RD, RB
-02AA  [371] cmp zero
-      02AA  7C  CMP ZERO
-02AB  [372] jne page_fail
-      02AB  D6  LDL RA, #22
-      02AC  37  LDH RA, #7
-      02AD  A8  MOV PRL, RA
-      02AE  C2  LDL RA, #2
-      02AF  30  LDH RA, #0
-      02B0  B0  MOV PRH, RA
-      02B1  19  JNE
-02B2  [374] call begin_data_stream
-      02B2  C4  LDL RA, #4
-      02B3  37  LDH RA, #7
-      02B4  A8  MOV PRL, RA
-      02B5  C1  LDL RA, #1
-      02B6  30  LDH RA, #0
+      0284  07  JAL
+0285  [277] mov rd, rb
+      0285  8A  MOV RD, RB
+0286  [278] ldi #0x04
+      0286  C4  LDL RA, #4
+0287  [279] and ra
+      0287  10  AND RA
+0288  [280] mov rd, acc
+      0288  8B  MOV RD, ACC
+0289  [281] cmp zero
+      0289  7C  CMP ZERO
+028A  [282] jeq @OLED_WRITE_COMMAND__B2_ZERO
+      028A  DC  LDL RA, #28
+      028B  34  LDH RA, #4
+      028C  A8  MOV PRL, RA
+      028D  C2  LDL RA, #2
+      028E  B0  MOV PRH, RA
+      028F  18  JEQ
+0290  [283] call @OLED_WRITE_COMMAND__SEND_BIT_ONE
+      0290  D3  LDL RA, #19
+      0291  37  LDH RA, #7
+      0292  A8  MOV PRL, RA
+      0293  C2  LDL RA, #2
+      0294  B0  MOV PRH, RA
+      0295  07  JAL
+0296  [284] jmp @OLED_WRITE_COMMAND__B1
+      0296  C2  LDL RA, #2
+      0297  35  LDH RA, #5
+      0298  A8  MOV PRL, RA
+      0299  C2  LDL RA, #2
+      029A  B0  MOV PRH, RA
+      029B  1F  JMP
+029C  [286] call @OLED_WRITE_COMMAND__SEND_BIT_ZERO
+      029C  C1  LDL RA, #1
+      029D  37  LDH RA, #7
+      029E  A8  MOV PRL, RA
+      029F  C2  LDL RA, #2
+      02A0  B0  MOV PRH, RA
+      02A1  07  JAL
+02A2  [289] mov rd, rb
+      02A2  8A  MOV RD, RB
+02A3  [290] ldi #0x02
+      02A3  C2  LDL RA, #2
+02A4  [291] and ra
+      02A4  10  AND RA
+02A5  [292] mov rd, acc
+      02A5  8B  MOV RD, ACC
+02A6  [293] cmp zero
+      02A6  7C  CMP ZERO
+02A7  [294] jeq @OLED_WRITE_COMMAND__B1_ZERO
+      02A7  DE  LDL RA, #30
+      02A8  35  LDH RA, #5
+      02A9  A8  MOV PRL, RA
+      02AA  C2  LDL RA, #2
+      02AB  B0  MOV PRH, RA
+      02AC  18  JEQ
+02AD  [295] call @OLED_WRITE_COMMAND__SEND_BIT_ONE
+      02AD  D3  LDL RA, #19
+      02AE  37  LDH RA, #7
+      02AF  A8  MOV PRL, RA
+      02B0  C2  LDL RA, #2
+      02B1  B0  MOV PRH, RA
+      02B2  07  JAL
+02B3  [296] jmp @OLED_WRITE_COMMAND__B0
+      02B3  C4  LDL RA, #4
+      02B4  36  LDH RA, #6
+      02B5  A8  MOV PRL, RA
+      02B6  C2  LDL RA, #2
       02B7  B0  MOV PRH, RA
-      02B8  07  JAL
-02B9  [375] mov rd, rb
-      02B9  8A  MOV RD, RB
-02BA  [376] cmp zero
-      02BA  7C  CMP ZERO
-02BB  [377] jne page_fail
-      02BB  D6  LDL RA, #22
-      02BC  37  LDH RA, #7
-      02BD  A8  MOV PRL, RA
-      02BE  C2  LDL RA, #2
-      02BF  30  LDH RA, #0
-      02C0  B0  MOV PRH, RA
-      02C1  19  JNE
-02C2  [379] ldi $RAM_BASE_H
-      02C2  C0  LDL RA, #0
-02C3  [380] mov marh, ra
-      02C3  A0  MOV MARH, RA
-02C4  [381] ldi $SCRATCH_COUNT_L
-      02C4  C1  LDL RA, #1
-02C5  [382] mov marl, ra
-      02C5  98  MOV MARL, RA
-02C6  [383] ldi #0x80
-      02C6  C0  LDL RA, #0
-      02C7  34  LDH RA, #4
-02C8  [384] mov m, ra
-      02C8  B8  MOV M, RA
-02C9  [387] ldi #0xFF
-      02C9  DF  LDL RA, #31
-      02CA  37  LDH RA, #7
-02CB  [388] mov rb, ra
-      02CB  90  MOV RB, RA
-02CC  [389] call stream_data_byte
-      02CC  CD  LDL RA, #13
-      02CD  31  LDH RA, #1
-      02CE  A8  MOV PRL, RA
-      02CF  C2  LDL RA, #2
-      02D0  30  LDH RA, #0
-      02D1  B0  MOV PRH, RA
-      02D2  07  JAL
-02D3  [390] mov rd, rb
-      02D3  8A  MOV RD, RB
-02D4  [391] cmp zero
-      02D4  7C  CMP ZERO
-02D5  [392] jne page_fail
-      02D5  D6  LDL RA, #22
-      02D6  37  LDH RA, #7
-      02D7  A8  MOV PRL, RA
-      02D8  C2  LDL RA, #2
-      02D9  30  LDH RA, #0
-      02DA  B0  MOV PRH, RA
-      02DB  19  JNE
-02DC  [394] ldi $RAM_BASE_H
-      02DC  C0  LDL RA, #0
-02DD  [395] mov marh, ra
-      02DD  A0  MOV MARH, RA
-02DE  [396] ldi $SCRATCH_COUNT_L
-      02DE  C1  LDL RA, #1
-02DF  [397] mov marl, ra
-      02DF  98  MOV MARL, RA
-02E0  [398] mov rd, m
-      02E0  8F  MOV RD, M
-02E1  [399] subi #1
-      02E1  69  SUBI #1
-02E2  [400] mov rd, acc
-      02E2  8B  MOV RD, ACC
-02E3  [401] mov m, rd
-      02E3  B9  MOV M, RD
-02E4  [402] jne fill_ff_loop
-      02E4  C9  LDL RA, #9
-      02E5  36  LDH RA, #6
-      02E6  A8  MOV PRL, RA
-      02E7  C2  LDL RA, #2
-      02E8  30  LDH RA, #0
-      02E9  B0  MOV PRH, RA
-      02EA  19  JNE
-02EB  [404] call i2c_stop
-      02EB  DE  LDL RA, #30
-      02EC  32  LDH RA, #2
-      02ED  A8  MOV PRL, RA
-      02EE  C3  LDL RA, #3
-      02EF  30  LDH RA, #0
-      02F0  B0  MOV PRH, RA
-      02F1  07  JAL
-02F2  [405] mov rb, zero
-      02F2  94  MOV RB, ZERO
-02F3  [406] ret :stack
-      02F3  2E  POP PRH
-      02F4  2D  POP PRL
-      02F5  1F  JMP
-02F6  [409] call i2c_stop
-      02F6  DE  LDL RA, #30
-      02F7  32  LDH RA, #2
-      02F8  A8  MOV PRL, RA
-      02F9  C3  LDL RA, #3
-      02FA  30  LDH RA, #0
-      02FB  B0  MOV PRH, RA
-      02FC  07  JAL
-02FD  [410] ret :stack
-      02FD  2E  POP PRH
-      02FE  2D  POP PRL
-      02FF  1F  JMP
-0300  [413] call i2c_stop
-      0300  DE  LDL RA, #30
-      0301  32  LDH RA, #2
-      0302  A8  MOV PRL, RA
-      0303  C3  LDL RA, #3
-      0304  30  LDH RA, #0
-      0305  B0  MOV PRH, RA
-      0306  07  JAL
-0307  [414] ldi $LED_FAIL_ADDR
-      0307  C2  LDL RA, #2
-0308  [415] mov rb, ra
-      0308  90  MOV RB, RA
-0309  [416] ret :stack
-      0309  2E  POP PRH
-      030A  2D  POP PRL
-      030B  1F  JMP
-030C  [419] call i2c_stop
-      030C  DE  LDL RA, #30
-      030D  32  LDH RA, #2
-      030E  A8  MOV PRL, RA
-      030F  C3  LDL RA, #3
-      0310  30  LDH RA, #0
-      0311  B0  MOV PRH, RA
-      0312  07  JAL
-0313  [420] ldi $LED_FAIL_CTRL
-      0313  C3  LDL RA, #3
-0314  [421] mov rb, ra
-      0314  90  MOV RB, RA
-0315  [422] ret :stack
-      0315  2E  POP PRH
-      0316  2D  POP PRL
-      0317  1F  JMP
-0318  [425] call i2c_stop
-      0318  DE  LDL RA, #30
-      0319  32  LDH RA, #2
+      02B8  1F  JMP
+02B9  [297] nop
+      02B9  00  NOP
+02BA  [298] nop
+      02BA  00  NOP
+02BB  [299] nop
+      02BB  00  NOP
+02BC  [300] nop
+      02BC  00  NOP
+02BD  [301] nop
+      02BD  00  NOP
+02BE  [303] call @OLED_WRITE_COMMAND__SEND_BIT_ZERO
+      02BE  C1  LDL RA, #1
+      02BF  37  LDH RA, #7
+      02C0  A8  MOV PRL, RA
+      02C1  C2  LDL RA, #2
+      02C2  B0  MOV PRH, RA
+      02C3  07  JAL
+02C4  [306] mov rd, rb
+      02C4  8A  MOV RD, RB
+02C5  [307] ldi #0x01
+      02C5  C1  LDL RA, #1
+02C6  [308] and ra
+      02C6  10  AND RA
+02C7  [309] mov rd, acc
+      02C7  8B  MOV RD, ACC
+02C8  [310] cmp zero
+      02C8  7C  CMP ZERO
+02C9  [311] jeq @OLED_WRITE_COMMAND__B0_ZERO
+      02C9  D8  LDL RA, #24
+      02CA  36  LDH RA, #6
+      02CB  A8  MOV PRL, RA
+      02CC  C2  LDL RA, #2
+      02CD  B0  MOV PRH, RA
+      02CE  18  JEQ
+02CF  [312] call @OLED_WRITE_COMMAND__SEND_BIT_ONE
+      02CF  D3  LDL RA, #19
+      02D0  37  LDH RA, #7
+      02D1  A8  MOV PRL, RA
+      02D2  C2  LDL RA, #2
+      02D3  B0  MOV PRH, RA
+      02D4  07  JAL
+02D5  [313] ret :stack
+      02D5  2E  POP PRH
+      02D6  2D  POP PRL
+      02D7  1F  JMP
+02D8  [315] call @OLED_WRITE_COMMAND__SEND_BIT_ZERO
+      02D8  C1  LDL RA, #1
+      02D9  37  LDH RA, #7
+      02DA  A8  MOV PRL, RA
+      02DB  C2  LDL RA, #2
+      02DC  B0  MOV PRH, RA
+      02DD  07  JAL
+02DE  [316] ret :stack
+      02DE  2E  POP PRH
+      02DF  2D  POP PRL
+      02E0  1F  JMP
+02E1  [319] push lrl
+      02E1  25  PUSH LRL
+02E2  [320] push lrh
+      02E2  26  PUSH LRH
+02E3  [322] ldi $OLED_GPIO_BASE_H
+      02E3  C8  LDL RA, #8
+02E4  [323] mov marh, ra
+      02E4  A0  MOV MARH, RA
+02E5  [324] ldi $OLED_GPIO_DIR1_L
+      02E5  D1  LDL RA, #17
+      02E6  31  LDH RA, #1
+02E7  [325] mov marl, ra
+      02E7  98  MOV MARL, RA
+02E8  [326] ldi $OLED_SDA_DRIVE_LOW
+      02E8  C1  LDL RA, #1
+02E9  [327] mov m, ra
+      02E9  B8  MOV M, RA
+02EA  [328] call @OLED_WRITE_COMMAND__PULSE_SCL
+      02EA  C4  LDL RA, #4
+      02EB  30  LDH RA, #0
+      02EC  A8  MOV PRL, RA
+      02ED  C3  LDL RA, #3
+      02EE  B0  MOV PRH, RA
+      02EF  07  JAL
+02F0  [329] ret :stack
+      02F0  2E  POP PRH
+      02F1  2D  POP PRL
+      02F2  1F  JMP
+02F3  [332] push lrl
+      02F3  25  PUSH LRL
+02F4  [333] push lrh
+      02F4  26  PUSH LRH
+02F5  [335] ldi $OLED_GPIO_BASE_H
+      02F5  C8  LDL RA, #8
+02F6  [336] mov marh, ra
+      02F6  A0  MOV MARH, RA
+02F7  [337] ldi $OLED_GPIO_DIR1_L
+      02F7  D1  LDL RA, #17
+      02F8  31  LDH RA, #1
+02F9  [338] mov marl, ra
+      02F9  98  MOV MARL, RA
+02FA  [339] mov m, zero
+      02FA  BC  MOV M, ZERO
+02FB  [340] call @OLED_WRITE_COMMAND__PULSE_SCL
+      02FB  C4  LDL RA, #4
+      02FC  30  LDH RA, #0
+      02FD  A8  MOV PRL, RA
+      02FE  C3  LDL RA, #3
+      02FF  B0  MOV PRH, RA
+      0300  07  JAL
+0301  [341] ret :stack
+      0301  2E  POP PRH
+      0302  2D  POP PRL
+      0303  1F  JMP
+0304  [344] push lrl
+      0304  25  PUSH LRL
+0305  [345] push lrh
+      0305  26  PUSH LRH
+0306  [347] call @OLED_WRITE_COMMAND__DELAY_SHORT
+      0306  CC  LDL RA, #12
+      0307  31  LDH RA, #1
+      0308  A8  MOV PRL, RA
+      0309  C3  LDL RA, #3
+      030A  B0  MOV PRH, RA
+      030B  07  JAL
+030C  [348] ldi $OLED_GPIO_BASE_H
+      030C  C8  LDL RA, #8
+030D  [349] mov marh, ra
+      030D  A0  MOV MARH, RA
+030E  [350] ldi $OLED_GPIO_DIR0_L
+      030E  D0  LDL RA, #16
+      030F  31  LDH RA, #1
+0310  [351] mov marl, ra
+      0310  98  MOV MARL, RA
+0311  [352] mov m, zero
+      0311  BC  MOV M, ZERO
+0312  [353] call @OLED_WRITE_COMMAND__DELAY_SHORT
+      0312  CC  LDL RA, #12
+      0313  31  LDH RA, #1
+      0314  A8  MOV PRL, RA
+      0315  C3  LDL RA, #3
+      0316  B0  MOV PRH, RA
+      0317  07  JAL
+0318  [354] call @OLED_WRITE_COMMAND__DELAY_SHORT
+      0318  CC  LDL RA, #12
+      0319  31  LDH RA, #1
       031A  A8  MOV PRL, RA
       031B  C3  LDL RA, #3
-      031C  30  LDH RA, #0
-      031D  B0  MOV PRH, RA
-      031E  07  JAL
-031F  [426] ldi $LED_FAIL_CMD
-      031F  C4  LDL RA, #4
-0320  [427] mov rb, ra
-      0320  90  MOV RB, RA
-0321  [428] ret :stack
-      0321  2E  POP PRH
-      0322  2D  POP PRL
-      0323  1F  JMP
-0324  [431] call i2c_stop
-      0324  DE  LDL RA, #30
-      0325  32  LDH RA, #2
-      0326  A8  MOV PRL, RA
-      0327  C3  LDL RA, #3
-      0328  30  LDH RA, #0
-      0329  B0  MOV PRH, RA
-      032A  07  JAL
-032B  [432] ldi $LED_FAIL_DATA
-      032B  C5  LDL RA, #5
-032C  [433] mov rb, ra
-      032C  90  MOV RB, RA
-032D  [434] ret :stack
-      032D  2E  POP PRH
-      032E  2D  POP PRL
-      032F  1F  JMP
-0330  [437] push lrl
-      0330  25  PUSH LRL
-0331  [438] push lrh
-      0331  26  PUSH LRH
-0332  [440] ldi $GPIO_BASE_H
-      0332  C8  LDL RA, #8
-0333  [441] mov marh, ra
-      0333  A0  MOV MARH, RA
-0334  [442] ldi $GPIO_DIR0_L
-      0334  D0  LDL RA, #16
-      0335  31  LDH RA, #1
-0336  [443] mov marl, ra
-      0336  98  MOV MARL, RA
-0337  [444] mov m, zero
-      0337  BC  MOV M, ZERO
-0338  [445] ldi $GPIO_DIR1_L
-      0338  D1  LDL RA, #17
-      0339  31  LDH RA, #1
-033A  [446] mov marl, ra
-      033A  98  MOV MARL, RA
-033B  [447] mov m, zero
-      033B  BC  MOV M, ZERO
-033C  [448] call delay_short
-      033C  DD  LDL RA, #29
-      033D  30  LDH RA, #0
-      033E  A8  MOV PRL, RA
+      031C  B0  MOV PRH, RA
+      031D  07  JAL
+031E  [355] ldi $OLED_GPIO_DIR0_L
+      031E  D0  LDL RA, #16
+      031F  31  LDH RA, #1
+0320  [356] mov marl, ra
+      0320  98  MOV MARL, RA
+0321  [357] ldi $OLED_SCL_DRIVE_LOW
+      0321  C1  LDL RA, #1
+0322  [358] mov m, ra
+      0322  B8  MOV M, RA
+0323  [359] call @OLED_WRITE_COMMAND__DELAY_SHORT
+      0323  CC  LDL RA, #12
+      0324  31  LDH RA, #1
+      0325  A8  MOV PRL, RA
+      0326  C3  LDL RA, #3
+      0327  B0  MOV PRH, RA
+      0328  07  JAL
+0329  [360] ret :stack
+      0329  2E  POP PRH
+      032A  2D  POP PRL
+      032B  1F  JMP
+032C  [363] ldi rd, $OLED_DELAY_COUNT
+      032C  F0  LDL RD, #16
+032D  [365] subi #1
+      032D  69  SUBI #1
+032E  [366] mov rd, acc
+      032E  8B  MOV RD, ACC
+032F  [367] jne @OLED_WRITE_COMMAND__DELAY_LOOP
+      032F  CD  LDL RA, #13
+      0330  31  LDH RA, #1
+      0331  A8  MOV PRL, RA
+      0332  C3  LDL RA, #3
+      0333  B0  MOV PRH, RA
+      0334  19  JNE
+0335  [368] ret
+      0335  AD  MOV PRL, LRL
+      0336  B6  MOV PRH, LRH
+      0337  1F  JMP
+0338  [1030] push lrl
+      0338  25  PUSH LRL
+0339  [1031] push lrh
+      0339  26  PUSH LRH
+033A  [1033] ldi $F_TMP_BASE_H
+      033A  C0  LDL RA, #0
+033B  [1034] mov marh, ra
+      033B  A0  MOV MARH, RA
+033C  [1035] ldi $F_T4_L
+      033C  C4  LDL RA, #4
+033D  [1036] mov marl, ra
+      033D  98  MOV MARL, RA
+033E  [1037] mov m, rb
+      033E  BA  MOV M, RB
+033F  [1039] ldi $F_T5_L
       033F  C5  LDL RA, #5
-      0340  30  LDH RA, #0
-      0341  B0  MOV PRH, RA
-      0342  07  JAL
-0343  [450] ldi $GPIO_DIR1_L
-      0343  D1  LDL RA, #17
-      0344  31  LDH RA, #1
-0345  [451] mov marl, ra
-      0345  98  MOV MARL, RA
-0346  [452] ldi $SDA_DRIVE_LOW
-      0346  C1  LDL RA, #1
-0347  [453] mov m, ra
-      0347  B8  MOV M, RA
-0348  [454] call delay_short
-      0348  DD  LDL RA, #29
-      0349  30  LDH RA, #0
-      034A  A8  MOV PRL, RA
-      034B  C5  LDL RA, #5
-      034C  30  LDH RA, #0
-      034D  B0  MOV PRH, RA
-      034E  07  JAL
-034F  [456] ldi $GPIO_DIR0_L
-      034F  D0  LDL RA, #16
-      0350  31  LDH RA, #1
-0351  [457] mov marl, ra
-      0351  98  MOV MARL, RA
-0352  [458] ldi $SCL_DRIVE_LOW
-      0352  C1  LDL RA, #1
-0353  [459] mov m, ra
-      0353  B8  MOV M, RA
-0354  [460] call delay_short
-      0354  DD  LDL RA, #29
-      0355  30  LDH RA, #0
-      0356  A8  MOV PRL, RA
-      0357  C5  LDL RA, #5
-      0358  30  LDH RA, #0
-      0359  B0  MOV PRH, RA
-      035A  07  JAL
-035B  [461] ret :stack
-      035B  2E  POP PRH
-      035C  2D  POP PRL
-      035D  1F  JMP
-035E  [464] push lrl
-      035E  25  PUSH LRL
-035F  [465] push lrh
-      035F  26  PUSH LRH
-0360  [467] ldi $GPIO_BASE_H
-      0360  C8  LDL RA, #8
-0361  [468] mov marh, ra
-      0361  A0  MOV MARH, RA
-0362  [470] ldi $GPIO_DIR1_L
-      0362  D1  LDL RA, #17
-      0363  31  LDH RA, #1
-0364  [471] mov marl, ra
-      0364  98  MOV MARL, RA
-0365  [472] ldi $SDA_DRIVE_LOW
-      0365  C1  LDL RA, #1
-0366  [473] mov m, ra
-      0366  B8  MOV M, RA
-0367  [474] call delay_short
-      0367  DD  LDL RA, #29
-      0368  30  LDH RA, #0
-      0369  A8  MOV PRL, RA
-      036A  C5  LDL RA, #5
-      036B  30  LDH RA, #0
-      036C  B0  MOV PRH, RA
-      036D  07  JAL
-036E  [476] ldi $GPIO_DIR0_L
-      036E  D0  LDL RA, #16
-      036F  31  LDH RA, #1
-0370  [477] mov marl, ra
-      0370  98  MOV MARL, RA
-0371  [478] mov m, zero
-      0371  BC  MOV M, ZERO
-0372  [479] call delay_short
-      0372  DD  LDL RA, #29
-      0373  30  LDH RA, #0
-      0374  A8  MOV PRL, RA
-      0375  C5  LDL RA, #5
-      0376  30  LDH RA, #0
-      0377  B0  MOV PRH, RA
-      0378  07  JAL
-0379  [481] ldi $GPIO_DIR1_L
-      0379  D1  LDL RA, #17
-      037A  31  LDH RA, #1
-037B  [482] mov marl, ra
-      037B  98  MOV MARL, RA
-037C  [483] mov m, zero
-      037C  BC  MOV M, ZERO
-037D  [484] call delay_short
-      037D  DD  LDL RA, #29
-      037E  30  LDH RA, #0
-      037F  A8  MOV PRL, RA
-      0380  C5  LDL RA, #5
-      0381  30  LDH RA, #0
-      0382  B0  MOV PRH, RA
-      0383  07  JAL
-0384  [485] ret :stack
-      0384  2E  POP PRH
-      0385  2D  POP PRL
-      0386  1F  JMP
-0387  [488] push lrl
-      0387  25  PUSH LRL
-0388  [489] push lrh
-      0388  26  PUSH LRH
-0389  [491] ldi $GPIO_BASE_H
-      0389  C8  LDL RA, #8
-038A  [492] mov marh, ra
-      038A  A0  MOV MARH, RA
-038B  [493] ldi $GPIO_DIR1_L
-      038B  D1  LDL RA, #17
-      038C  31  LDH RA, #1
-038D  [494] mov marl, ra
-      038D  98  MOV MARL, RA
-038E  [495] mov m, zero
-      038E  BC  MOV M, ZERO
-038F  [496] call delay_short
-      038F  DD  LDL RA, #29
-      0390  30  LDH RA, #0
-      0391  A8  MOV PRL, RA
-      0392  C5  LDL RA, #5
-      0393  30  LDH RA, #0
-      0394  B0  MOV PRH, RA
-      0395  07  JAL
-0396  [498] ldi $GPIO_DIR0_L
-      0396  D0  LDL RA, #16
-      0397  31  LDH RA, #1
-0398  [499] mov marl, ra
+0340  [1040] mov marl, ra
+      0340  98  MOV MARL, RA
+0341  [1041] mov m, rd
+      0341  B9  MOV M, RD
+0342  [1044] ldi $F_T4_L
+      0342  C4  LDL RA, #4
+0343  [1045] mov marl, ra
+      0343  98  MOV MARL, RA
+0344  [1046] mov rb, m
+      0344  97  MOV RB, M
+0345  [1047] call oled_write_command
+      0345  D0  LDL RA, #16
+      0346  37  LDH RA, #7
+      0347  A8  MOV PRL, RA
+      0348  B4  MOV PRH, ZERO
+      0349  07  JAL
+034A  [1048] mov rd, rb
+      034A  8A  MOV RD, RB
+034B  [1049] cmp zero
+      034B  7C  CMP ZERO
+034C  [1050] jne @OLED_SET_PAGE_COLUMN_DIRECT__FAIL
+      034C  D5  LDL RA, #21
+      034D  35  LDH RA, #5
+      034E  A8  MOV PRL, RA
+      034F  C3  LDL RA, #3
+      0350  B0  MOV PRH, RA
+      0351  19  JNE
+0352  [1053] ldi $F_TMP_BASE_H
+      0352  C0  LDL RA, #0
+0353  [1054] mov marh, ra
+      0353  A0  MOV MARH, RA
+0354  [1057] ldi $F_T6_L
+      0354  C6  LDL RA, #6
+0355  [1058] mov marl, ra
+      0355  98  MOV MARL, RA
+0356  [1059] ldi #0x0F
+      0356  CF  LDL RA, #15
+0357  [1060] mov m, ra
+      0357  B8  MOV M, RA
+0358  [1062] ldi $F_T5_L
+      0358  C5  LDL RA, #5
+0359  [1063] mov marl, ra
+      0359  98  MOV MARL, RA
+035A  [1064] mov rd, m
+      035A  8F  MOV RD, M
+035B  [1065] ldi $F_T6_L
+      035B  C6  LDL RA, #6
+035C  [1066] mov marl, ra
+      035C  98  MOV MARL, RA
+035D  [1067] and m
+      035D  17  AND M
+035E  [1068] mov rb, acc
+      035E  93  MOV RB, ACC
+035F  [1069] call oled_write_command
+      035F  D0  LDL RA, #16
+      0360  37  LDH RA, #7
+      0361  A8  MOV PRL, RA
+      0362  B4  MOV PRH, ZERO
+      0363  07  JAL
+0364  [1070] mov rd, rb
+      0364  8A  MOV RD, RB
+0365  [1071] cmp zero
+      0365  7C  CMP ZERO
+0366  [1072] jne @OLED_SET_PAGE_COLUMN_DIRECT__FAIL
+      0366  D5  LDL RA, #21
+      0367  35  LDH RA, #5
+      0368  A8  MOV PRL, RA
+      0369  C3  LDL RA, #3
+      036A  B0  MOV PRH, RA
+      036B  19  JNE
+036C  [1075] ldi $F_TMP_BASE_H
+      036C  C0  LDL RA, #0
+036D  [1076] mov marh, ra
+      036D  A0  MOV MARH, RA
+036E  [1079] ldi $F_T6_L
+      036E  C6  LDL RA, #6
+036F  [1080] mov marl, ra
+      036F  98  MOV MARL, RA
+0370  [1081] ldi #0x10
+      0370  D0  LDL RA, #16
+0371  [1082] mov m, ra
+      0371  B8  MOV M, RA
+0372  [1084] ldi $F_T5_L
+      0372  C5  LDL RA, #5
+0373  [1085] mov marl, ra
+      0373  98  MOV MARL, RA
+0374  [1086] mov rd, m
+      0374  8F  MOV RD, M
+0375  [1087] ldi #0x10
+      0375  D0  LDL RA, #16
+0376  [1088] and ra
+      0376  10  AND RA
+0377  [1089] mov rd, acc
+      0377  8B  MOV RD, ACC
+0378  [1090] cmp zero
+      0378  7C  CMP ZERO
+0379  [1091] jeq @OLED_SET_PAGE_COLUMN_DIRECT__SKIP_ADD1
+      0379  C4  LDL RA, #4
+      037A  34  LDH RA, #4
+      037B  A8  MOV PRL, RA
+      037C  C3  LDL RA, #3
+      037D  B0  MOV PRH, RA
+      037E  18  JEQ
+037F  [1092] ldi $F_T6_L
+      037F  C6  LDL RA, #6
+0380  [1093] mov marl, ra
+      0380  98  MOV MARL, RA
+0381  [1094] mov rd, m
+      0381  8F  MOV RD, M
+0382  [1095] addi #1
+      0382  49  ADDI #1
+0383  [1096] mov m, acc
+      0383  BB  MOV M, ACC
+0384  [1099] ldi $F_T5_L
+      0384  C5  LDL RA, #5
+0385  [1100] mov marl, ra
+      0385  98  MOV MARL, RA
+0386  [1101] mov rd, m
+      0386  8F  MOV RD, M
+0387  [1102] ldi #0x20
+      0387  C0  LDL RA, #0
+      0388  31  LDH RA, #1
+0389  [1103] and ra
+      0389  10  AND RA
+038A  [1104] mov rd, acc
+      038A  8B  MOV RD, ACC
+038B  [1105] cmp zero
+      038B  7C  CMP ZERO
+038C  [1106] jeq @OLED_SET_PAGE_COLUMN_DIRECT__SKIP_ADD2
+      038C  D7  LDL RA, #23
+      038D  34  LDH RA, #4
+      038E  A8  MOV PRL, RA
+      038F  C3  LDL RA, #3
+      0390  B0  MOV PRH, RA
+      0391  18  JEQ
+0392  [1107] ldi $F_T6_L
+      0392  C6  LDL RA, #6
+0393  [1108] mov marl, ra
+      0393  98  MOV MARL, RA
+0394  [1109] mov rd, m
+      0394  8F  MOV RD, M
+0395  [1110] addi #2
+      0395  4A  ADDI #2
+0396  [1111] mov m, acc
+      0396  BB  MOV M, ACC
+0397  [1114] ldi $F_T5_L
+      0397  C5  LDL RA, #5
+0398  [1115] mov marl, ra
       0398  98  MOV MARL, RA
-0399  [500] mov m, zero
-      0399  BC  MOV M, ZERO
-039A  [501] call delay_short
-      039A  DD  LDL RA, #29
-      039B  30  LDH RA, #0
-      039C  A8  MOV PRL, RA
-      039D  C5  LDL RA, #5
-      039E  30  LDH RA, #0
-      039F  B0  MOV PRH, RA
-      03A0  07  JAL
-03A1  [502] call delay_short
-      03A1  DD  LDL RA, #29
-      03A2  30  LDH RA, #0
-      03A3  A8  MOV PRL, RA
-      03A4  C5  LDL RA, #5
-      03A5  30  LDH RA, #0
-      03A6  B0  MOV PRH, RA
-      03A7  07  JAL
-03A8  [504] ldi $GPIO_IN1_L
-      03A8  D1  LDL RA, #17
-03A9  [505] mov marl, ra
-      03A9  98  MOV MARL, RA
-03AA  [506] mov rd, m
-      03AA  8F  MOV RD, M
-03AB  [507] mov rb, rd
-      03AB  91  MOV RB, RD
-03AC  [509] ldi $GPIO_DIR0_L
-      03AC  D0  LDL RA, #16
-      03AD  31  LDH RA, #1
-03AE  [510] mov marl, ra
-      03AE  98  MOV MARL, RA
-03AF  [511] ldi $SCL_DRIVE_LOW
-      03AF  C1  LDL RA, #1
-03B0  [512] mov m, ra
-      03B0  B8  MOV M, RA
-03B1  [513] call delay_short
-      03B1  DD  LDL RA, #29
-      03B2  30  LDH RA, #0
-      03B3  A8  MOV PRL, RA
-      03B4  C5  LDL RA, #5
-      03B5  30  LDH RA, #0
-      03B6  B0  MOV PRH, RA
-      03B7  07  JAL
-03B8  [514] ret :stack
-      03B8  2E  POP PRH
-      03B9  2D  POP PRL
-      03BA  1F  JMP
-03BB  [517] push lrl
-      03BB  25  PUSH LRL
-03BC  [518] push lrh
-      03BC  26  PUSH LRH
-03BD  [521] mov rd, rb
-      03BD  8A  MOV RD, RB
-03BE  [522] ldi #0x80
-      03BE  C0  LDL RA, #0
-      03BF  34  LDH RA, #4
-03C0  [523] and ra
-      03C0  10  AND RA
-03C1  [524] mov rd, acc
-      03C1  8B  MOV RD, ACC
-03C2  [525] cmp zero
-      03C2  7C  CMP ZERO
-03C3  [526] jeq send_b7_zero
-      03C3  D8  LDL RA, #24
-      03C4  36  LDH RA, #6
+0399  [1116] mov rd, m
+      0399  8F  MOV RD, M
+039A  [1117] ldi #0x40
+      039A  C0  LDL RA, #0
+      039B  32  LDH RA, #2
+039C  [1118] and ra
+      039C  10  AND RA
+039D  [1119] mov rd, acc
+      039D  8B  MOV RD, ACC
+039E  [1120] cmp zero
+      039E  7C  CMP ZERO
+039F  [1121] jeq @OLED_SET_PAGE_COLUMN_DIRECT__SEND_UPPER
+      039F  CA  LDL RA, #10
+      03A0  35  LDH RA, #5
+      03A1  A8  MOV PRL, RA
+      03A2  C3  LDL RA, #3
+      03A3  B0  MOV PRH, RA
+      03A4  18  JEQ
+03A5  [1122] ldi $F_T6_L
+      03A5  C6  LDL RA, #6
+03A6  [1123] mov marl, ra
+      03A6  98  MOV MARL, RA
+03A7  [1124] mov rd, m
+      03A7  8F  MOV RD, M
+03A8  [1125] addi #4
+      03A8  4C  ADDI #4
+03A9  [1126] mov m, acc
+      03A9  BB  MOV M, ACC
+03AA  [1129] ldi $F_T6_L
+      03AA  C6  LDL RA, #6
+03AB  [1130] mov marl, ra
+      03AB  98  MOV MARL, RA
+03AC  [1131] mov rb, m
+      03AC  97  MOV RB, M
+03AD  [1132] call oled_write_command
+      03AD  D0  LDL RA, #16
+      03AE  37  LDH RA, #7
+      03AF  A8  MOV PRL, RA
+      03B0  B4  MOV PRH, ZERO
+      03B1  07  JAL
+03B2  [1133] ret :stack
+      03B2  2E  POP PRH
+      03B3  2D  POP PRL
+      03B4  1F  JMP
+03B5  [1136] ret :stack
+      03B5  2E  POP PRH
+      03B6  2D  POP PRL
+      03B7  1F  JMP
+03B8  [380] push lrl
+      03B8  25  PUSH LRL
+03B9  [381] push lrh
+      03B9  26  PUSH LRH
+03BA  [383] call @OLED_BEGIN_DATA_STREAM__I2C_START
+      03BA  C8  LDL RA, #8
+      03BB  30  LDH RA, #0
+      03BC  A8  MOV PRL, RA
+      03BD  C4  LDL RA, #4
+      03BE  B0  MOV PRH, RA
+      03BF  07  JAL
+03C0  [385] ldi $OLED_ADDR_W
+      03C0  D8  LDL RA, #24
+      03C1  33  LDH RA, #3
+03C2  [386] mov rb, ra
+      03C2  90  MOV RB, RA
+03C3  [387] call @OLED_BEGIN_DATA_STREAM__SEND_BYTE
+      03C3  C9  LDL RA, #9
+      03C4  34  LDH RA, #4
       03C5  A8  MOV PRL, RA
-      03C6  C3  LDL RA, #3
-      03C7  30  LDH RA, #0
-      03C8  B0  MOV PRH, RA
-      03C9  18  JEQ
-03CA  [527] call send_bit_one
-      03CA  DF  LDL RA, #31
-      03CB  36  LDH RA, #6
-      03CC  A8  MOV PRL, RA
-      03CD  C4  LDL RA, #4
-      03CE  30  LDH RA, #0
-      03CF  B0  MOV PRH, RA
-      03D0  07  JAL
-03D1  [528] jmp send_b6
-      03D1  DF  LDL RA, #31
-      03D2  36  LDH RA, #6
+      03C6  C4  LDL RA, #4
+      03C7  B0  MOV PRH, RA
+      03C8  07  JAL
+03C9  [388] call @OLED_BEGIN_DATA_STREAM__READ_ACK
+      03C9  D9  LDL RA, #25
+      03CA  32  LDH RA, #2
+      03CB  A8  MOV PRL, RA
+      03CC  C4  LDL RA, #4
+      03CD  B0  MOV PRH, RA
+      03CE  07  JAL
+03CF  [389] mov rd, rb
+      03CF  8A  MOV RD, RB
+03D0  [390] cmp zero
+      03D0  7C  CMP ZERO
+03D1  [391] jne @OLED_BEGIN_DATA_STREAM__FAIL_ADDR
+      03D1  D2  LDL RA, #18
+      03D2  37  LDH RA, #7
       03D3  A8  MOV PRL, RA
       03D4  C3  LDL RA, #3
-      03D5  30  LDH RA, #0
-      03D6  B0  MOV PRH, RA
-      03D7  1F  JMP
-03D8  [530] call send_bit_zero
-      03D8  CC  LDL RA, #12
-      03D9  36  LDH RA, #6
-      03DA  A8  MOV PRL, RA
-      03DB  C4  LDL RA, #4
-      03DC  30  LDH RA, #0
-      03DD  B0  MOV PRH, RA
-      03DE  07  JAL
-03DF  [533] mov rd, rb
-      03DF  8A  MOV RD, RB
-03E0  [534] ldi #0x40
-      03E0  C0  LDL RA, #0
+      03D5  B0  MOV PRH, RA
+      03D6  19  JNE
+03D7  [393] ldi $OLED_CTRL_DATA
+      03D7  C0  LDL RA, #0
+      03D8  32  LDH RA, #2
+03D9  [394] mov rb, ra
+      03D9  90  MOV RB, RA
+03DA  [395] call @OLED_BEGIN_DATA_STREAM__SEND_BYTE
+      03DA  C9  LDL RA, #9
+      03DB  34  LDH RA, #4
+      03DC  A8  MOV PRL, RA
+      03DD  C4  LDL RA, #4
+      03DE  B0  MOV PRH, RA
+      03DF  07  JAL
+03E0  [396] call @OLED_BEGIN_DATA_STREAM__READ_ACK
+      03E0  D9  LDL RA, #25
       03E1  32  LDH RA, #2
-03E2  [535] and ra
-      03E2  10  AND RA
-03E3  [536] mov rd, acc
-      03E3  8B  MOV RD, ACC
-03E4  [537] cmp zero
-      03E4  7C  CMP ZERO
-03E5  [538] jeq send_b6_zero
-      03E5  DA  LDL RA, #26
-      03E6  37  LDH RA, #7
-      03E7  A8  MOV PRL, RA
-      03E8  C3  LDL RA, #3
-      03E9  30  LDH RA, #0
-      03EA  B0  MOV PRH, RA
-      03EB  18  JEQ
-03EC  [539] call send_bit_one
-      03EC  DF  LDL RA, #31
-      03ED  36  LDH RA, #6
-      03EE  A8  MOV PRL, RA
-      03EF  C4  LDL RA, #4
-      03F0  30  LDH RA, #0
-      03F1  B0  MOV PRH, RA
-      03F2  07  JAL
-03F3  [540] jmp send_b5
-      03F3  C1  LDL RA, #1
-      03F4  30  LDH RA, #0
-      03F5  A8  MOV PRL, RA
-      03F6  C4  LDL RA, #4
-      03F7  30  LDH RA, #0
-      03F8  B0  MOV PRH, RA
-      03F9  1F  JMP
-03FA  [542] call send_bit_zero
-      03FA  CC  LDL RA, #12
-      03FB  36  LDH RA, #6
-      03FC  A8  MOV PRL, RA
-      03FD  C4  LDL RA, #4
-      03FE  30  LDH RA, #0
-      03FF  B0  MOV PRH, RA
-      0400  07  JAL
-0401  [545] mov rd, rb
-      0401  8A  MOV RD, RB
-0402  [546] ldi #0x20
-      0402  C0  LDL RA, #0
-      0403  31  LDH RA, #1
-0404  [547] and ra
-      0404  10  AND RA
-0405  [548] mov rd, acc
-      0405  8B  MOV RD, ACC
-0406  [549] cmp zero
-      0406  7C  CMP ZERO
-0407  [550] jeq send_b5_zero
-      0407  DC  LDL RA, #28
-      0408  30  LDH RA, #0
-      0409  A8  MOV PRL, RA
-      040A  C4  LDL RA, #4
-      040B  30  LDH RA, #0
-      040C  B0  MOV PRH, RA
-      040D  18  JEQ
-040E  [551] call send_bit_one
-      040E  DF  LDL RA, #31
-      040F  36  LDH RA, #6
-      0410  A8  MOV PRL, RA
-      0411  C4  LDL RA, #4
-      0412  30  LDH RA, #0
-      0413  B0  MOV PRH, RA
-      0414  07  JAL
-0415  [552] jmp send_b4
-      0415  C3  LDL RA, #3
-      0416  31  LDH RA, #1
-      0417  A8  MOV PRL, RA
-      0418  C4  LDL RA, #4
-      0419  30  LDH RA, #0
-      041A  B0  MOV PRH, RA
-      041B  1F  JMP
-041C  [554] call send_bit_zero
-      041C  CC  LDL RA, #12
-      041D  36  LDH RA, #6
-      041E  A8  MOV PRL, RA
-      041F  C4  LDL RA, #4
-      0420  30  LDH RA, #0
-      0421  B0  MOV PRH, RA
-      0422  07  JAL
-0423  [557] mov rd, rb
-      0423  8A  MOV RD, RB
-0424  [558] ldi #0x10
-      0424  D0  LDL RA, #16
-0425  [559] and ra
-      0425  10  AND RA
-0426  [560] mov rd, acc
-      0426  8B  MOV RD, ACC
-0427  [561] cmp zero
-      0427  7C  CMP ZERO
-0428  [562] jeq send_b4_zero
-      0428  DD  LDL RA, #29
-      0429  31  LDH RA, #1
-      042A  A8  MOV PRL, RA
-      042B  C4  LDL RA, #4
-      042C  30  LDH RA, #0
-      042D  B0  MOV PRH, RA
-      042E  18  JEQ
-042F  [563] call send_bit_one
-      042F  DF  LDL RA, #31
-      0430  36  LDH RA, #6
-      0431  A8  MOV PRL, RA
-      0432  C4  LDL RA, #4
-      0433  30  LDH RA, #0
-      0434  B0  MOV PRH, RA
-      0435  07  JAL
-0436  [564] jmp send_b3
-      0436  C4  LDL RA, #4
-      0437  32  LDH RA, #2
-      0438  A8  MOV PRL, RA
-      0439  C4  LDL RA, #4
-      043A  30  LDH RA, #0
-      043B  B0  MOV PRH, RA
-      043C  1F  JMP
-043D  [566] call send_bit_zero
-      043D  CC  LDL RA, #12
-      043E  36  LDH RA, #6
-      043F  A8  MOV PRL, RA
-      0440  C4  LDL RA, #4
-      0441  30  LDH RA, #0
-      0442  B0  MOV PRH, RA
-      0443  07  JAL
-0444  [569] mov rd, rb
-      0444  8A  MOV RD, RB
-0445  [570] ldi #0x08
-      0445  C8  LDL RA, #8
-0446  [571] and ra
-      0446  10  AND RA
-0447  [572] mov rd, acc
-      0447  8B  MOV RD, ACC
-0448  [573] cmp zero
-      0448  7C  CMP ZERO
-0449  [574] jeq send_b3_zero
-      0449  DE  LDL RA, #30
-      044A  32  LDH RA, #2
-      044B  A8  MOV PRL, RA
-      044C  C4  LDL RA, #4
-      044D  30  LDH RA, #0
-      044E  B0  MOV PRH, RA
-      044F  18  JEQ
-0450  [575] call send_bit_one
-      0450  DF  LDL RA, #31
+      03E2  A8  MOV PRL, RA
+      03E3  C4  LDL RA, #4
+      03E4  B0  MOV PRH, RA
+      03E5  07  JAL
+03E6  [397] mov rd, rb
+      03E6  8A  MOV RD, RB
+03E7  [398] cmp zero
+      03E7  7C  CMP ZERO
+03E8  [399] jne @OLED_BEGIN_DATA_STREAM__FAIL_CTRL
+      03E8  DD  LDL RA, #29
+      03E9  37  LDH RA, #7
+      03EA  A8  MOV PRL, RA
+      03EB  C3  LDL RA, #3
+      03EC  B0  MOV PRH, RA
+      03ED  19  JNE
+03EE  [401] mov rb, zero
+      03EE  94  MOV RB, ZERO
+03EF  [402] ret :stack
+      03EF  2E  POP PRH
+      03F0  2D  POP PRL
+      03F1  1F  JMP
+03F2  [405] call @OLED_BEGIN_DATA_STREAM__I2C_STOP
+      03F2  D3  LDL RA, #19
+      03F3  31  LDH RA, #1
+      03F4  A8  MOV PRL, RA
+      03F5  C4  LDL RA, #4
+      03F6  B0  MOV PRH, RA
+      03F7  07  JAL
+03F8  [406] ldi $OLED_ERR_ADDR
+      03F8  C2  LDL RA, #2
+03F9  [407] mov rb, ra
+      03F9  90  MOV RB, RA
+03FA  [408] ret :stack
+      03FA  2E  POP PRH
+      03FB  2D  POP PRL
+      03FC  1F  JMP
+03FD  [411] call @OLED_BEGIN_DATA_STREAM__I2C_STOP
+      03FD  D3  LDL RA, #19
+      03FE  31  LDH RA, #1
+      03FF  A8  MOV PRL, RA
+      0400  C4  LDL RA, #4
+      0401  B0  MOV PRH, RA
+      0402  07  JAL
+0403  [412] ldi $OLED_ERR_CTRL
+      0403  C3  LDL RA, #3
+0404  [413] mov rb, ra
+      0404  90  MOV RB, RA
+0405  [414] ret :stack
+      0405  2E  POP PRH
+      0406  2D  POP PRL
+      0407  1F  JMP
+0408  [417] push lrl
+      0408  25  PUSH LRL
+0409  [418] push lrh
+      0409  26  PUSH LRH
+040A  [420] ldi $OLED_GPIO_BASE_H
+      040A  C8  LDL RA, #8
+040B  [421] mov marh, ra
+      040B  A0  MOV MARH, RA
+040C  [422] ldi $OLED_GPIO_DIR0_L
+      040C  D0  LDL RA, #16
+      040D  31  LDH RA, #1
+040E  [423] mov marl, ra
+      040E  98  MOV MARL, RA
+040F  [424] mov m, zero
+      040F  BC  MOV M, ZERO
+0410  [425] ldi $OLED_GPIO_DIR1_L
+      0410  D1  LDL RA, #17
+      0411  31  LDH RA, #1
+0412  [426] mov marl, ra
+      0412  98  MOV MARL, RA
+0413  [427] mov m, zero
+      0413  BC  MOV M, ZERO
+0414  [428] call @OLED_BEGIN_DATA_STREAM__DELAY_SHORT
+      0414  C6  LDL RA, #6
+      0415  36  LDH RA, #6
+      0416  A8  MOV PRL, RA
+      0417  C5  LDL RA, #5
+      0418  B0  MOV PRH, RA
+      0419  07  JAL
+041A  [430] ldi $OLED_GPIO_DIR1_L
+      041A  D1  LDL RA, #17
+      041B  31  LDH RA, #1
+041C  [431] mov marl, ra
+      041C  98  MOV MARL, RA
+041D  [432] ldi $OLED_SDA_DRIVE_LOW
+      041D  C1  LDL RA, #1
+041E  [433] mov m, ra
+      041E  B8  MOV M, RA
+041F  [434] call @OLED_BEGIN_DATA_STREAM__DELAY_SHORT
+      041F  C6  LDL RA, #6
+      0420  36  LDH RA, #6
+      0421  A8  MOV PRL, RA
+      0422  C5  LDL RA, #5
+      0423  B0  MOV PRH, RA
+      0424  07  JAL
+0425  [436] ldi $OLED_GPIO_DIR0_L
+      0425  D0  LDL RA, #16
+      0426  31  LDH RA, #1
+0427  [437] mov marl, ra
+      0427  98  MOV MARL, RA
+0428  [438] ldi $OLED_SCL_DRIVE_LOW
+      0428  C1  LDL RA, #1
+0429  [439] mov m, ra
+      0429  B8  MOV M, RA
+042A  [440] call @OLED_BEGIN_DATA_STREAM__DELAY_SHORT
+      042A  C6  LDL RA, #6
+      042B  36  LDH RA, #6
+      042C  A8  MOV PRL, RA
+      042D  C5  LDL RA, #5
+      042E  B0  MOV PRH, RA
+      042F  07  JAL
+0430  [441] ret :stack
+      0430  2E  POP PRH
+      0431  2D  POP PRL
+      0432  1F  JMP
+0433  [444] push lrl
+      0433  25  PUSH LRL
+0434  [445] push lrh
+      0434  26  PUSH LRH
+0435  [447] ldi $OLED_GPIO_BASE_H
+      0435  C8  LDL RA, #8
+0436  [448] mov marh, ra
+      0436  A0  MOV MARH, RA
+0437  [450] ldi $OLED_GPIO_DIR1_L
+      0437  D1  LDL RA, #17
+      0438  31  LDH RA, #1
+0439  [451] mov marl, ra
+      0439  98  MOV MARL, RA
+043A  [452] ldi $OLED_SDA_DRIVE_LOW
+      043A  C1  LDL RA, #1
+043B  [453] mov m, ra
+      043B  B8  MOV M, RA
+043C  [454] call @OLED_BEGIN_DATA_STREAM__DELAY_SHORT
+      043C  C6  LDL RA, #6
+      043D  36  LDH RA, #6
+      043E  A8  MOV PRL, RA
+      043F  C5  LDL RA, #5
+      0440  B0  MOV PRH, RA
+      0441  07  JAL
+0442  [456] ldi $OLED_GPIO_DIR0_L
+      0442  D0  LDL RA, #16
+      0443  31  LDH RA, #1
+0444  [457] mov marl, ra
+      0444  98  MOV MARL, RA
+0445  [458] mov m, zero
+      0445  BC  MOV M, ZERO
+0446  [459] call @OLED_BEGIN_DATA_STREAM__DELAY_SHORT
+      0446  C6  LDL RA, #6
+      0447  36  LDH RA, #6
+      0448  A8  MOV PRL, RA
+      0449  C5  LDL RA, #5
+      044A  B0  MOV PRH, RA
+      044B  07  JAL
+044C  [461] ldi $OLED_GPIO_DIR1_L
+      044C  D1  LDL RA, #17
+      044D  31  LDH RA, #1
+044E  [462] mov marl, ra
+      044E  98  MOV MARL, RA
+044F  [463] mov m, zero
+      044F  BC  MOV M, ZERO
+0450  [464] call @OLED_BEGIN_DATA_STREAM__DELAY_SHORT
+      0450  C6  LDL RA, #6
       0451  36  LDH RA, #6
       0452  A8  MOV PRL, RA
-      0453  C4  LDL RA, #4
-      0454  30  LDH RA, #0
-      0455  B0  MOV PRH, RA
-      0456  07  JAL
-0457  [576] jmp send_b2
-      0457  C5  LDL RA, #5
-      0458  33  LDH RA, #3
-      0459  A8  MOV PRL, RA
-      045A  C4  LDL RA, #4
-      045B  30  LDH RA, #0
-      045C  B0  MOV PRH, RA
-      045D  1F  JMP
-045E  [578] call send_bit_zero
-      045E  CC  LDL RA, #12
-      045F  36  LDH RA, #6
-      0460  A8  MOV PRL, RA
-      0461  C4  LDL RA, #4
-      0462  30  LDH RA, #0
-      0463  B0  MOV PRH, RA
-      0464  07  JAL
-0465  [581] mov rd, rb
-      0465  8A  MOV RD, RB
-0466  [582] ldi #0x04
-      0466  C4  LDL RA, #4
-0467  [583] and ra
-      0467  10  AND RA
-0468  [584] mov rd, acc
-      0468  8B  MOV RD, ACC
-0469  [585] cmp zero
-      0469  7C  CMP ZERO
-046A  [586] jeq send_b2_zero
-      046A  DF  LDL RA, #31
-      046B  33  LDH RA, #3
-      046C  A8  MOV PRL, RA
-      046D  C4  LDL RA, #4
-      046E  30  LDH RA, #0
+      0453  C5  LDL RA, #5
+      0454  B0  MOV PRH, RA
+      0455  07  JAL
+0456  [465] ret :stack
+      0456  2E  POP PRH
+      0457  2D  POP PRL
+      0458  1F  JMP
+0459  [468] push lrl
+      0459  25  PUSH LRL
+045A  [469] push lrh
+      045A  26  PUSH LRH
+045B  [471] ldi $OLED_GPIO_BASE_H
+      045B  C8  LDL RA, #8
+045C  [472] mov marh, ra
+      045C  A0  MOV MARH, RA
+045D  [473] ldi $OLED_GPIO_DIR1_L
+      045D  D1  LDL RA, #17
+      045E  31  LDH RA, #1
+045F  [474] mov marl, ra
+      045F  98  MOV MARL, RA
+0460  [475] mov m, zero
+      0460  BC  MOV M, ZERO
+0461  [476] call @OLED_BEGIN_DATA_STREAM__DELAY_SHORT
+      0461  C6  LDL RA, #6
+      0462  36  LDH RA, #6
+      0463  A8  MOV PRL, RA
+      0464  C5  LDL RA, #5
+      0465  B0  MOV PRH, RA
+      0466  07  JAL
+0467  [478] ldi $OLED_GPIO_DIR0_L
+      0467  D0  LDL RA, #16
+      0468  31  LDH RA, #1
+0469  [479] mov marl, ra
+      0469  98  MOV MARL, RA
+046A  [480] mov m, zero
+      046A  BC  MOV M, ZERO
+046B  [481] call @OLED_BEGIN_DATA_STREAM__DELAY_SHORT
+      046B  C6  LDL RA, #6
+      046C  36  LDH RA, #6
+      046D  A8  MOV PRL, RA
+      046E  C5  LDL RA, #5
       046F  B0  MOV PRH, RA
-      0470  18  JEQ
-0471  [587] call send_bit_one
-      0471  DF  LDL RA, #31
+      0470  07  JAL
+0471  [482] call @OLED_BEGIN_DATA_STREAM__DELAY_SHORT
+      0471  C6  LDL RA, #6
       0472  36  LDH RA, #6
       0473  A8  MOV PRL, RA
-      0474  C4  LDL RA, #4
-      0475  30  LDH RA, #0
-      0476  B0  MOV PRH, RA
-      0477  07  JAL
-0478  [588] jmp send_b1
-      0478  C6  LDL RA, #6
-      0479  34  LDH RA, #4
-      047A  A8  MOV PRL, RA
-      047B  C4  LDL RA, #4
-      047C  30  LDH RA, #0
-      047D  B0  MOV PRH, RA
-      047E  1F  JMP
-047F  [590] call send_bit_zero
-      047F  CC  LDL RA, #12
-      0480  36  LDH RA, #6
-      0481  A8  MOV PRL, RA
-      0482  C4  LDL RA, #4
-      0483  30  LDH RA, #0
+      0474  C5  LDL RA, #5
+      0475  B0  MOV PRH, RA
+      0476  07  JAL
+0477  [484] ldi $OLED_GPIO_IN1_L
+      0477  D1  LDL RA, #17
+0478  [485] mov marl, ra
+      0478  98  MOV MARL, RA
+0479  [486] mov rd, m
+      0479  8F  MOV RD, M
+047A  [487] mov rb, rd
+      047A  91  MOV RB, RD
+047B  [489] ldi $OLED_GPIO_DIR0_L
+      047B  D0  LDL RA, #16
+      047C  31  LDH RA, #1
+047D  [490] mov marl, ra
+      047D  98  MOV MARL, RA
+047E  [491] ldi $OLED_SCL_DRIVE_LOW
+      047E  C1  LDL RA, #1
+047F  [492] mov m, ra
+      047F  B8  MOV M, RA
+0480  [493] call @OLED_BEGIN_DATA_STREAM__DELAY_SHORT
+      0480  C6  LDL RA, #6
+      0481  36  LDH RA, #6
+      0482  A8  MOV PRL, RA
+      0483  C5  LDL RA, #5
       0484  B0  MOV PRH, RA
       0485  07  JAL
-0486  [593] mov rd, rb
-      0486  8A  MOV RD, RB
-0487  [594] ldi #0x02
-      0487  C2  LDL RA, #2
-0488  [595] and ra
-      0488  10  AND RA
-0489  [596] mov rd, acc
-      0489  8B  MOV RD, ACC
-048A  [597] cmp zero
-      048A  7C  CMP ZERO
-048B  [598] jeq send_b1_zero
-      048B  C5  LDL RA, #5
-      048C  35  LDH RA, #5
-      048D  A8  MOV PRL, RA
-      048E  C4  LDL RA, #4
-      048F  30  LDH RA, #0
-      0490  B0  MOV PRH, RA
-      0491  18  JEQ
-0492  [599] call send_bit_one
-      0492  DF  LDL RA, #31
-      0493  36  LDH RA, #6
-      0494  A8  MOV PRL, RA
-      0495  C4  LDL RA, #4
-      0496  30  LDH RA, #0
-      0497  B0  MOV PRH, RA
-      0498  07  JAL
-0499  [600] jmp send_b0
-      0499  CC  LDL RA, #12
-      049A  35  LDH RA, #5
-      049B  A8  MOV PRL, RA
-      049C  C4  LDL RA, #4
-      049D  30  LDH RA, #0
-      049E  B0  MOV PRH, RA
-      049F  1F  JMP
-04A0  [604] nop
-      04A0  00  NOP
-04A1  [605] nop
-      04A1  00  NOP
-04A2  [606] nop
-      04A2  00  NOP
-04A3  [607] nop
-      04A3  00  NOP
-04A4  [608] nop
-      04A4  00  NOP
-04A5  [611] call send_bit_zero
-      04A5  CC  LDL RA, #12
-      04A6  36  LDH RA, #6
-      04A7  A8  MOV PRL, RA
-      04A8  C4  LDL RA, #4
-      04A9  30  LDH RA, #0
-      04AA  B0  MOV PRH, RA
-      04AB  07  JAL
-04AC  [614] mov rd, rb
-      04AC  8A  MOV RD, RB
-04AD  [615] ldi #0x01
-      04AD  C1  LDL RA, #1
-04AE  [616] and ra
-      04AE  10  AND RA
-04AF  [617] mov rd, acc
-      04AF  8B  MOV RD, ACC
-04B0  [618] cmp zero
-      04B0  7C  CMP ZERO
-04B1  [619] jeq send_b0_zero
-      04B1  C2  LDL RA, #2
-      04B2  36  LDH RA, #6
-      04B3  A8  MOV PRL, RA
-      04B4  C4  LDL RA, #4
-      04B5  30  LDH RA, #0
-      04B6  B0  MOV PRH, RA
-      04B7  18  JEQ
-04B8  [620] call send_bit_one
-      04B8  DF  LDL RA, #31
-      04B9  36  LDH RA, #6
-      04BA  A8  MOV PRL, RA
-      04BB  C4  LDL RA, #4
-      04BC  30  LDH RA, #0
-      04BD  B0  MOV PRH, RA
-      04BE  07  JAL
-04BF  [621] ret :stack
-      04BF  2E  POP PRH
-      04C0  2D  POP PRL
-      04C1  1F  JMP
-04C2  [623] call send_bit_zero
-      04C2  CC  LDL RA, #12
-      04C3  36  LDH RA, #6
-      04C4  A8  MOV PRL, RA
-      04C5  C4  LDL RA, #4
-      04C6  30  LDH RA, #0
-      04C7  B0  MOV PRH, RA
-      04C8  07  JAL
-04C9  [624] ret :stack
-      04C9  2E  POP PRH
-      04CA  2D  POP PRL
-      04CB  1F  JMP
-04CC  [627] push lrl
-      04CC  25  PUSH LRL
-04CD  [628] push lrh
-      04CD  26  PUSH LRH
-04CE  [630] ldi $GPIO_BASE_H
-      04CE  C8  LDL RA, #8
-04CF  [631] mov marh, ra
-      04CF  A0  MOV MARH, RA
-04D0  [632] ldi $GPIO_DIR1_L
-      04D0  D1  LDL RA, #17
-      04D1  31  LDH RA, #1
-04D2  [633] mov marl, ra
-      04D2  98  MOV MARL, RA
-04D3  [634] ldi $SDA_DRIVE_LOW
-      04D3  C1  LDL RA, #1
-04D4  [635] mov m, ra
-      04D4  B8  MOV M, RA
-04D5  [636] call pulse_scl
-      04D5  D1  LDL RA, #17
-      04D6  37  LDH RA, #7
-      04D7  A8  MOV PRL, RA
-      04D8  C4  LDL RA, #4
-      04D9  30  LDH RA, #0
-      04DA  B0  MOV PRH, RA
-      04DB  07  JAL
-04DC  [637] ret :stack
-      04DC  2E  POP PRH
-      04DD  2D  POP PRL
+0486  [494] ret :stack
+      0486  2E  POP PRH
+      0487  2D  POP PRL
+      0488  1F  JMP
+0489  [497] push lrl
+      0489  25  PUSH LRL
+048A  [498] push lrh
+      048A  26  PUSH LRH
+048B  [500] mov rd, rb
+      048B  8A  MOV RD, RB
+048C  [501] ldi #0x80
+      048C  C0  LDL RA, #0
+      048D  34  LDH RA, #4
+048E  [502] and ra
+      048E  10  AND RA
+048F  [503] mov rd, acc
+      048F  8B  MOV RD, ACC
+0490  [504] cmp zero
+      0490  7C  CMP ZERO
+0491  [505] jeq @OLED_BEGIN_DATA_STREAM__B7_ZERO
+      0491  C3  LDL RA, #3
+      0492  35  LDH RA, #5
+      0493  A8  MOV PRL, RA
+      0494  C4  LDL RA, #4
+      0495  B0  MOV PRH, RA
+      0496  18  JEQ
+0497  [506] call @OLED_BEGIN_DATA_STREAM__SEND_BIT_ONE
+      0497  CD  LDL RA, #13
+      0498  34  LDH RA, #4
+      0499  A8  MOV PRL, RA
+      049A  C5  LDL RA, #5
+      049B  B0  MOV PRH, RA
+      049C  07  JAL
+049D  [507] jmp @OLED_BEGIN_DATA_STREAM__B6
+      049D  C9  LDL RA, #9
+      049E  35  LDH RA, #5
+      049F  A8  MOV PRL, RA
+      04A0  C4  LDL RA, #4
+      04A1  B0  MOV PRH, RA
+      04A2  1F  JMP
+04A3  [509] call @OLED_BEGIN_DATA_STREAM__SEND_BIT_ZERO
+      04A3  DB  LDL RA, #27
+      04A4  33  LDH RA, #3
+      04A5  A8  MOV PRL, RA
+      04A6  C5  LDL RA, #5
+      04A7  B0  MOV PRH, RA
+      04A8  07  JAL
+04A9  [512] mov rd, rb
+      04A9  8A  MOV RD, RB
+04AA  [513] ldi #0x40
+      04AA  C0  LDL RA, #0
+      04AB  32  LDH RA, #2
+04AC  [514] and ra
+      04AC  10  AND RA
+04AD  [515] mov rd, acc
+      04AD  8B  MOV RD, ACC
+04AE  [516] cmp zero
+      04AE  7C  CMP ZERO
+04AF  [517] jeq @OLED_BEGIN_DATA_STREAM__B6_ZERO
+      04AF  C1  LDL RA, #1
+      04B0  36  LDH RA, #6
+      04B1  A8  MOV PRL, RA
+      04B2  C4  LDL RA, #4
+      04B3  B0  MOV PRH, RA
+      04B4  18  JEQ
+04B5  [518] call @OLED_BEGIN_DATA_STREAM__SEND_BIT_ONE
+      04B5  CD  LDL RA, #13
+      04B6  34  LDH RA, #4
+      04B7  A8  MOV PRL, RA
+      04B8  C5  LDL RA, #5
+      04B9  B0  MOV PRH, RA
+      04BA  07  JAL
+04BB  [519] jmp @OLED_BEGIN_DATA_STREAM__B5
+      04BB  C7  LDL RA, #7
+      04BC  36  LDH RA, #6
+      04BD  A8  MOV PRL, RA
+      04BE  C4  LDL RA, #4
+      04BF  B0  MOV PRH, RA
+      04C0  1F  JMP
+04C1  [521] call @OLED_BEGIN_DATA_STREAM__SEND_BIT_ZERO
+      04C1  DB  LDL RA, #27
+      04C2  33  LDH RA, #3
+      04C3  A8  MOV PRL, RA
+      04C4  C5  LDL RA, #5
+      04C5  B0  MOV PRH, RA
+      04C6  07  JAL
+04C7  [524] mov rd, rb
+      04C7  8A  MOV RD, RB
+04C8  [525] ldi #0x20
+      04C8  C0  LDL RA, #0
+      04C9  31  LDH RA, #1
+04CA  [526] and ra
+      04CA  10  AND RA
+04CB  [527] mov rd, acc
+      04CB  8B  MOV RD, ACC
+04CC  [528] cmp zero
+      04CC  7C  CMP ZERO
+04CD  [529] jeq @OLED_BEGIN_DATA_STREAM__B5_ZERO
+      04CD  DF  LDL RA, #31
+      04CE  36  LDH RA, #6
+      04CF  A8  MOV PRL, RA
+      04D0  C4  LDL RA, #4
+      04D1  B0  MOV PRH, RA
+      04D2  18  JEQ
+04D3  [530] call @OLED_BEGIN_DATA_STREAM__SEND_BIT_ONE
+      04D3  CD  LDL RA, #13
+      04D4  34  LDH RA, #4
+      04D5  A8  MOV PRL, RA
+      04D6  C5  LDL RA, #5
+      04D7  B0  MOV PRH, RA
+      04D8  07  JAL
+04D9  [531] jmp @OLED_BEGIN_DATA_STREAM__B4
+      04D9  C5  LDL RA, #5
+      04DA  37  LDH RA, #7
+      04DB  A8  MOV PRL, RA
+      04DC  C4  LDL RA, #4
+      04DD  B0  MOV PRH, RA
       04DE  1F  JMP
-04DF  [640] push lrl
-      04DF  25  PUSH LRL
-04E0  [641] push lrh
-      04E0  26  PUSH LRH
-04E1  [643] ldi $GPIO_BASE_H
-      04E1  C8  LDL RA, #8
-04E2  [644] mov marh, ra
-      04E2  A0  MOV MARH, RA
-04E3  [645] ldi $GPIO_DIR1_L
-      04E3  D1  LDL RA, #17
-      04E4  31  LDH RA, #1
-04E5  [646] mov marl, ra
-      04E5  98  MOV MARL, RA
-04E6  [647] mov m, zero
-      04E6  BC  MOV M, ZERO
-04E7  [648] call pulse_scl
-      04E7  D1  LDL RA, #17
-      04E8  37  LDH RA, #7
-      04E9  A8  MOV PRL, RA
-      04EA  C4  LDL RA, #4
-      04EB  30  LDH RA, #0
-      04EC  B0  MOV PRH, RA
-      04ED  07  JAL
-04EE  [649] ret :stack
-      04EE  2E  POP PRH
-      04EF  2D  POP PRL
-      04F0  1F  JMP
-04F1  [652] push lrl
-      04F1  25  PUSH LRL
-04F2  [653] push lrh
-      04F2  26  PUSH LRH
-04F3  [655] call delay_short
-      04F3  DD  LDL RA, #29
-      04F4  30  LDH RA, #0
-      04F5  A8  MOV PRL, RA
-      04F6  C5  LDL RA, #5
+04DF  [533] call @OLED_BEGIN_DATA_STREAM__SEND_BIT_ZERO
+      04DF  DB  LDL RA, #27
+      04E0  33  LDH RA, #3
+      04E1  A8  MOV PRL, RA
+      04E2  C5  LDL RA, #5
+      04E3  B0  MOV PRH, RA
+      04E4  07  JAL
+04E5  [536] mov rd, rb
+      04E5  8A  MOV RD, RB
+04E6  [537] ldi #0x10
+      04E6  D0  LDL RA, #16
+04E7  [538] and ra
+      04E7  10  AND RA
+04E8  [539] mov rd, acc
+      04E8  8B  MOV RD, ACC
+04E9  [540] cmp zero
+      04E9  7C  CMP ZERO
+04EA  [541] jeq @OLED_BEGIN_DATA_STREAM__B4_ZERO
+      04EA  DC  LDL RA, #28
+      04EB  37  LDH RA, #7
+      04EC  A8  MOV PRL, RA
+      04ED  C4  LDL RA, #4
+      04EE  B0  MOV PRH, RA
+      04EF  18  JEQ
+04F0  [542] call @OLED_BEGIN_DATA_STREAM__SEND_BIT_ONE
+      04F0  CD  LDL RA, #13
+      04F1  34  LDH RA, #4
+      04F2  A8  MOV PRL, RA
+      04F3  C5  LDL RA, #5
+      04F4  B0  MOV PRH, RA
+      04F5  07  JAL
+04F6  [543] jmp @OLED_BEGIN_DATA_STREAM__B3
+      04F6  C2  LDL RA, #2
       04F7  30  LDH RA, #0
-      04F8  B0  MOV PRH, RA
-      04F9  07  JAL
-04FA  [656] ldi $GPIO_BASE_H
-      04FA  C8  LDL RA, #8
-04FB  [657] mov marh, ra
-      04FB  A0  MOV MARH, RA
-04FC  [658] ldi $GPIO_DIR0_L
-      04FC  D0  LDL RA, #16
-      04FD  31  LDH RA, #1
-04FE  [659] mov marl, ra
-      04FE  98  MOV MARL, RA
-04FF  [660] mov m, zero
-      04FF  BC  MOV M, ZERO
-0500  [661] call delay_short
-      0500  DD  LDL RA, #29
-      0501  30  LDH RA, #0
-      0502  A8  MOV PRL, RA
-      0503  C5  LDL RA, #5
-      0504  30  LDH RA, #0
-      0505  B0  MOV PRH, RA
-      0506  07  JAL
-0507  [662] call delay_short
-      0507  DD  LDL RA, #29
+      04F8  A8  MOV PRL, RA
+      04F9  C5  LDL RA, #5
+      04FA  B0  MOV PRH, RA
+      04FB  1F  JMP
+04FC  [545] call @OLED_BEGIN_DATA_STREAM__SEND_BIT_ZERO
+      04FC  DB  LDL RA, #27
+      04FD  33  LDH RA, #3
+      04FE  A8  MOV PRL, RA
+      04FF  C5  LDL RA, #5
+      0500  B0  MOV PRH, RA
+      0501  07  JAL
+0502  [548] mov rd, rb
+      0502  8A  MOV RD, RB
+0503  [549] ldi #0x08
+      0503  C8  LDL RA, #8
+0504  [550] and ra
+      0504  10  AND RA
+0505  [551] mov rd, acc
+      0505  8B  MOV RD, ACC
+0506  [552] cmp zero
+      0506  7C  CMP ZERO
+0507  [553] jeq @OLED_BEGIN_DATA_STREAM__B3_ZERO
+      0507  D9  LDL RA, #25
       0508  30  LDH RA, #0
       0509  A8  MOV PRL, RA
       050A  C5  LDL RA, #5
-      050B  30  LDH RA, #0
-      050C  B0  MOV PRH, RA
-      050D  07  JAL
-050E  [663] ldi $GPIO_DIR0_L
-      050E  D0  LDL RA, #16
-      050F  31  LDH RA, #1
-0510  [664] mov marl, ra
-      0510  98  MOV MARL, RA
-0511  [665] ldi $SCL_DRIVE_LOW
-      0511  C1  LDL RA, #1
-0512  [666] mov m, ra
-      0512  B8  MOV M, RA
-0513  [667] call delay_short
-      0513  DD  LDL RA, #29
+      050B  B0  MOV PRH, RA
+      050C  18  JEQ
+050D  [554] call @OLED_BEGIN_DATA_STREAM__SEND_BIT_ONE
+      050D  CD  LDL RA, #13
+      050E  34  LDH RA, #4
+      050F  A8  MOV PRL, RA
+      0510  C5  LDL RA, #5
+      0511  B0  MOV PRH, RA
+      0512  07  JAL
+0513  [555] jmp @OLED_BEGIN_DATA_STREAM__B2
+      0513  DF  LDL RA, #31
       0514  30  LDH RA, #0
       0515  A8  MOV PRL, RA
       0516  C5  LDL RA, #5
-      0517  30  LDH RA, #0
-      0518  B0  MOV PRH, RA
-      0519  07  JAL
-051A  [668] ret :stack
-      051A  2E  POP PRH
-      051B  2D  POP PRL
-      051C  1F  JMP
-051D  [671] ldi rd, $DELAY_COUNT
-      051D  E1  LDL RD, #1
-051E  [674] subi #1
-      051E  69  SUBI #1
-051F  [675] mov rd, acc
-      051F  8B  MOV RD, ACC
-0520  [676] jne delay_loop
-      0520  DE  LDL RA, #30
-      0521  30  LDH RA, #0
-      0522  A8  MOV PRL, RA
-      0523  C5  LDL RA, #5
-      0524  30  LDH RA, #0
-      0525  B0  MOV PRH, RA
-      0526  19  JNE
-0527  [677] ret
-      0527  AD  MOV PRL, LRL
-      0528  B6  MOV PRH, LRH
-      0529  1F  JMP
-052A  [680] jmpa done
-      052A  CA  LDL RA, #10
-      052B  31  LDH RA, #1
+      0517  B0  MOV PRH, RA
+      0518  1F  JMP
+0519  [557] call @OLED_BEGIN_DATA_STREAM__SEND_BIT_ZERO
+      0519  DB  LDL RA, #27
+      051A  33  LDH RA, #3
+      051B  A8  MOV PRL, RA
+      051C  C5  LDL RA, #5
+      051D  B0  MOV PRH, RA
+      051E  07  JAL
+051F  [560] mov rd, rb
+      051F  8A  MOV RD, RB
+0520  [561] ldi #0x04
+      0520  C4  LDL RA, #4
+0521  [562] and ra
+      0521  10  AND RA
+0522  [563] mov rd, acc
+      0522  8B  MOV RD, ACC
+0523  [564] cmp zero
+      0523  7C  CMP ZERO
+0524  [565] jeq @OLED_BEGIN_DATA_STREAM__B2_ZERO
+      0524  D6  LDL RA, #22
+      0525  31  LDH RA, #1
+      0526  A8  MOV PRL, RA
+      0527  C5  LDL RA, #5
+      0528  B0  MOV PRH, RA
+      0529  18  JEQ
+052A  [566] call @OLED_BEGIN_DATA_STREAM__SEND_BIT_ONE
+      052A  CD  LDL RA, #13
+      052B  34  LDH RA, #4
       052C  A8  MOV PRL, RA
       052D  C5  LDL RA, #5
-      052E  30  LDH RA, #0
-      052F  B0  MOV PRH, RA
-      0530  1F  JMP
-
-; Source: /mnt/d/Projects/ArniComp-Support-Package/assembler/lib/oled_soft_i2c.asm
-0531  [73] push lrl
-      0531  25  PUSH LRL
-0532  [74] push lrh
-      0532  26  PUSH LRH
-0533  [76] ldi $F_TMP_BASE_H
-      0533  C0  LDL RA, #0
-0534  [77] mov marh, ra
-      0534  A0  MOV MARH, RA
-0535  [78] ldi $F_T0_L
-      0535  C0  LDL RA, #0
-0536  [79] mov marl, ra
-      0536  98  MOV MARL, RA
-0537  [80] mov m, rb
-      0537  BA  MOV M, RB
-0538  [82] call @OLED_WRITE_COMMAND__I2C_START
-      0538  DD  LDL RA, #29
-      0539  35  LDH RA, #5
-      053A  A8  MOV PRL, RA
-      053B  C5  LDL RA, #5
-      053C  30  LDH RA, #0
-      053D  B0  MOV PRH, RA
-      053E  07  JAL
-053F  [84] ldi $OLED_ADDR_W
-      053F  D8  LDL RA, #24
-      0540  33  LDH RA, #3
-0541  [85] mov rb, ra
-      0541  90  MOV RB, RA
-0542  [86] call @OLED_WRITE_COMMAND__SEND_BYTE
-      0542  C8  LDL RA, #8
-      0543  32  LDH RA, #2
-      0544  A8  MOV PRL, RA
-      0545  C6  LDL RA, #6
-      0546  30  LDH RA, #0
-      0547  B0  MOV PRH, RA
-      0548  07  JAL
-0549  [87] call @OLED_WRITE_COMMAND__READ_ACK
-      0549  D4  LDL RA, #20
-      054A  30  LDH RA, #0
-      054B  A8  MOV PRL, RA
-      054C  C6  LDL RA, #6
-      054D  30  LDH RA, #0
-      054E  B0  MOV PRH, RA
-      054F  07  JAL
-0550  [88] mov rd, rb
-      0550  8A  MOV RD, RB
-0551  [89] cmp zero
-      0551  7C  CMP ZERO
-0552  [90] jne @OLED_WRITE_COMMAND__FAIL_ADDR
-      0552  D9  LDL RA, #25
-      0553  34  LDH RA, #4
-      0554  A8  MOV PRL, RA
-      0555  C5  LDL RA, #5
-      0556  30  LDH RA, #0
-      0557  B0  MOV PRH, RA
-      0558  19  JNE
-0559  [92] ldi $OLED_CTRL_CMD
-      0559  C0  LDL RA, #0
-055A  [93] mov rb, ra
-      055A  90  MOV RB, RA
-055B  [94] call @OLED_WRITE_COMMAND__SEND_BYTE
-      055B  C8  LDL RA, #8
-      055C  32  LDH RA, #2
-      055D  A8  MOV PRL, RA
-      055E  C6  LDL RA, #6
-      055F  30  LDH RA, #0
-      0560  B0  MOV PRH, RA
-      0561  07  JAL
-0562  [95] call @OLED_WRITE_COMMAND__READ_ACK
-      0562  D4  LDL RA, #20
-      0563  30  LDH RA, #0
-      0564  A8  MOV PRL, RA
-      0565  C6  LDL RA, #6
-      0566  30  LDH RA, #0
+      052E  B0  MOV PRH, RA
+      052F  07  JAL
+0530  [567] jmp @OLED_BEGIN_DATA_STREAM__B1
+      0530  DC  LDL RA, #28
+      0531  31  LDH RA, #1
+      0532  A8  MOV PRL, RA
+      0533  C5  LDL RA, #5
+      0534  B0  MOV PRH, RA
+      0535  1F  JMP
+0536  [569] call @OLED_BEGIN_DATA_STREAM__SEND_BIT_ZERO
+      0536  DB  LDL RA, #27
+      0537  33  LDH RA, #3
+      0538  A8  MOV PRL, RA
+      0539  C5  LDL RA, #5
+      053A  B0  MOV PRH, RA
+      053B  07  JAL
+053C  [572] mov rd, rb
+      053C  8A  MOV RD, RB
+053D  [573] ldi #0x02
+      053D  C2  LDL RA, #2
+053E  [574] and ra
+      053E  10  AND RA
+053F  [575] mov rd, acc
+      053F  8B  MOV RD, ACC
+0540  [576] cmp zero
+      0540  7C  CMP ZERO
+0541  [577] jeq @OLED_BEGIN_DATA_STREAM__B1_ZERO
+      0541  D8  LDL RA, #24
+      0542  32  LDH RA, #2
+      0543  A8  MOV PRL, RA
+      0544  C5  LDL RA, #5
+      0545  B0  MOV PRH, RA
+      0546  18  JEQ
+0547  [578] call @OLED_BEGIN_DATA_STREAM__SEND_BIT_ONE
+      0547  CD  LDL RA, #13
+      0548  34  LDH RA, #4
+      0549  A8  MOV PRL, RA
+      054A  C5  LDL RA, #5
+      054B  B0  MOV PRH, RA
+      054C  07  JAL
+054D  [579] jmp @OLED_BEGIN_DATA_STREAM__B0
+      054D  DE  LDL RA, #30
+      054E  32  LDH RA, #2
+      054F  A8  MOV PRL, RA
+      0550  C5  LDL RA, #5
+      0551  B0  MOV PRH, RA
+      0552  1F  JMP
+0553  [580] nop
+      0553  00  NOP
+0554  [581] nop
+      0554  00  NOP
+0555  [582] nop
+      0555  00  NOP
+0556  [583] nop
+      0556  00  NOP
+0557  [584] nop
+      0557  00  NOP
+0558  [586] call @OLED_BEGIN_DATA_STREAM__SEND_BIT_ZERO
+      0558  DB  LDL RA, #27
+      0559  33  LDH RA, #3
+      055A  A8  MOV PRL, RA
+      055B  C5  LDL RA, #5
+      055C  B0  MOV PRH, RA
+      055D  07  JAL
+055E  [589] mov rd, rb
+      055E  8A  MOV RD, RB
+055F  [590] ldi #0x01
+      055F  C1  LDL RA, #1
+0560  [591] and ra
+      0560  10  AND RA
+0561  [592] mov rd, acc
+      0561  8B  MOV RD, ACC
+0562  [593] cmp zero
+      0562  7C  CMP ZERO
+0563  [594] jeq @OLED_BEGIN_DATA_STREAM__B0_ZERO
+      0563  D2  LDL RA, #18
+      0564  33  LDH RA, #3
+      0565  A8  MOV PRL, RA
+      0566  C5  LDL RA, #5
       0567  B0  MOV PRH, RA
-      0568  07  JAL
-0569  [96] mov rd, rb
-      0569  8A  MOV RD, RB
-056A  [97] cmp zero
-      056A  7C  CMP ZERO
-056B  [98] jne @OLED_WRITE_COMMAND__FAIL_CTRL
-      056B  C5  LDL RA, #5
-      056C  35  LDH RA, #5
-      056D  A8  MOV PRL, RA
-      056E  C5  LDL RA, #5
-      056F  30  LDH RA, #0
-      0570  B0  MOV PRH, RA
-      0571  19  JNE
-0572  [100] ldi $F_TMP_BASE_H
-      0572  C0  LDL RA, #0
-0573  [101] mov marh, ra
-      0573  A0  MOV MARH, RA
-0574  [102] ldi $F_T0_L
-      0574  C0  LDL RA, #0
-0575  [103] mov marl, ra
-      0575  98  MOV MARL, RA
-0576  [104] mov rb, m
-      0576  97  MOV RB, M
-0577  [105] call @OLED_WRITE_COMMAND__SEND_BYTE
-      0577  C8  LDL RA, #8
-      0578  32  LDH RA, #2
-      0579  A8  MOV PRL, RA
-      057A  C6  LDL RA, #6
-      057B  30  LDH RA, #0
-      057C  B0  MOV PRH, RA
-      057D  07  JAL
-057E  [106] call @OLED_WRITE_COMMAND__READ_ACK
-      057E  D4  LDL RA, #20
-      057F  30  LDH RA, #0
-      0580  A8  MOV PRL, RA
-      0581  C6  LDL RA, #6
-      0582  30  LDH RA, #0
-      0583  B0  MOV PRH, RA
-      0584  07  JAL
-0585  [107] mov rd, rb
-      0585  8A  MOV RD, RB
-0586  [108] cmp zero
-      0586  7C  CMP ZERO
-0587  [109] jne @OLED_WRITE_COMMAND__FAIL_CMD
-      0587  D1  LDL RA, #17
-      0588  35  LDH RA, #5
-      0589  A8  MOV PRL, RA
-      058A  C5  LDL RA, #5
-      058B  30  LDH RA, #0
-      058C  B0  MOV PRH, RA
-      058D  19  JNE
-058E  [111] call @OLED_WRITE_COMMAND__I2C_STOP
-      058E  CB  LDL RA, #11
-      058F  37  LDH RA, #7
-      0590  A8  MOV PRL, RA
-      0591  C5  LDL RA, #5
-      0592  30  LDH RA, #0
-      0593  B0  MOV PRH, RA
-      0594  07  JAL
-0595  [112] mov rb, zero
-      0595  94  MOV RB, ZERO
-0596  [113] ret :stack
-      0596  2E  POP PRH
-      0597  2D  POP PRL
-      0598  1F  JMP
-0599  [116] call @OLED_WRITE_COMMAND__I2C_STOP
-      0599  CB  LDL RA, #11
-      059A  37  LDH RA, #7
-      059B  A8  MOV PRL, RA
-      059C  C5  LDL RA, #5
-      059D  30  LDH RA, #0
-      059E  B0  MOV PRH, RA
-      059F  07  JAL
-05A0  [117] ldi $OLED_ERR_ADDR
-      05A0  C2  LDL RA, #2
-05A1  [118] mov rb, ra
-      05A1  90  MOV RB, RA
-05A2  [119] ret :stack
-      05A2  2E  POP PRH
-      05A3  2D  POP PRL
-      05A4  1F  JMP
-05A5  [122] call @OLED_WRITE_COMMAND__I2C_STOP
-      05A5  CB  LDL RA, #11
-      05A6  37  LDH RA, #7
-      05A7  A8  MOV PRL, RA
-      05A8  C5  LDL RA, #5
-      05A9  30  LDH RA, #0
-      05AA  B0  MOV PRH, RA
-      05AB  07  JAL
-05AC  [123] ldi $OLED_ERR_CTRL
-      05AC  C3  LDL RA, #3
-05AD  [124] mov rb, ra
-      05AD  90  MOV RB, RA
-05AE  [125] ret :stack
-      05AE  2E  POP PRH
-      05AF  2D  POP PRL
-      05B0  1F  JMP
-05B1  [128] call @OLED_WRITE_COMMAND__I2C_STOP
-      05B1  CB  LDL RA, #11
-      05B2  37  LDH RA, #7
-      05B3  A8  MOV PRL, RA
-      05B4  C5  LDL RA, #5
-      05B5  30  LDH RA, #0
+      0568  18  JEQ
+0569  [595] call @OLED_BEGIN_DATA_STREAM__SEND_BIT_ONE
+      0569  CD  LDL RA, #13
+      056A  34  LDH RA, #4
+      056B  A8  MOV PRL, RA
+      056C  C5  LDL RA, #5
+      056D  B0  MOV PRH, RA
+      056E  07  JAL
+056F  [596] ret :stack
+      056F  2E  POP PRH
+      0570  2D  POP PRL
+      0571  1F  JMP
+0572  [598] call @OLED_BEGIN_DATA_STREAM__SEND_BIT_ZERO
+      0572  DB  LDL RA, #27
+      0573  33  LDH RA, #3
+      0574  A8  MOV PRL, RA
+      0575  C5  LDL RA, #5
+      0576  B0  MOV PRH, RA
+      0577  07  JAL
+0578  [599] ret :stack
+      0578  2E  POP PRH
+      0579  2D  POP PRL
+      057A  1F  JMP
+057B  [602] push lrl
+      057B  25  PUSH LRL
+057C  [603] push lrh
+      057C  26  PUSH LRH
+057D  [605] ldi $OLED_GPIO_BASE_H
+      057D  C8  LDL RA, #8
+057E  [606] mov marh, ra
+      057E  A0  MOV MARH, RA
+057F  [607] ldi $OLED_GPIO_DIR1_L
+      057F  D1  LDL RA, #17
+      0580  31  LDH RA, #1
+0581  [608] mov marl, ra
+      0581  98  MOV MARL, RA
+0582  [609] ldi $OLED_SDA_DRIVE_LOW
+      0582  C1  LDL RA, #1
+0583  [610] mov m, ra
+      0583  B8  MOV M, RA
+0584  [611] call @OLED_BEGIN_DATA_STREAM__PULSE_SCL
+      0584  DE  LDL RA, #30
+      0585  34  LDH RA, #4
+      0586  A8  MOV PRL, RA
+      0587  C5  LDL RA, #5
+      0588  B0  MOV PRH, RA
+      0589  07  JAL
+058A  [612] ret :stack
+      058A  2E  POP PRH
+      058B  2D  POP PRL
+      058C  1F  JMP
+058D  [615] push lrl
+      058D  25  PUSH LRL
+058E  [616] push lrh
+      058E  26  PUSH LRH
+058F  [618] ldi $OLED_GPIO_BASE_H
+      058F  C8  LDL RA, #8
+0590  [619] mov marh, ra
+      0590  A0  MOV MARH, RA
+0591  [620] ldi $OLED_GPIO_DIR1_L
+      0591  D1  LDL RA, #17
+      0592  31  LDH RA, #1
+0593  [621] mov marl, ra
+      0593  98  MOV MARL, RA
+0594  [622] mov m, zero
+      0594  BC  MOV M, ZERO
+0595  [623] call @OLED_BEGIN_DATA_STREAM__PULSE_SCL
+      0595  DE  LDL RA, #30
+      0596  34  LDH RA, #4
+      0597  A8  MOV PRL, RA
+      0598  C5  LDL RA, #5
+      0599  B0  MOV PRH, RA
+      059A  07  JAL
+059B  [624] ret :stack
+      059B  2E  POP PRH
+      059C  2D  POP PRL
+      059D  1F  JMP
+059E  [627] push lrl
+      059E  25  PUSH LRL
+059F  [628] push lrh
+      059F  26  PUSH LRH
+05A0  [630] call @OLED_BEGIN_DATA_STREAM__DELAY_SHORT
+      05A0  C6  LDL RA, #6
+      05A1  36  LDH RA, #6
+      05A2  A8  MOV PRL, RA
+      05A3  C5  LDL RA, #5
+      05A4  B0  MOV PRH, RA
+      05A5  07  JAL
+05A6  [631] ldi $OLED_GPIO_BASE_H
+      05A6  C8  LDL RA, #8
+05A7  [632] mov marh, ra
+      05A7  A0  MOV MARH, RA
+05A8  [633] ldi $OLED_GPIO_DIR0_L
+      05A8  D0  LDL RA, #16
+      05A9  31  LDH RA, #1
+05AA  [634] mov marl, ra
+      05AA  98  MOV MARL, RA
+05AB  [635] mov m, zero
+      05AB  BC  MOV M, ZERO
+05AC  [636] call @OLED_BEGIN_DATA_STREAM__DELAY_SHORT
+      05AC  C6  LDL RA, #6
+      05AD  36  LDH RA, #6
+      05AE  A8  MOV PRL, RA
+      05AF  C5  LDL RA, #5
+      05B0  B0  MOV PRH, RA
+      05B1  07  JAL
+05B2  [637] call @OLED_BEGIN_DATA_STREAM__DELAY_SHORT
+      05B2  C6  LDL RA, #6
+      05B3  36  LDH RA, #6
+      05B4  A8  MOV PRL, RA
+      05B5  C5  LDL RA, #5
       05B6  B0  MOV PRH, RA
       05B7  07  JAL
-05B8  [129] ldi $OLED_ERR_CMD
-      05B8  C4  LDL RA, #4
-05B9  [130] mov rb, ra
-      05B9  90  MOV RB, RA
-05BA  [131] ret :stack
-      05BA  2E  POP PRH
-      05BB  2D  POP PRL
-      05BC  1F  JMP
-05BD  [134] push lrl
-      05BD  25  PUSH LRL
-05BE  [135] push lrh
-      05BE  26  PUSH LRH
-05BF  [137] ldi $OLED_GPIO_BASE_H
-      05BF  C8  LDL RA, #8
-05C0  [138] mov marh, ra
-      05C0  A0  MOV MARH, RA
-05C1  [139] ldi $OLED_GPIO_DIR0_L
-      05C1  D0  LDL RA, #16
-      05C2  31  LDH RA, #1
-05C3  [140] mov marl, ra
-      05C3  98  MOV MARL, RA
-05C4  [141] mov m, zero
-      05C4  BC  MOV M, ZERO
-05C5  [142] ldi $OLED_GPIO_DIR1_L
-      05C5  D1  LDL RA, #17
-      05C6  31  LDH RA, #1
-05C7  [143] mov marl, ra
-      05C7  98  MOV MARL, RA
-05C8  [144] mov m, zero
-      05C8  BC  MOV M, ZERO
-05C9  [145] call @OLED_WRITE_COMMAND__DELAY_SHORT
-      05C9  CA  LDL RA, #10
-      05CA  35  LDH RA, #5
+05B8  [638] ldi $OLED_GPIO_DIR0_L
+      05B8  D0  LDL RA, #16
+      05B9  31  LDH RA, #1
+05BA  [639] mov marl, ra
+      05BA  98  MOV MARL, RA
+05BB  [640] ldi $OLED_SCL_DRIVE_LOW
+      05BB  C1  LDL RA, #1
+05BC  [641] mov m, ra
+      05BC  B8  MOV M, RA
+05BD  [642] call @OLED_BEGIN_DATA_STREAM__DELAY_SHORT
+      05BD  C6  LDL RA, #6
+      05BE  36  LDH RA, #6
+      05BF  A8  MOV PRL, RA
+      05C0  C5  LDL RA, #5
+      05C1  B0  MOV PRH, RA
+      05C2  07  JAL
+05C3  [643] ret :stack
+      05C3  2E  POP PRH
+      05C4  2D  POP PRL
+      05C5  1F  JMP
+05C6  [646] ldi rd, $OLED_DELAY_COUNT
+      05C6  F0  LDL RD, #16
+05C7  [648] subi #1
+      05C7  69  SUBI #1
+05C8  [649] mov rd, acc
+      05C8  8B  MOV RD, ACC
+05C9  [650] jne @OLED_BEGIN_DATA_STREAM__DELAY_LOOP
+      05C9  C7  LDL RA, #7
+      05CA  36  LDH RA, #6
       05CB  A8  MOV PRL, RA
-      05CC  C7  LDL RA, #7
-      05CD  30  LDH RA, #0
-      05CE  B0  MOV PRH, RA
-      05CF  07  JAL
-05D0  [147] ldi $OLED_GPIO_DIR1_L
-      05D0  D1  LDL RA, #17
-      05D1  31  LDH RA, #1
-05D2  [148] mov marl, ra
-      05D2  98  MOV MARL, RA
-05D3  [149] ldi $OLED_SDA_DRIVE_LOW
-      05D3  C1  LDL RA, #1
-05D4  [150] mov m, ra
-      05D4  B8  MOV M, RA
-05D5  [151] call @OLED_WRITE_COMMAND__DELAY_SHORT
-      05D5  CA  LDL RA, #10
-      05D6  35  LDH RA, #5
-      05D7  A8  MOV PRL, RA
-      05D8  C7  LDL RA, #7
-      05D9  30  LDH RA, #0
-      05DA  B0  MOV PRH, RA
-      05DB  07  JAL
-05DC  [153] ldi $OLED_GPIO_DIR0_L
-      05DC  D0  LDL RA, #16
-      05DD  31  LDH RA, #1
-05DE  [154] mov marl, ra
-      05DE  98  MOV MARL, RA
-05DF  [155] ldi $OLED_SCL_DRIVE_LOW
-      05DF  C1  LDL RA, #1
-05E0  [156] mov m, ra
-      05E0  B8  MOV M, RA
-05E1  [157] call @OLED_WRITE_COMMAND__DELAY_SHORT
-      05E1  CA  LDL RA, #10
-      05E2  35  LDH RA, #5
-      05E3  A8  MOV PRL, RA
-      05E4  C7  LDL RA, #7
-      05E5  30  LDH RA, #0
+      05CC  C5  LDL RA, #5
+      05CD  B0  MOV PRH, RA
+      05CE  19  JNE
+05CF  [651] ret
+      05CF  AD  MOV PRL, LRL
+      05D0  B6  MOV PRH, LRH
+      05D1  1F  JMP
+05D2  [664] push lrl
+      05D2  25  PUSH LRL
+05D3  [665] push lrh
+      05D3  26  PUSH LRH
+05D4  [667] call @OLED_STREAM_DATA_BYTE__SEND_BYTE
+      05D4  CD  LDL RA, #13
+      05D5  32  LDH RA, #2
+      05D6  A8  MOV PRL, RA
+      05D7  C6  LDL RA, #6
+      05D8  B0  MOV PRH, RA
+      05D9  07  JAL
+05DA  [668] call @OLED_STREAM_DATA_BYTE__READ_ACK
+      05DA  DD  LDL RA, #29
+      05DB  30  LDH RA, #0
+      05DC  A8  MOV PRL, RA
+      05DD  C6  LDL RA, #6
+      05DE  B0  MOV PRH, RA
+      05DF  07  JAL
+05E0  [669] mov rd, rb
+      05E0  8A  MOV RD, RB
+05E1  [670] cmp zero
+      05E1  7C  CMP ZERO
+05E2  [671] jne @OLED_STREAM_DATA_BYTE__FAIL_DATA
+      05E2  CC  LDL RA, #12
+      05E3  37  LDH RA, #7
+      05E4  A8  MOV PRL, RA
+      05E5  C5  LDL RA, #5
       05E6  B0  MOV PRH, RA
-      05E7  07  JAL
-05E8  [158] ret :stack
-      05E8  2E  POP PRH
-      05E9  2D  POP PRL
-      05EA  1F  JMP
-05EB  [161] push lrl
-      05EB  25  PUSH LRL
-05EC  [162] push lrh
-      05EC  26  PUSH LRH
-05ED  [164] ldi $OLED_GPIO_BASE_H
-      05ED  C8  LDL RA, #8
-05EE  [165] mov marh, ra
-      05EE  A0  MOV MARH, RA
-05EF  [167] ldi $OLED_GPIO_DIR1_L
-      05EF  D1  LDL RA, #17
-      05F0  31  LDH RA, #1
-05F1  [168] mov marl, ra
-      05F1  98  MOV MARL, RA
-05F2  [169] ldi $OLED_SDA_DRIVE_LOW
-      05F2  C1  LDL RA, #1
-05F3  [170] mov m, ra
-      05F3  B8  MOV M, RA
-05F4  [171] call @OLED_WRITE_COMMAND__DELAY_SHORT
-      05F4  CA  LDL RA, #10
-      05F5  35  LDH RA, #5
-      05F6  A8  MOV PRL, RA
-      05F7  C7  LDL RA, #7
-      05F8  30  LDH RA, #0
-      05F9  B0  MOV PRH, RA
-      05FA  07  JAL
-05FB  [173] ldi $OLED_GPIO_DIR0_L
-      05FB  D0  LDL RA, #16
+      05E7  19  JNE
+05E8  [673] mov rb, zero
+      05E8  94  MOV RB, ZERO
+05E9  [674] ret :stack
+      05E9  2E  POP PRH
+      05EA  2D  POP PRL
+      05EB  1F  JMP
+05EC  [677] call @OLED_STREAM_DATA_BYTE__I2C_STOP
+      05EC  D7  LDL RA, #23
+      05ED  37  LDH RA, #7
+      05EE  A8  MOV PRL, RA
+      05EF  C5  LDL RA, #5
+      05F0  B0  MOV PRH, RA
+      05F1  07  JAL
+05F2  [678] ldi $OLED_ERR_DATA
+      05F2  C5  LDL RA, #5
+05F3  [679] mov rb, ra
+      05F3  90  MOV RB, RA
+05F4  [680] ret :stack
+      05F4  2E  POP PRH
+      05F5  2D  POP PRL
+      05F6  1F  JMP
+05F7  [683] push lrl
+      05F7  25  PUSH LRL
+05F8  [684] push lrh
+      05F8  26  PUSH LRH
+05F9  [686] ldi $OLED_GPIO_BASE_H
+      05F9  C8  LDL RA, #8
+05FA  [687] mov marh, ra
+      05FA  A0  MOV MARH, RA
+05FB  [689] ldi $OLED_GPIO_DIR1_L
+      05FB  D1  LDL RA, #17
       05FC  31  LDH RA, #1
-05FD  [174] mov marl, ra
+05FD  [690] mov marl, ra
       05FD  98  MOV MARL, RA
-05FE  [175] mov m, zero
-      05FE  BC  MOV M, ZERO
-05FF  [176] call @OLED_WRITE_COMMAND__DELAY_SHORT
-      05FF  CA  LDL RA, #10
-      0600  35  LDH RA, #5
-      0601  A8  MOV PRL, RA
-      0602  C7  LDL RA, #7
-      0603  30  LDH RA, #0
+05FE  [691] ldi $OLED_SDA_DRIVE_LOW
+      05FE  C1  LDL RA, #1
+05FF  [692] mov m, ra
+      05FF  B8  MOV M, RA
+0600  [693] call @OLED_STREAM_DATA_BYTE__DELAY_SHORT
+      0600  CA  LDL RA, #10
+      0601  34  LDH RA, #4
+      0602  A8  MOV PRL, RA
+      0603  C7  LDL RA, #7
       0604  B0  MOV PRH, RA
       0605  07  JAL
-0606  [178] ldi $OLED_GPIO_DIR1_L
-      0606  D1  LDL RA, #17
+0606  [695] ldi $OLED_GPIO_DIR0_L
+      0606  D0  LDL RA, #16
       0607  31  LDH RA, #1
-0608  [179] mov marl, ra
+0608  [696] mov marl, ra
       0608  98  MOV MARL, RA
-0609  [180] mov m, zero
+0609  [697] mov m, zero
       0609  BC  MOV M, ZERO
-060A  [181] call @OLED_WRITE_COMMAND__DELAY_SHORT
+060A  [698] call @OLED_STREAM_DATA_BYTE__DELAY_SHORT
       060A  CA  LDL RA, #10
-      060B  35  LDH RA, #5
+      060B  34  LDH RA, #4
       060C  A8  MOV PRL, RA
       060D  C7  LDL RA, #7
-      060E  30  LDH RA, #0
-      060F  B0  MOV PRH, RA
-      0610  07  JAL
-0611  [182] ret :stack
-      0611  2E  POP PRH
-      0612  2D  POP PRL
-      0613  1F  JMP
-0614  [185] push lrl
-      0614  25  PUSH LRL
-0615  [186] push lrh
-      0615  26  PUSH LRH
-0616  [188] ldi $OLED_GPIO_BASE_H
-      0616  C8  LDL RA, #8
-0617  [189] mov marh, ra
-      0617  A0  MOV MARH, RA
-0618  [190] ldi $OLED_GPIO_DIR1_L
-      0618  D1  LDL RA, #17
-      0619  31  LDH RA, #1
-061A  [191] mov marl, ra
-      061A  98  MOV MARL, RA
-061B  [192] mov m, zero
-      061B  BC  MOV M, ZERO
-061C  [193] call @OLED_WRITE_COMMAND__DELAY_SHORT
-      061C  CA  LDL RA, #10
-      061D  35  LDH RA, #5
-      061E  A8  MOV PRL, RA
-      061F  C7  LDL RA, #7
-      0620  30  LDH RA, #0
-      0621  B0  MOV PRH, RA
-      0622  07  JAL
-0623  [195] ldi $OLED_GPIO_DIR0_L
-      0623  D0  LDL RA, #16
-      0624  31  LDH RA, #1
-0625  [196] mov marl, ra
-      0625  98  MOV MARL, RA
-0626  [197] mov m, zero
-      0626  BC  MOV M, ZERO
-0627  [198] call @OLED_WRITE_COMMAND__DELAY_SHORT
-      0627  CA  LDL RA, #10
-      0628  35  LDH RA, #5
-      0629  A8  MOV PRL, RA
-      062A  C7  LDL RA, #7
-      062B  30  LDH RA, #0
-      062C  B0  MOV PRH, RA
-      062D  07  JAL
-062E  [199] call @OLED_WRITE_COMMAND__DELAY_SHORT
-      062E  CA  LDL RA, #10
-      062F  35  LDH RA, #5
-      0630  A8  MOV PRL, RA
-      0631  C7  LDL RA, #7
-      0632  30  LDH RA, #0
+      060E  B0  MOV PRH, RA
+      060F  07  JAL
+0610  [700] ldi $OLED_GPIO_DIR1_L
+      0610  D1  LDL RA, #17
+      0611  31  LDH RA, #1
+0612  [701] mov marl, ra
+      0612  98  MOV MARL, RA
+0613  [702] mov m, zero
+      0613  BC  MOV M, ZERO
+0614  [703] call @OLED_STREAM_DATA_BYTE__DELAY_SHORT
+      0614  CA  LDL RA, #10
+      0615  34  LDH RA, #4
+      0616  A8  MOV PRL, RA
+      0617  C7  LDL RA, #7
+      0618  B0  MOV PRH, RA
+      0619  07  JAL
+061A  [704] ret :stack
+      061A  2E  POP PRH
+      061B  2D  POP PRL
+      061C  1F  JMP
+061D  [707] push lrl
+      061D  25  PUSH LRL
+061E  [708] push lrh
+      061E  26  PUSH LRH
+061F  [710] ldi $OLED_GPIO_BASE_H
+      061F  C8  LDL RA, #8
+0620  [711] mov marh, ra
+      0620  A0  MOV MARH, RA
+0621  [712] ldi $OLED_GPIO_DIR1_L
+      0621  D1  LDL RA, #17
+      0622  31  LDH RA, #1
+0623  [713] mov marl, ra
+      0623  98  MOV MARL, RA
+0624  [714] mov m, zero
+      0624  BC  MOV M, ZERO
+0625  [715] call @OLED_STREAM_DATA_BYTE__DELAY_SHORT
+      0625  CA  LDL RA, #10
+      0626  34  LDH RA, #4
+      0627  A8  MOV PRL, RA
+      0628  C7  LDL RA, #7
+      0629  B0  MOV PRH, RA
+      062A  07  JAL
+062B  [717] ldi $OLED_GPIO_DIR0_L
+      062B  D0  LDL RA, #16
+      062C  31  LDH RA, #1
+062D  [718] mov marl, ra
+      062D  98  MOV MARL, RA
+062E  [719] mov m, zero
+      062E  BC  MOV M, ZERO
+062F  [720] call @OLED_STREAM_DATA_BYTE__DELAY_SHORT
+      062F  CA  LDL RA, #10
+      0630  34  LDH RA, #4
+      0631  A8  MOV PRL, RA
+      0632  C7  LDL RA, #7
       0633  B0  MOV PRH, RA
       0634  07  JAL
-0635  [201] ldi $OLED_GPIO_IN1_L
-      0635  D1  LDL RA, #17
-0636  [202] mov marl, ra
-      0636  98  MOV MARL, RA
-0637  [203] mov rd, m
-      0637  8F  MOV RD, M
-0638  [204] mov rb, rd
-      0638  91  MOV RB, RD
-0639  [206] ldi $OLED_GPIO_DIR0_L
-      0639  D0  LDL RA, #16
-      063A  31  LDH RA, #1
-063B  [207] mov marl, ra
-      063B  98  MOV MARL, RA
-063C  [208] ldi $OLED_SCL_DRIVE_LOW
-      063C  C1  LDL RA, #1
-063D  [209] mov m, ra
-      063D  B8  MOV M, RA
-063E  [210] call @OLED_WRITE_COMMAND__DELAY_SHORT
-      063E  CA  LDL RA, #10
-      063F  35  LDH RA, #5
-      0640  A8  MOV PRL, RA
-      0641  C7  LDL RA, #7
-      0642  30  LDH RA, #0
-      0643  B0  MOV PRH, RA
-      0644  07  JAL
-0645  [211] ret :stack
-      0645  2E  POP PRH
-      0646  2D  POP PRL
-      0647  1F  JMP
-0648  [214] push lrl
-      0648  25  PUSH LRL
-0649  [215] push lrh
-      0649  26  PUSH LRH
-064A  [217] mov rd, rb
-      064A  8A  MOV RD, RB
-064B  [218] ldi #0x80
-      064B  C0  LDL RA, #0
-      064C  34  LDH RA, #4
-064D  [219] and ra
-      064D  10  AND RA
-064E  [220] mov rd, acc
-      064E  8B  MOV RD, ACC
-064F  [221] cmp zero
-      064F  7C  CMP ZERO
-0650  [222] jeq @OLED_WRITE_COMMAND__B7_ZERO
-      0650  C5  LDL RA, #5
-      0651  33  LDH RA, #3
-      0652  A8  MOV PRL, RA
-      0653  C6  LDL RA, #6
-      0654  30  LDH RA, #0
-      0655  B0  MOV PRH, RA
-      0656  18  JEQ
-0657  [223] call @OLED_WRITE_COMMAND__SEND_BIT_ONE
-      0657  CC  LDL RA, #12
-      0658  33  LDH RA, #3
-      0659  A8  MOV PRL, RA
-      065A  C7  LDL RA, #7
-      065B  30  LDH RA, #0
-      065C  B0  MOV PRH, RA
-      065D  07  JAL
-065E  [224] jmp @OLED_WRITE_COMMAND__B6
-      065E  CC  LDL RA, #12
-      065F  33  LDH RA, #3
-      0660  A8  MOV PRL, RA
-      0661  C6  LDL RA, #6
-      0662  30  LDH RA, #0
-      0663  B0  MOV PRH, RA
-      0664  1F  JMP
-0665  [226] call @OLED_WRITE_COMMAND__SEND_BIT_ZERO
-      0665  D9  LDL RA, #25
-      0666  32  LDH RA, #2
-      0667  A8  MOV PRL, RA
-      0668  C7  LDL RA, #7
-      0669  30  LDH RA, #0
-      066A  B0  MOV PRH, RA
-      066B  07  JAL
-066C  [229] mov rd, rb
-      066C  8A  MOV RD, RB
-066D  [230] ldi #0x40
-      066D  C0  LDL RA, #0
-      066E  32  LDH RA, #2
-066F  [231] and ra
-      066F  10  AND RA
-0670  [232] mov rd, acc
-      0670  8B  MOV RD, ACC
-0671  [233] cmp zero
-      0671  7C  CMP ZERO
-0672  [234] jeq @OLED_WRITE_COMMAND__B6_ZERO
-      0672  C7  LDL RA, #7
-      0673  34  LDH RA, #4
-      0674  A8  MOV PRL, RA
-      0675  C6  LDL RA, #6
-      0676  30  LDH RA, #0
+0635  [721] call @OLED_STREAM_DATA_BYTE__DELAY_SHORT
+      0635  CA  LDL RA, #10
+      0636  34  LDH RA, #4
+      0637  A8  MOV PRL, RA
+      0638  C7  LDL RA, #7
+      0639  B0  MOV PRH, RA
+      063A  07  JAL
+063B  [723] ldi $OLED_GPIO_IN1_L
+      063B  D1  LDL RA, #17
+063C  [724] mov marl, ra
+      063C  98  MOV MARL, RA
+063D  [725] mov rd, m
+      063D  8F  MOV RD, M
+063E  [726] mov rb, rd
+      063E  91  MOV RB, RD
+063F  [728] ldi $OLED_GPIO_DIR0_L
+      063F  D0  LDL RA, #16
+      0640  31  LDH RA, #1
+0641  [729] mov marl, ra
+      0641  98  MOV MARL, RA
+0642  [730] ldi $OLED_SCL_DRIVE_LOW
+      0642  C1  LDL RA, #1
+0643  [731] mov m, ra
+      0643  B8  MOV M, RA
+0644  [732] call @OLED_STREAM_DATA_BYTE__DELAY_SHORT
+      0644  CA  LDL RA, #10
+      0645  34  LDH RA, #4
+      0646  A8  MOV PRL, RA
+      0647  C7  LDL RA, #7
+      0648  B0  MOV PRH, RA
+      0649  07  JAL
+064A  [733] ret :stack
+      064A  2E  POP PRH
+      064B  2D  POP PRL
+      064C  1F  JMP
+064D  [736] push lrl
+      064D  25  PUSH LRL
+064E  [737] push lrh
+      064E  26  PUSH LRH
+064F  [739] mov rd, rb
+      064F  8A  MOV RD, RB
+0650  [740] ldi #0x80
+      0650  C0  LDL RA, #0
+      0651  34  LDH RA, #4
+0652  [741] and ra
+      0652  10  AND RA
+0653  [742] mov rd, acc
+      0653  8B  MOV RD, ACC
+0654  [743] cmp zero
+      0654  7C  CMP ZERO
+0655  [744] jeq @OLED_STREAM_DATA_BYTE__B7_ZERO
+      0655  C7  LDL RA, #7
+      0656  33  LDH RA, #3
+      0657  A8  MOV PRL, RA
+      0658  C6  LDL RA, #6
+      0659  B0  MOV PRH, RA
+      065A  18  JEQ
+065B  [745] call @OLED_STREAM_DATA_BYTE__SEND_BIT_ONE
+      065B  D1  LDL RA, #17
+      065C  32  LDH RA, #2
+      065D  A8  MOV PRL, RA
+      065E  C7  LDL RA, #7
+      065F  B0  MOV PRH, RA
+      0660  07  JAL
+0661  [746] jmp @OLED_STREAM_DATA_BYTE__B6
+      0661  CD  LDL RA, #13
+      0662  33  LDH RA, #3
+      0663  A8  MOV PRL, RA
+      0664  C6  LDL RA, #6
+      0665  B0  MOV PRH, RA
+      0666  1F  JMP
+0667  [748] call @OLED_STREAM_DATA_BYTE__SEND_BIT_ZERO
+      0667  DF  LDL RA, #31
+      0668  31  LDH RA, #1
+      0669  A8  MOV PRL, RA
+      066A  C7  LDL RA, #7
+      066B  B0  MOV PRH, RA
+      066C  07  JAL
+066D  [751] mov rd, rb
+      066D  8A  MOV RD, RB
+066E  [752] ldi #0x40
+      066E  C0  LDL RA, #0
+      066F  32  LDH RA, #2
+0670  [753] and ra
+      0670  10  AND RA
+0671  [754] mov rd, acc
+      0671  8B  MOV RD, ACC
+0672  [755] cmp zero
+      0672  7C  CMP ZERO
+0673  [756] jeq @OLED_STREAM_DATA_BYTE__B6_ZERO
+      0673  C5  LDL RA, #5
+      0674  34  LDH RA, #4
+      0675  A8  MOV PRL, RA
+      0676  C6  LDL RA, #6
       0677  B0  MOV PRH, RA
       0678  18  JEQ
-0679  [235] call @OLED_WRITE_COMMAND__SEND_BIT_ONE
-      0679  CC  LDL RA, #12
-      067A  33  LDH RA, #3
+0679  [757] call @OLED_STREAM_DATA_BYTE__SEND_BIT_ONE
+      0679  D1  LDL RA, #17
+      067A  32  LDH RA, #2
       067B  A8  MOV PRL, RA
       067C  C7  LDL RA, #7
-      067D  30  LDH RA, #0
-      067E  B0  MOV PRH, RA
-      067F  07  JAL
-0680  [236] jmp @OLED_WRITE_COMMAND__B5
-      0680  CE  LDL RA, #14
-      0681  34  LDH RA, #4
-      0682  A8  MOV PRL, RA
-      0683  C6  LDL RA, #6
-      0684  30  LDH RA, #0
-      0685  B0  MOV PRH, RA
-      0686  1F  JMP
-0687  [238] call @OLED_WRITE_COMMAND__SEND_BIT_ZERO
-      0687  D9  LDL RA, #25
-      0688  32  LDH RA, #2
-      0689  A8  MOV PRL, RA
-      068A  C7  LDL RA, #7
-      068B  30  LDH RA, #0
-      068C  B0  MOV PRH, RA
-      068D  07  JAL
-068E  [241] mov rd, rb
-      068E  8A  MOV RD, RB
-068F  [242] ldi #0x20
-      068F  C0  LDL RA, #0
-      0690  31  LDH RA, #1
-0691  [243] and ra
-      0691  10  AND RA
-0692  [244] mov rd, acc
-      0692  8B  MOV RD, ACC
-0693  [245] cmp zero
-      0693  7C  CMP ZERO
-0694  [246] jeq @OLED_WRITE_COMMAND__B5_ZERO
-      0694  C9  LDL RA, #9
-      0695  35  LDH RA, #5
-      0696  A8  MOV PRL, RA
-      0697  C6  LDL RA, #6
-      0698  30  LDH RA, #0
-      0699  B0  MOV PRH, RA
-      069A  18  JEQ
-069B  [247] call @OLED_WRITE_COMMAND__SEND_BIT_ONE
-      069B  CC  LDL RA, #12
-      069C  33  LDH RA, #3
-      069D  A8  MOV PRL, RA
-      069E  C7  LDL RA, #7
-      069F  30  LDH RA, #0
-      06A0  B0  MOV PRH, RA
-      06A1  07  JAL
-06A2  [248] jmp @OLED_WRITE_COMMAND__B4
-      06A2  D0  LDL RA, #16
-      06A3  35  LDH RA, #5
-      06A4  A8  MOV PRL, RA
-      06A5  C6  LDL RA, #6
-      06A6  30  LDH RA, #0
+      067D  B0  MOV PRH, RA
+      067E  07  JAL
+067F  [758] jmp @OLED_STREAM_DATA_BYTE__B5
+      067F  CB  LDL RA, #11
+      0680  34  LDH RA, #4
+      0681  A8  MOV PRL, RA
+      0682  C6  LDL RA, #6
+      0683  B0  MOV PRH, RA
+      0684  1F  JMP
+0685  [760] call @OLED_STREAM_DATA_BYTE__SEND_BIT_ZERO
+      0685  DF  LDL RA, #31
+      0686  31  LDH RA, #1
+      0687  A8  MOV PRL, RA
+      0688  C7  LDL RA, #7
+      0689  B0  MOV PRH, RA
+      068A  07  JAL
+068B  [763] mov rd, rb
+      068B  8A  MOV RD, RB
+068C  [764] ldi #0x20
+      068C  C0  LDL RA, #0
+      068D  31  LDH RA, #1
+068E  [765] and ra
+      068E  10  AND RA
+068F  [766] mov rd, acc
+      068F  8B  MOV RD, ACC
+0690  [767] cmp zero
+      0690  7C  CMP ZERO
+0691  [768] jeq @OLED_STREAM_DATA_BYTE__B5_ZERO
+      0691  C3  LDL RA, #3
+      0692  35  LDH RA, #5
+      0693  A8  MOV PRL, RA
+      0694  C6  LDL RA, #6
+      0695  B0  MOV PRH, RA
+      0696  18  JEQ
+0697  [769] call @OLED_STREAM_DATA_BYTE__SEND_BIT_ONE
+      0697  D1  LDL RA, #17
+      0698  32  LDH RA, #2
+      0699  A8  MOV PRL, RA
+      069A  C7  LDL RA, #7
+      069B  B0  MOV PRH, RA
+      069C  07  JAL
+069D  [770] jmp @OLED_STREAM_DATA_BYTE__B4
+      069D  C9  LDL RA, #9
+      069E  35  LDH RA, #5
+      069F  A8  MOV PRL, RA
+      06A0  C6  LDL RA, #6
+      06A1  B0  MOV PRH, RA
+      06A2  1F  JMP
+06A3  [772] call @OLED_STREAM_DATA_BYTE__SEND_BIT_ZERO
+      06A3  DF  LDL RA, #31
+      06A4  31  LDH RA, #1
+      06A5  A8  MOV PRL, RA
+      06A6  C7  LDL RA, #7
       06A7  B0  MOV PRH, RA
-      06A8  1F  JMP
-06A9  [250] call @OLED_WRITE_COMMAND__SEND_BIT_ZERO
-      06A9  D9  LDL RA, #25
-      06AA  32  LDH RA, #2
-      06AB  A8  MOV PRL, RA
-      06AC  C7  LDL RA, #7
-      06AD  30  LDH RA, #0
-      06AE  B0  MOV PRH, RA
-      06AF  07  JAL
-06B0  [253] mov rd, rb
-      06B0  8A  MOV RD, RB
-06B1  [254] ldi #0x10
-      06B1  D0  LDL RA, #16
-06B2  [255] and ra
-      06B2  10  AND RA
-06B3  [256] mov rd, acc
-      06B3  8B  MOV RD, ACC
-06B4  [257] cmp zero
-      06B4  7C  CMP ZERO
-06B5  [258] jeq @OLED_WRITE_COMMAND__B4_ZERO
-      06B5  CA  LDL RA, #10
-      06B6  36  LDH RA, #6
-      06B7  A8  MOV PRL, RA
-      06B8  C6  LDL RA, #6
-      06B9  30  LDH RA, #0
-      06BA  B0  MOV PRH, RA
-      06BB  18  JEQ
-06BC  [259] call @OLED_WRITE_COMMAND__SEND_BIT_ONE
-      06BC  CC  LDL RA, #12
-      06BD  33  LDH RA, #3
-      06BE  A8  MOV PRL, RA
-      06BF  C7  LDL RA, #7
-      06C0  30  LDH RA, #0
-      06C1  B0  MOV PRH, RA
-      06C2  07  JAL
-06C3  [260] jmp @OLED_WRITE_COMMAND__B3
-      06C3  D1  LDL RA, #17
-      06C4  36  LDH RA, #6
-      06C5  A8  MOV PRL, RA
-      06C6  C6  LDL RA, #6
-      06C7  30  LDH RA, #0
-      06C8  B0  MOV PRH, RA
-      06C9  1F  JMP
-06CA  [262] call @OLED_WRITE_COMMAND__SEND_BIT_ZERO
-      06CA  D9  LDL RA, #25
-      06CB  32  LDH RA, #2
-      06CC  A8  MOV PRL, RA
-      06CD  C7  LDL RA, #7
-      06CE  30  LDH RA, #0
+      06A8  07  JAL
+06A9  [775] mov rd, rb
+      06A9  8A  MOV RD, RB
+06AA  [776] ldi #0x10
+      06AA  D0  LDL RA, #16
+06AB  [777] and ra
+      06AB  10  AND RA
+06AC  [778] mov rd, acc
+      06AC  8B  MOV RD, ACC
+06AD  [779] cmp zero
+      06AD  7C  CMP ZERO
+06AE  [780] jeq @OLED_STREAM_DATA_BYTE__B4_ZERO
+      06AE  C0  LDL RA, #0
+      06AF  36  LDH RA, #6
+      06B0  A8  MOV PRL, RA
+      06B1  C6  LDL RA, #6
+      06B2  B0  MOV PRH, RA
+      06B3  18  JEQ
+06B4  [781] call @OLED_STREAM_DATA_BYTE__SEND_BIT_ONE
+      06B4  D1  LDL RA, #17
+      06B5  32  LDH RA, #2
+      06B6  A8  MOV PRL, RA
+      06B7  C7  LDL RA, #7
+      06B8  B0  MOV PRH, RA
+      06B9  07  JAL
+06BA  [782] jmp @OLED_STREAM_DATA_BYTE__B3
+      06BA  C6  LDL RA, #6
+      06BB  36  LDH RA, #6
+      06BC  A8  MOV PRL, RA
+      06BD  C6  LDL RA, #6
+      06BE  B0  MOV PRH, RA
+      06BF  1F  JMP
+06C0  [784] call @OLED_STREAM_DATA_BYTE__SEND_BIT_ZERO
+      06C0  DF  LDL RA, #31
+      06C1  31  LDH RA, #1
+      06C2  A8  MOV PRL, RA
+      06C3  C7  LDL RA, #7
+      06C4  B0  MOV PRH, RA
+      06C5  07  JAL
+06C6  [787] mov rd, rb
+      06C6  8A  MOV RD, RB
+06C7  [788] ldi #0x08
+      06C7  C8  LDL RA, #8
+06C8  [789] and ra
+      06C8  10  AND RA
+06C9  [790] mov rd, acc
+      06C9  8B  MOV RD, ACC
+06CA  [791] cmp zero
+      06CA  7C  CMP ZERO
+06CB  [792] jeq @OLED_STREAM_DATA_BYTE__B3_ZERO
+      06CB  DD  LDL RA, #29
+      06CC  36  LDH RA, #6
+      06CD  A8  MOV PRL, RA
+      06CE  C6  LDL RA, #6
       06CF  B0  MOV PRH, RA
-      06D0  07  JAL
-06D1  [265] mov rd, rb
-      06D1  8A  MOV RD, RB
-06D2  [266] ldi #0x08
-      06D2  C8  LDL RA, #8
-06D3  [267] and ra
-      06D3  10  AND RA
-06D4  [268] mov rd, acc
-      06D4  8B  MOV RD, ACC
-06D5  [269] cmp zero
-      06D5  7C  CMP ZERO
-06D6  [270] jeq @OLED_WRITE_COMMAND__B3_ZERO
-      06D6  CB  LDL RA, #11
-      06D7  37  LDH RA, #7
-      06D8  A8  MOV PRL, RA
-      06D9  C6  LDL RA, #6
-      06DA  30  LDH RA, #0
+      06D0  18  JEQ
+06D1  [793] call @OLED_STREAM_DATA_BYTE__SEND_BIT_ONE
+      06D1  D1  LDL RA, #17
+      06D2  32  LDH RA, #2
+      06D3  A8  MOV PRL, RA
+      06D4  C7  LDL RA, #7
+      06D5  B0  MOV PRH, RA
+      06D6  07  JAL
+06D7  [794] jmp @OLED_STREAM_DATA_BYTE__B2
+      06D7  C3  LDL RA, #3
+      06D8  37  LDH RA, #7
+      06D9  A8  MOV PRL, RA
+      06DA  C6  LDL RA, #6
       06DB  B0  MOV PRH, RA
-      06DC  18  JEQ
-06DD  [271] call @OLED_WRITE_COMMAND__SEND_BIT_ONE
-      06DD  CC  LDL RA, #12
-      06DE  33  LDH RA, #3
+      06DC  1F  JMP
+06DD  [796] call @OLED_STREAM_DATA_BYTE__SEND_BIT_ZERO
+      06DD  DF  LDL RA, #31
+      06DE  31  LDH RA, #1
       06DF  A8  MOV PRL, RA
       06E0  C7  LDL RA, #7
-      06E1  30  LDH RA, #0
-      06E2  B0  MOV PRH, RA
-      06E3  07  JAL
-06E4  [272] jmp @OLED_WRITE_COMMAND__B2
-      06E4  D2  LDL RA, #18
-      06E5  37  LDH RA, #7
-      06E6  A8  MOV PRL, RA
-      06E7  C6  LDL RA, #6
-      06E8  30  LDH RA, #0
-      06E9  B0  MOV PRH, RA
-      06EA  1F  JMP
-06EB  [274] call @OLED_WRITE_COMMAND__SEND_BIT_ZERO
-      06EB  D9  LDL RA, #25
-      06EC  32  LDH RA, #2
-      06ED  A8  MOV PRL, RA
-      06EE  C7  LDL RA, #7
-      06EF  30  LDH RA, #0
-      06F0  B0  MOV PRH, RA
-      06F1  07  JAL
-06F2  [277] mov rd, rb
-      06F2  8A  MOV RD, RB
-06F3  [278] ldi #0x04
-      06F3  C4  LDL RA, #4
-06F4  [279] and ra
-      06F4  10  AND RA
-06F5  [280] mov rd, acc
-      06F5  8B  MOV RD, ACC
-06F6  [281] cmp zero
-      06F6  7C  CMP ZERO
-06F7  [282] jeq @OLED_WRITE_COMMAND__B2_ZERO
-      06F7  CC  LDL RA, #12
-      06F8  30  LDH RA, #0
-      06F9  A8  MOV PRL, RA
-      06FA  C7  LDL RA, #7
-      06FB  30  LDH RA, #0
-      06FC  B0  MOV PRH, RA
-      06FD  18  JEQ
-06FE  [283] call @OLED_WRITE_COMMAND__SEND_BIT_ONE
-      06FE  CC  LDL RA, #12
-      06FF  33  LDH RA, #3
-      0700  A8  MOV PRL, RA
-      0701  C7  LDL RA, #7
-      0702  30  LDH RA, #0
-      0703  B0  MOV PRH, RA
-      0704  07  JAL
-0705  [284] jmp @OLED_WRITE_COMMAND__B1
-      0705  D3  LDL RA, #19
+      06E1  B0  MOV PRH, RA
+      06E2  07  JAL
+06E3  [799] mov rd, rb
+      06E3  8A  MOV RD, RB
+06E4  [800] ldi #0x04
+      06E4  C4  LDL RA, #4
+06E5  [801] and ra
+      06E5  10  AND RA
+06E6  [802] mov rd, acc
+      06E6  8B  MOV RD, ACC
+06E7  [803] cmp zero
+      06E7  7C  CMP ZERO
+06E8  [804] jeq @OLED_STREAM_DATA_BYTE__B2_ZERO
+      06E8  DA  LDL RA, #26
+      06E9  37  LDH RA, #7
+      06EA  A8  MOV PRL, RA
+      06EB  C6  LDL RA, #6
+      06EC  B0  MOV PRH, RA
+      06ED  18  JEQ
+06EE  [805] call @OLED_STREAM_DATA_BYTE__SEND_BIT_ONE
+      06EE  D1  LDL RA, #17
+      06EF  32  LDH RA, #2
+      06F0  A8  MOV PRL, RA
+      06F1  C7  LDL RA, #7
+      06F2  B0  MOV PRH, RA
+      06F3  07  JAL
+06F4  [806] jmp @OLED_STREAM_DATA_BYTE__B1
+      06F4  C0  LDL RA, #0
+      06F5  30  LDH RA, #0
+      06F6  A8  MOV PRL, RA
+      06F7  C7  LDL RA, #7
+      06F8  B0  MOV PRH, RA
+      06F9  1F  JMP
+06FA  [808] call @OLED_STREAM_DATA_BYTE__SEND_BIT_ZERO
+      06FA  DF  LDL RA, #31
+      06FB  31  LDH RA, #1
+      06FC  A8  MOV PRL, RA
+      06FD  C7  LDL RA, #7
+      06FE  B0  MOV PRH, RA
+      06FF  07  JAL
+0700  [811] mov rd, rb
+      0700  8A  MOV RD, RB
+0701  [812] ldi #0x02
+      0701  C2  LDL RA, #2
+0702  [813] and ra
+      0702  10  AND RA
+0703  [814] mov rd, acc
+      0703  8B  MOV RD, ACC
+0704  [815] cmp zero
+      0704  7C  CMP ZERO
+0705  [816] jeq @OLED_STREAM_DATA_BYTE__B1_ZERO
+      0705  DC  LDL RA, #28
       0706  30  LDH RA, #0
       0707  A8  MOV PRL, RA
       0708  C7  LDL RA, #7
-      0709  30  LDH RA, #0
-      070A  B0  MOV PRH, RA
-      070B  1F  JMP
-070C  [286] call @OLED_WRITE_COMMAND__SEND_BIT_ZERO
-      070C  D9  LDL RA, #25
-      070D  32  LDH RA, #2
-      070E  A8  MOV PRL, RA
-      070F  C7  LDL RA, #7
-      0710  30  LDH RA, #0
-      0711  B0  MOV PRH, RA
-      0712  07  JAL
-0713  [289] mov rd, rb
-      0713  8A  MOV RD, RB
-0714  [290] ldi #0x02
-      0714  C2  LDL RA, #2
-0715  [291] and ra
-      0715  10  AND RA
-0716  [292] mov rd, acc
-      0716  8B  MOV RD, ACC
-0717  [293] cmp zero
-      0717  7C  CMP ZERO
-0718  [294] jeq @OLED_WRITE_COMMAND__B1_ZERO
-      0718  D2  LDL RA, #18
-      0719  31  LDH RA, #1
-      071A  A8  MOV PRL, RA
-      071B  C7  LDL RA, #7
-      071C  30  LDH RA, #0
-      071D  B0  MOV PRH, RA
-      071E  18  JEQ
-071F  [295] call @OLED_WRITE_COMMAND__SEND_BIT_ONE
-      071F  CC  LDL RA, #12
-      0720  33  LDH RA, #3
-      0721  A8  MOV PRL, RA
-      0722  C7  LDL RA, #7
-      0723  30  LDH RA, #0
-      0724  B0  MOV PRH, RA
-      0725  07  JAL
-0726  [296] jmp @OLED_WRITE_COMMAND__B0
-      0726  D9  LDL RA, #25
-      0727  31  LDH RA, #1
-      0728  A8  MOV PRL, RA
-      0729  C7  LDL RA, #7
-      072A  30  LDH RA, #0
+      0709  B0  MOV PRH, RA
+      070A  18  JEQ
+070B  [817] call @OLED_STREAM_DATA_BYTE__SEND_BIT_ONE
+      070B  D1  LDL RA, #17
+      070C  32  LDH RA, #2
+      070D  A8  MOV PRL, RA
+      070E  C7  LDL RA, #7
+      070F  B0  MOV PRH, RA
+      0710  07  JAL
+0711  [818] jmp @OLED_STREAM_DATA_BYTE__B0
+      0711  C2  LDL RA, #2
+      0712  31  LDH RA, #1
+      0713  A8  MOV PRL, RA
+      0714  C7  LDL RA, #7
+      0715  B0  MOV PRH, RA
+      0716  1F  JMP
+0717  [819] nop
+      0717  00  NOP
+0718  [820] nop
+      0718  00  NOP
+0719  [821] nop
+      0719  00  NOP
+071A  [822] nop
+      071A  00  NOP
+071B  [823] nop
+      071B  00  NOP
+071C  [825] call @OLED_STREAM_DATA_BYTE__SEND_BIT_ZERO
+      071C  DF  LDL RA, #31
+      071D  31  LDH RA, #1
+      071E  A8  MOV PRL, RA
+      071F  C7  LDL RA, #7
+      0720  B0  MOV PRH, RA
+      0721  07  JAL
+0722  [828] mov rd, rb
+      0722  8A  MOV RD, RB
+0723  [829] ldi #0x01
+      0723  C1  LDL RA, #1
+0724  [830] and ra
+      0724  10  AND RA
+0725  [831] mov rd, acc
+      0725  8B  MOV RD, ACC
+0726  [832] cmp zero
+      0726  7C  CMP ZERO
+0727  [833] jeq @OLED_STREAM_DATA_BYTE__B0_ZERO
+      0727  D6  LDL RA, #22
+      0728  31  LDH RA, #1
+      0729  A8  MOV PRL, RA
+      072A  C7  LDL RA, #7
       072B  B0  MOV PRH, RA
-      072C  1F  JMP
-072D  [297] nop
-      072D  00  NOP
-072E  [298] nop
-      072E  00  NOP
-072F  [299] nop
-      072F  00  NOP
-0730  [300] nop
-      0730  00  NOP
-0731  [301] nop
-      0731  00  NOP
-0732  [303] call @OLED_WRITE_COMMAND__SEND_BIT_ZERO
-      0732  D9  LDL RA, #25
-      0733  32  LDH RA, #2
-      0734  A8  MOV PRL, RA
-      0735  C7  LDL RA, #7
-      0736  30  LDH RA, #0
-      0737  B0  MOV PRH, RA
-      0738  07  JAL
-0739  [306] mov rd, rb
-      0739  8A  MOV RD, RB
-073A  [307] ldi #0x01
-      073A  C1  LDL RA, #1
-073B  [308] and ra
-      073B  10  AND RA
-073C  [309] mov rd, acc
-      073C  8B  MOV RD, ACC
-073D  [310] cmp zero
-      073D  7C  CMP ZERO
-073E  [311] jeq @OLED_WRITE_COMMAND__B0_ZERO
-      073E  CF  LDL RA, #15
-      073F  32  LDH RA, #2
-      0740  A8  MOV PRL, RA
-      0741  C7  LDL RA, #7
-      0742  30  LDH RA, #0
-      0743  B0  MOV PRH, RA
-      0744  18  JEQ
-0745  [312] call @OLED_WRITE_COMMAND__SEND_BIT_ONE
-      0745  CC  LDL RA, #12
-      0746  33  LDH RA, #3
-      0747  A8  MOV PRL, RA
-      0748  C7  LDL RA, #7
-      0749  30  LDH RA, #0
-      074A  B0  MOV PRH, RA
-      074B  07  JAL
-074C  [313] ret :stack
-      074C  2E  POP PRH
-      074D  2D  POP PRL
-      074E  1F  JMP
-074F  [315] call @OLED_WRITE_COMMAND__SEND_BIT_ZERO
-      074F  D9  LDL RA, #25
-      0750  32  LDH RA, #2
-      0751  A8  MOV PRL, RA
-      0752  C7  LDL RA, #7
-      0753  30  LDH RA, #0
-      0754  B0  MOV PRH, RA
-      0755  07  JAL
-0756  [316] ret :stack
-      0756  2E  POP PRH
-      0757  2D  POP PRL
-      0758  1F  JMP
-0759  [319] push lrl
-      0759  25  PUSH LRL
-075A  [320] push lrh
-      075A  26  PUSH LRH
-075B  [322] ldi $OLED_GPIO_BASE_H
-      075B  C8  LDL RA, #8
-075C  [323] mov marh, ra
-      075C  A0  MOV MARH, RA
-075D  [324] ldi $OLED_GPIO_DIR1_L
-      075D  D1  LDL RA, #17
-      075E  31  LDH RA, #1
-075F  [325] mov marl, ra
-      075F  98  MOV MARL, RA
-0760  [326] ldi $OLED_SDA_DRIVE_LOW
-      0760  C1  LDL RA, #1
-0761  [327] mov m, ra
-      0761  B8  MOV M, RA
-0762  [328] call @OLED_WRITE_COMMAND__PULSE_SCL
-      0762  DE  LDL RA, #30
-      0763  33  LDH RA, #3
-      0764  A8  MOV PRL, RA
-      0765  C7  LDL RA, #7
-      0766  30  LDH RA, #0
-      0767  B0  MOV PRH, RA
-      0768  07  JAL
-0769  [329] ret :stack
-      0769  2E  POP PRH
-      076A  2D  POP PRL
-      076B  1F  JMP
-076C  [332] push lrl
-      076C  25  PUSH LRL
-076D  [333] push lrh
-      076D  26  PUSH LRH
-076E  [335] ldi $OLED_GPIO_BASE_H
-      076E  C8  LDL RA, #8
-076F  [336] mov marh, ra
-      076F  A0  MOV MARH, RA
-0770  [337] ldi $OLED_GPIO_DIR1_L
-      0770  D1  LDL RA, #17
-      0771  31  LDH RA, #1
-0772  [338] mov marl, ra
-      0772  98  MOV MARL, RA
-0773  [339] mov m, zero
-      0773  BC  MOV M, ZERO
-0774  [340] call @OLED_WRITE_COMMAND__PULSE_SCL
-      0774  DE  LDL RA, #30
-      0775  33  LDH RA, #3
-      0776  A8  MOV PRL, RA
-      0777  C7  LDL RA, #7
-      0778  30  LDH RA, #0
-      0779  B0  MOV PRH, RA
-      077A  07  JAL
-077B  [341] ret :stack
-      077B  2E  POP PRH
-      077C  2D  POP PRL
-      077D  1F  JMP
-077E  [344] push lrl
-      077E  25  PUSH LRL
-077F  [345] push lrh
-      077F  26  PUSH LRH
-0780  [347] call @OLED_WRITE_COMMAND__DELAY_SHORT
-      0780  CA  LDL RA, #10
-      0781  35  LDH RA, #5
-      0782  A8  MOV PRL, RA
-      0783  C7  LDL RA, #7
-      0784  30  LDH RA, #0
+      072C  18  JEQ
+072D  [834] call @OLED_STREAM_DATA_BYTE__SEND_BIT_ONE
+      072D  D1  LDL RA, #17
+      072E  32  LDH RA, #2
+      072F  A8  MOV PRL, RA
+      0730  C7  LDL RA, #7
+      0731  B0  MOV PRH, RA
+      0732  07  JAL
+0733  [835] ret :stack
+      0733  2E  POP PRH
+      0734  2D  POP PRL
+      0735  1F  JMP
+0736  [837] call @OLED_STREAM_DATA_BYTE__SEND_BIT_ZERO
+      0736  DF  LDL RA, #31
+      0737  31  LDH RA, #1
+      0738  A8  MOV PRL, RA
+      0739  C7  LDL RA, #7
+      073A  B0  MOV PRH, RA
+      073B  07  JAL
+073C  [838] ret :stack
+      073C  2E  POP PRH
+      073D  2D  POP PRL
+      073E  1F  JMP
+073F  [841] push lrl
+      073F  25  PUSH LRL
+0740  [842] push lrh
+      0740  26  PUSH LRH
+0741  [844] ldi $OLED_GPIO_BASE_H
+      0741  C8  LDL RA, #8
+0742  [845] mov marh, ra
+      0742  A0  MOV MARH, RA
+0743  [846] ldi $OLED_GPIO_DIR1_L
+      0743  D1  LDL RA, #17
+      0744  31  LDH RA, #1
+0745  [847] mov marl, ra
+      0745  98  MOV MARL, RA
+0746  [848] ldi $OLED_SDA_DRIVE_LOW
+      0746  C1  LDL RA, #1
+0747  [849] mov m, ra
+      0747  B8  MOV M, RA
+0748  [850] call @OLED_STREAM_DATA_BYTE__PULSE_SCL
+      0748  C2  LDL RA, #2
+      0749  33  LDH RA, #3
+      074A  A8  MOV PRL, RA
+      074B  C7  LDL RA, #7
+      074C  B0  MOV PRH, RA
+      074D  07  JAL
+074E  [851] ret :stack
+      074E  2E  POP PRH
+      074F  2D  POP PRL
+      0750  1F  JMP
+0751  [854] push lrl
+      0751  25  PUSH LRL
+0752  [855] push lrh
+      0752  26  PUSH LRH
+0753  [857] ldi $OLED_GPIO_BASE_H
+      0753  C8  LDL RA, #8
+0754  [858] mov marh, ra
+      0754  A0  MOV MARH, RA
+0755  [859] ldi $OLED_GPIO_DIR1_L
+      0755  D1  LDL RA, #17
+      0756  31  LDH RA, #1
+0757  [860] mov marl, ra
+      0757  98  MOV MARL, RA
+0758  [861] mov m, zero
+      0758  BC  MOV M, ZERO
+0759  [862] call @OLED_STREAM_DATA_BYTE__PULSE_SCL
+      0759  C2  LDL RA, #2
+      075A  33  LDH RA, #3
+      075B  A8  MOV PRL, RA
+      075C  C7  LDL RA, #7
+      075D  B0  MOV PRH, RA
+      075E  07  JAL
+075F  [863] ret :stack
+      075F  2E  POP PRH
+      0760  2D  POP PRL
+      0761  1F  JMP
+0762  [866] push lrl
+      0762  25  PUSH LRL
+0763  [867] push lrh
+      0763  26  PUSH LRH
+0764  [869] call @OLED_STREAM_DATA_BYTE__DELAY_SHORT
+      0764  CA  LDL RA, #10
+      0765  34  LDH RA, #4
+      0766  A8  MOV PRL, RA
+      0767  C7  LDL RA, #7
+      0768  B0  MOV PRH, RA
+      0769  07  JAL
+076A  [870] ldi $OLED_GPIO_BASE_H
+      076A  C8  LDL RA, #8
+076B  [871] mov marh, ra
+      076B  A0  MOV MARH, RA
+076C  [872] ldi $OLED_GPIO_DIR0_L
+      076C  D0  LDL RA, #16
+      076D  31  LDH RA, #1
+076E  [873] mov marl, ra
+      076E  98  MOV MARL, RA
+076F  [874] mov m, zero
+      076F  BC  MOV M, ZERO
+0770  [875] call @OLED_STREAM_DATA_BYTE__DELAY_SHORT
+      0770  CA  LDL RA, #10
+      0771  34  LDH RA, #4
+      0772  A8  MOV PRL, RA
+      0773  C7  LDL RA, #7
+      0774  B0  MOV PRH, RA
+      0775  07  JAL
+0776  [876] call @OLED_STREAM_DATA_BYTE__DELAY_SHORT
+      0776  CA  LDL RA, #10
+      0777  34  LDH RA, #4
+      0778  A8  MOV PRL, RA
+      0779  C7  LDL RA, #7
+      077A  B0  MOV PRH, RA
+      077B  07  JAL
+077C  [877] ldi $OLED_GPIO_DIR0_L
+      077C  D0  LDL RA, #16
+      077D  31  LDH RA, #1
+077E  [878] mov marl, ra
+      077E  98  MOV MARL, RA
+077F  [879] ldi $OLED_SCL_DRIVE_LOW
+      077F  C1  LDL RA, #1
+0780  [880] mov m, ra
+      0780  B8  MOV M, RA
+0781  [881] call @OLED_STREAM_DATA_BYTE__DELAY_SHORT
+      0781  CA  LDL RA, #10
+      0782  34  LDH RA, #4
+      0783  A8  MOV PRL, RA
+      0784  C7  LDL RA, #7
       0785  B0  MOV PRH, RA
       0786  07  JAL
-0787  [348] ldi $OLED_GPIO_BASE_H
-      0787  C8  LDL RA, #8
-0788  [349] mov marh, ra
-      0788  A0  MOV MARH, RA
-0789  [350] ldi $OLED_GPIO_DIR0_L
-      0789  D0  LDL RA, #16
-      078A  31  LDH RA, #1
-078B  [351] mov marl, ra
-      078B  98  MOV MARL, RA
-078C  [352] mov m, zero
-      078C  BC  MOV M, ZERO
-078D  [353] call @OLED_WRITE_COMMAND__DELAY_SHORT
-      078D  CA  LDL RA, #10
-      078E  35  LDH RA, #5
+0787  [882] ret :stack
+      0787  2E  POP PRH
+      0788  2D  POP PRL
+      0789  1F  JMP
+078A  [885] ldi rd, $OLED_DELAY_COUNT
+      078A  F0  LDL RD, #16
+078B  [887] subi #1
+      078B  69  SUBI #1
+078C  [888] mov rd, acc
+      078C  8B  MOV RD, ACC
+078D  [889] jne @OLED_STREAM_DATA_BYTE__DELAY_LOOP
+      078D  CB  LDL RA, #11
+      078E  34  LDH RA, #4
       078F  A8  MOV PRL, RA
       0790  C7  LDL RA, #7
-      0791  30  LDH RA, #0
-      0792  B0  MOV PRH, RA
-      0793  07  JAL
-0794  [354] call @OLED_WRITE_COMMAND__DELAY_SHORT
-      0794  CA  LDL RA, #10
-      0795  35  LDH RA, #5
-      0796  A8  MOV PRL, RA
-      0797  C7  LDL RA, #7
-      0798  30  LDH RA, #0
-      0799  B0  MOV PRH, RA
-      079A  07  JAL
-079B  [355] ldi $OLED_GPIO_DIR0_L
-      079B  D0  LDL RA, #16
-      079C  31  LDH RA, #1
-079D  [356] mov marl, ra
-      079D  98  MOV MARL, RA
-079E  [357] ldi $OLED_SCL_DRIVE_LOW
-      079E  C1  LDL RA, #1
-079F  [358] mov m, ra
-      079F  B8  MOV M, RA
-07A0  [359] call @OLED_WRITE_COMMAND__DELAY_SHORT
-      07A0  CA  LDL RA, #10
-      07A1  35  LDH RA, #5
-      07A2  A8  MOV PRL, RA
-      07A3  C7  LDL RA, #7
-      07A4  30  LDH RA, #0
-      07A5  B0  MOV PRH, RA
-      07A6  07  JAL
-07A7  [360] ret :stack
-      07A7  2E  POP PRH
-      07A8  2D  POP PRL
-      07A9  1F  JMP
-07AA  [363] ldi rd, $OLED_DELAY_COUNT
-      07AA  F0  LDL RD, #16
-07AB  [365] subi #1
-      07AB  69  SUBI #1
-07AC  [366] mov rd, acc
-      07AC  8B  MOV RD, ACC
-07AD  [367] jne @OLED_WRITE_COMMAND__DELAY_LOOP
-      07AD  CB  LDL RA, #11
-      07AE  35  LDH RA, #5
-      07AF  A8  MOV PRL, RA
-      07B0  C7  LDL RA, #7
-      07B1  30  LDH RA, #0
-      07B2  B0  MOV PRH, RA
-      07B3  19  JNE
-07B4  [368] ret
-      07B4  AD  MOV PRL, LRL
-      07B5  B6  MOV PRH, LRH
-      07B6  1F  JMP
-07B7  [946] push lrl
-      07B7  25  PUSH LRL
-07B8  [947] push lrh
-      07B8  26  PUSH LRH
-07B9  [949] ldi #0xAE
-      07B9  CE  LDL RA, #14
-      07BA  35  LDH RA, #5
-07BB  [950] mov rb, ra
-      07BB  90  MOV RB, RA
-07BC  [951] call oled_write_command
-      07BC  D1  LDL RA, #17
-      07BD  31  LDH RA, #1
-      07BE  A8  MOV PRL, RA
-      07BF  C5  LDL RA, #5
-      07C0  30  LDH RA, #0
-      07C1  B0  MOV PRH, RA
-      07C2  07  JAL
-07C3  [952] mov rd, rb
-      07C3  8A  MOV RD, RB
-07C4  [953] cmp zero
-      07C4  7C  CMP ZERO
-07C5  [954] jne @OLED_INIT_BASIC__FAIL
-      07C5  C9  LDL RA, #9
-      07C6  32  LDH RA, #2
-      07C7  A8  MOV PRL, RA
-      07C8  C8  LDL RA, #8
-      07C9  30  LDH RA, #0
-      07CA  B0  MOV PRH, RA
-      07CB  19  JNE
-07CC  [956] ldi #0x8D
-      07CC  CD  LDL RA, #13
-      07CD  34  LDH RA, #4
-07CE  [957] mov rb, ra
-      07CE  90  MOV RB, RA
-07CF  [958] call oled_write_command
-      07CF  D1  LDL RA, #17
-      07D0  31  LDH RA, #1
-      07D1  A8  MOV PRL, RA
-      07D2  C5  LDL RA, #5
-      07D3  30  LDH RA, #0
-      07D4  B0  MOV PRH, RA
-      07D5  07  JAL
-07D6  [959] mov rd, rb
-      07D6  8A  MOV RD, RB
-07D7  [960] cmp zero
-      07D7  7C  CMP ZERO
-07D8  [961] jne @OLED_INIT_BASIC__FAIL
-      07D8  C9  LDL RA, #9
-      07D9  32  LDH RA, #2
-      07DA  A8  MOV PRL, RA
-      07DB  C8  LDL RA, #8
-      07DC  30  LDH RA, #0
-      07DD  B0  MOV PRH, RA
-      07DE  19  JNE
-07DF  [963] ldi #0x14
-      07DF  D4  LDL RA, #20
-07E0  [964] mov rb, ra
-      07E0  90  MOV RB, RA
-07E1  [965] call oled_write_command
-      07E1  D1  LDL RA, #17
-      07E2  31  LDH RA, #1
-      07E3  A8  MOV PRL, RA
-      07E4  C5  LDL RA, #5
-      07E5  30  LDH RA, #0
-      07E6  B0  MOV PRH, RA
-      07E7  07  JAL
-07E8  [966] mov rd, rb
-      07E8  8A  MOV RD, RB
-07E9  [967] cmp zero
-      07E9  7C  CMP ZERO
-07EA  [968] jne @OLED_INIT_BASIC__FAIL
-      07EA  C9  LDL RA, #9
-      07EB  32  LDH RA, #2
-      07EC  A8  MOV PRL, RA
-      07ED  C8  LDL RA, #8
-      07EE  30  LDH RA, #0
-      07EF  B0  MOV PRH, RA
-      07F0  19  JNE
-07F1  [970] ldi #0x20
-      07F1  C0  LDL RA, #0
-      07F2  31  LDH RA, #1
-07F3  [971] mov rb, ra
-      07F3  90  MOV RB, RA
-07F4  [972] call oled_write_command
-      07F4  D1  LDL RA, #17
-      07F5  31  LDH RA, #1
+      0791  B0  MOV PRH, RA
+      0792  19  JNE
+0793  [890] ret
+      0793  AD  MOV PRL, LRL
+      0794  B6  MOV PRH, LRH
+      0795  1F  JMP
+0796  [900] push lrl
+      0796  25  PUSH LRL
+0797  [901] push lrh
+      0797  26  PUSH LRH
+0798  [903] ldi $OLED_GPIO_BASE_H
+      0798  C8  LDL RA, #8
+0799  [904] mov marh, ra
+      0799  A0  MOV MARH, RA
+079A  [906] ldi $OLED_GPIO_DIR1_L
+      079A  D1  LDL RA, #17
+      079B  31  LDH RA, #1
+079C  [907] mov marl, ra
+      079C  98  MOV MARL, RA
+079D  [908] ldi $OLED_SDA_DRIVE_LOW
+      079D  C1  LDL RA, #1
+079E  [909] mov m, ra
+      079E  B8  MOV M, RA
+079F  [910] call @OLED_END_STREAM__DELAY_SHORT
+      079F  DD  LDL RA, #29
+      07A0  35  LDH RA, #5
+      07A1  A8  MOV PRL, RA
+      07A2  C7  LDL RA, #7
+      07A3  B0  MOV PRH, RA
+      07A4  07  JAL
+07A5  [912] ldi $OLED_GPIO_DIR0_L
+      07A5  D0  LDL RA, #16
+      07A6  31  LDH RA, #1
+07A7  [913] mov marl, ra
+      07A7  98  MOV MARL, RA
+07A8  [914] mov m, zero
+      07A8  BC  MOV M, ZERO
+07A9  [915] call @OLED_END_STREAM__DELAY_SHORT
+      07A9  DD  LDL RA, #29
+      07AA  35  LDH RA, #5
+      07AB  A8  MOV PRL, RA
+      07AC  C7  LDL RA, #7
+      07AD  B0  MOV PRH, RA
+      07AE  07  JAL
+07AF  [917] ldi $OLED_GPIO_DIR1_L
+      07AF  D1  LDL RA, #17
+      07B0  31  LDH RA, #1
+07B1  [918] mov marl, ra
+      07B1  98  MOV MARL, RA
+07B2  [919] mov m, zero
+      07B2  BC  MOV M, ZERO
+07B3  [920] call @OLED_END_STREAM__DELAY_SHORT
+      07B3  DD  LDL RA, #29
+      07B4  35  LDH RA, #5
+      07B5  A8  MOV PRL, RA
+      07B6  C7  LDL RA, #7
+      07B7  B0  MOV PRH, RA
+      07B8  07  JAL
+07B9  [922] mov rb, zero
+      07B9  94  MOV RB, ZERO
+07BA  [923] ret :stack
+      07BA  2E  POP PRH
+      07BB  2D  POP PRL
+      07BC  1F  JMP
+07BD  [926] ldi rd, $OLED_DELAY_COUNT
+      07BD  F0  LDL RD, #16
+07BE  [928] subi #1
+      07BE  69  SUBI #1
+07BF  [929] mov rd, acc
+      07BF  8B  MOV RD, ACC
+07C0  [930] jne @OLED_END_STREAM__DELAY_LOOP
+      07C0  DE  LDL RA, #30
+      07C1  35  LDH RA, #5
+      07C2  A8  MOV PRL, RA
+      07C3  C7  LDL RA, #7
+      07C4  B0  MOV PRH, RA
+      07C5  19  JNE
+07C6  [931] ret
+      07C6  AD  MOV PRL, LRL
+      07C7  B6  MOV PRH, LRH
+      07C8  1F  JMP
+07C9  [946] push lrl
+      07C9  25  PUSH LRL
+07CA  [947] push lrh
+      07CA  26  PUSH LRH
+07CB  [949] ldi #0xAE
+      07CB  CE  LDL RA, #14
+      07CC  35  LDH RA, #5
+07CD  [950] mov rb, ra
+      07CD  90  MOV RB, RA
+07CE  [951] call oled_write_command
+      07CE  D0  LDL RA, #16
+      07CF  37  LDH RA, #7
+      07D0  A8  MOV PRL, RA
+      07D1  B4  MOV PRH, ZERO
+      07D2  07  JAL
+07D3  [952] mov rd, rb
+      07D3  8A  MOV RD, RB
+07D4  [953] cmp zero
+      07D4  7C  CMP ZERO
+07D5  [954] jne @OLED_INIT_BASIC__FAIL
+      07D5  C4  LDL RA, #4
+      07D6  32  LDH RA, #2
+      07D7  A8  MOV PRL, RA
+      07D8  C8  LDL RA, #8
+      07D9  B0  MOV PRH, RA
+      07DA  19  JNE
+07DB  [956] ldi #0x8D
+      07DB  CD  LDL RA, #13
+      07DC  34  LDH RA, #4
+07DD  [957] mov rb, ra
+      07DD  90  MOV RB, RA
+07DE  [958] call oled_write_command
+      07DE  D0  LDL RA, #16
+      07DF  37  LDH RA, #7
+      07E0  A8  MOV PRL, RA
+      07E1  B4  MOV PRH, ZERO
+      07E2  07  JAL
+07E3  [959] mov rd, rb
+      07E3  8A  MOV RD, RB
+07E4  [960] cmp zero
+      07E4  7C  CMP ZERO
+07E5  [961] jne @OLED_INIT_BASIC__FAIL
+      07E5  C4  LDL RA, #4
+      07E6  32  LDH RA, #2
+      07E7  A8  MOV PRL, RA
+      07E8  C8  LDL RA, #8
+      07E9  B0  MOV PRH, RA
+      07EA  19  JNE
+07EB  [963] ldi #0x14
+      07EB  D4  LDL RA, #20
+07EC  [964] mov rb, ra
+      07EC  90  MOV RB, RA
+07ED  [965] call oled_write_command
+      07ED  D0  LDL RA, #16
+      07EE  37  LDH RA, #7
+      07EF  A8  MOV PRL, RA
+      07F0  B4  MOV PRH, ZERO
+      07F1  07  JAL
+07F2  [966] mov rd, rb
+      07F2  8A  MOV RD, RB
+07F3  [967] cmp zero
+      07F3  7C  CMP ZERO
+07F4  [968] jne @OLED_INIT_BASIC__FAIL
+      07F4  C4  LDL RA, #4
+      07F5  32  LDH RA, #2
       07F6  A8  MOV PRL, RA
-      07F7  C5  LDL RA, #5
-      07F8  30  LDH RA, #0
-      07F9  B0  MOV PRH, RA
-      07FA  07  JAL
-07FB  [973] mov rd, rb
-      07FB  8A  MOV RD, RB
-07FC  [974] cmp zero
-      07FC  7C  CMP ZERO
-07FD  [975] jne @OLED_INIT_BASIC__FAIL
-      07FD  C9  LDL RA, #9
-      07FE  32  LDH RA, #2
+      07F7  C8  LDL RA, #8
+      07F8  B0  MOV PRH, RA
+      07F9  19  JNE
+07FA  [970] ldi #0x20
+      07FA  C0  LDL RA, #0
+      07FB  31  LDH RA, #1
+07FC  [971] mov rb, ra
+      07FC  90  MOV RB, RA
+07FD  [972] call oled_write_command
+      07FD  D0  LDL RA, #16
+      07FE  37  LDH RA, #7
       07FF  A8  MOV PRL, RA
-      0800  C8  LDL RA, #8
-      0801  30  LDH RA, #0
-      0802  B0  MOV PRH, RA
-      0803  19  JNE
-0804  [977] ldi #0x02
-      0804  C2  LDL RA, #2
-0805  [978] mov rb, ra
-      0805  90  MOV RB, RA
-0806  [979] call oled_write_command
-      0806  D1  LDL RA, #17
-      0807  31  LDH RA, #1
-      0808  A8  MOV PRL, RA
-      0809  C5  LDL RA, #5
-      080A  30  LDH RA, #0
-      080B  B0  MOV PRH, RA
-      080C  07  JAL
-080D  [980] mov rd, rb
-      080D  8A  MOV RD, RB
-080E  [981] cmp zero
-      080E  7C  CMP ZERO
-080F  [982] jne @OLED_INIT_BASIC__FAIL
-      080F  C9  LDL RA, #9
-      0810  32  LDH RA, #2
-      0811  A8  MOV PRL, RA
-      0812  C8  LDL RA, #8
-      0813  30  LDH RA, #0
-      0814  B0  MOV PRH, RA
-      0815  19  JNE
-0816  [984] ldi #0xA4
-      0816  C4  LDL RA, #4
-      0817  35  LDH RA, #5
-0818  [985] mov rb, ra
-      0818  90  MOV RB, RA
-0819  [986] call oled_write_command
-      0819  D1  LDL RA, #17
-      081A  31  LDH RA, #1
-      081B  A8  MOV PRL, RA
-      081C  C5  LDL RA, #5
-      081D  30  LDH RA, #0
-      081E  B0  MOV PRH, RA
-      081F  07  JAL
-0820  [987] mov rd, rb
-      0820  8A  MOV RD, RB
-0821  [988] cmp zero
-      0821  7C  CMP ZERO
-0822  [989] jne @OLED_INIT_BASIC__FAIL
-      0822  C9  LDL RA, #9
-      0823  32  LDH RA, #2
-      0824  A8  MOV PRL, RA
-      0825  C8  LDL RA, #8
-      0826  30  LDH RA, #0
+      0800  B4  MOV PRH, ZERO
+      0801  07  JAL
+0802  [973] mov rd, rb
+      0802  8A  MOV RD, RB
+0803  [974] cmp zero
+      0803  7C  CMP ZERO
+0804  [975] jne @OLED_INIT_BASIC__FAIL
+      0804  C4  LDL RA, #4
+      0805  32  LDH RA, #2
+      0806  A8  MOV PRL, RA
+      0807  C8  LDL RA, #8
+      0808  B0  MOV PRH, RA
+      0809  19  JNE
+080A  [977] ldi #0x02
+      080A  C2  LDL RA, #2
+080B  [978] mov rb, ra
+      080B  90  MOV RB, RA
+080C  [979] call oled_write_command
+      080C  D0  LDL RA, #16
+      080D  37  LDH RA, #7
+      080E  A8  MOV PRL, RA
+      080F  B4  MOV PRH, ZERO
+      0810  07  JAL
+0811  [980] mov rd, rb
+      0811  8A  MOV RD, RB
+0812  [981] cmp zero
+      0812  7C  CMP ZERO
+0813  [982] jne @OLED_INIT_BASIC__FAIL
+      0813  C4  LDL RA, #4
+      0814  32  LDH RA, #2
+      0815  A8  MOV PRL, RA
+      0816  C8  LDL RA, #8
+      0817  B0  MOV PRH, RA
+      0818  19  JNE
+0819  [984] ldi #0xA4
+      0819  C4  LDL RA, #4
+      081A  35  LDH RA, #5
+081B  [985] mov rb, ra
+      081B  90  MOV RB, RA
+081C  [986] call oled_write_command
+      081C  D0  LDL RA, #16
+      081D  37  LDH RA, #7
+      081E  A8  MOV PRL, RA
+      081F  B4  MOV PRH, ZERO
+      0820  07  JAL
+0821  [987] mov rd, rb
+      0821  8A  MOV RD, RB
+0822  [988] cmp zero
+      0822  7C  CMP ZERO
+0823  [989] jne @OLED_INIT_BASIC__FAIL
+      0823  C4  LDL RA, #4
+      0824  32  LDH RA, #2
+      0825  A8  MOV PRL, RA
+      0826  C8  LDL RA, #8
       0827  B0  MOV PRH, RA
       0828  19  JNE
 0829  [991] ldi #0xA6
@@ -2844,255 +2989,523 @@
 082B  [992] mov rb, ra
       082B  90  MOV RB, RA
 082C  [993] call oled_write_command
-      082C  D1  LDL RA, #17
-      082D  31  LDH RA, #1
+      082C  D0  LDL RA, #16
+      082D  37  LDH RA, #7
       082E  A8  MOV PRL, RA
-      082F  C5  LDL RA, #5
-      0830  30  LDH RA, #0
-      0831  B0  MOV PRH, RA
-      0832  07  JAL
-0833  [994] mov rd, rb
-      0833  8A  MOV RD, RB
-0834  [995] cmp zero
-      0834  7C  CMP ZERO
-0835  [996] jne @OLED_INIT_BASIC__FAIL
-      0835  C9  LDL RA, #9
-      0836  32  LDH RA, #2
-      0837  A8  MOV PRL, RA
-      0838  C8  LDL RA, #8
-      0839  30  LDH RA, #0
-      083A  B0  MOV PRH, RA
-      083B  19  JNE
-083C  [998] ldi #0xAF
-      083C  CF  LDL RA, #15
-      083D  35  LDH RA, #5
-083E  [999] mov rb, ra
-      083E  90  MOV RB, RA
-083F  [1000] call oled_write_command
-      083F  D1  LDL RA, #17
-      0840  31  LDH RA, #1
-      0841  A8  MOV PRL, RA
-      0842  C5  LDL RA, #5
-      0843  30  LDH RA, #0
-      0844  B0  MOV PRH, RA
-      0845  07  JAL
-0846  [1001] ret :stack
-      0846  2E  POP PRH
-      0847  2D  POP PRL
-      0848  1F  JMP
-0849  [1004] ret :stack
-      0849  2E  POP PRH
-      084A  2D  POP PRL
-      084B  1F  JMP
-084C  [1026] push lrl
-      084C  25  PUSH LRL
-084D  [1027] push lrh
-      084D  26  PUSH LRH
-084E  [1029] ldi $F_TMP_BASE_H
-      084E  C0  LDL RA, #0
-084F  [1030] mov marh, ra
-      084F  A0  MOV MARH, RA
-0850  [1031] ldi $F_T4_L
-      0850  C4  LDL RA, #4
-0851  [1032] mov marl, ra
-      0851  98  MOV MARL, RA
-0852  [1033] mov m, rb
-      0852  BA  MOV M, RB
-0853  [1035] ldi $F_T5_L
-      0853  C5  LDL RA, #5
-0854  [1036] mov marl, ra
-      0854  98  MOV MARL, RA
-0855  [1037] mov m, rd
-      0855  B9  MOV M, RD
-0856  [1040] ldi $F_T4_L
-      0856  C4  LDL RA, #4
-0857  [1041] mov marl, ra
-      0857  98  MOV MARL, RA
-0858  [1042] mov rb, m
-      0858  97  MOV RB, M
-0859  [1043] call oled_write_command
-      0859  D1  LDL RA, #17
-      085A  31  LDH RA, #1
-      085B  A8  MOV PRL, RA
-      085C  C5  LDL RA, #5
-      085D  30  LDH RA, #0
-      085E  B0  MOV PRH, RA
-      085F  07  JAL
-0860  [1044] mov rd, rb
-      0860  8A  MOV RD, RB
-0861  [1045] cmp zero
-      0861  7C  CMP ZERO
-0862  [1046] jne @OLED_SET_PAGE_COLUMN__FAIL
-      0862  CE  LDL RA, #14
-      0863  36  LDH RA, #6
-      0864  A8  MOV PRL, RA
-      0865  C8  LDL RA, #8
-      0866  30  LDH RA, #0
-      0867  B0  MOV PRH, RA
-      0868  19  JNE
-0869  [1049] ldi $F_T5_L
-      0869  C5  LDL RA, #5
-086A  [1050] mov marl, ra
-      086A  98  MOV MARL, RA
-086B  [1051] mov rd, m
-      086B  8F  MOV RD, M
-086C  [1052] ldi #0x0F
-      086C  CF  LDL RA, #15
-086D  [1053] and rd
-      086D  11  AND RD
-086E  [1054] mov rb, acc
-      086E  93  MOV RB, ACC
-086F  [1055] call oled_write_command
-      086F  D1  LDL RA, #17
-      0870  31  LDH RA, #1
+      082F  B4  MOV PRH, ZERO
+      0830  07  JAL
+0831  [994] mov rd, rb
+      0831  8A  MOV RD, RB
+0832  [995] cmp zero
+      0832  7C  CMP ZERO
+0833  [996] jne @OLED_INIT_BASIC__FAIL
+      0833  C4  LDL RA, #4
+      0834  32  LDH RA, #2
+      0835  A8  MOV PRL, RA
+      0836  C8  LDL RA, #8
+      0837  B0  MOV PRH, RA
+      0838  19  JNE
+0839  [998] ldi #0xAF
+      0839  CF  LDL RA, #15
+      083A  35  LDH RA, #5
+083B  [999] mov rb, ra
+      083B  90  MOV RB, RA
+083C  [1000] call oled_write_command
+      083C  D0  LDL RA, #16
+      083D  37  LDH RA, #7
+      083E  A8  MOV PRL, RA
+      083F  B4  MOV PRH, ZERO
+      0840  07  JAL
+0841  [1001] ret :stack
+      0841  2E  POP PRH
+      0842  2D  POP PRL
+      0843  1F  JMP
+0844  [1004] ret :stack
+      0844  2E  POP PRH
+      0845  2D  POP PRL
+      0846  1F  JMP
+0847  [1160] push lrl
+      0847  25  PUSH LRL
+0848  [1161] push lrh
+      0848  26  PUSH LRH
+0849  [1163] ldi $F_TMP_BASE_H
+      0849  C0  LDL RA, #0
+084A  [1164] mov marh, ra
+      084A  A0  MOV MARH, RA
+084B  [1165] ldi $F_T4_L
+      084B  C4  LDL RA, #4
+084C  [1166] mov marl, ra
+      084C  98  MOV MARL, RA
+084D  [1167] mov m, rb
+      084D  BA  MOV M, RB
+084E  [1169] ldi $F_T5_L
+      084E  C5  LDL RA, #5
+084F  [1170] mov marl, ra
+      084F  98  MOV MARL, RA
+0850  [1171] ldi #0xB0
+      0850  D0  LDL RA, #16
+      0851  35  LDH RA, #5
+0852  [1172] mov m, ra
+      0852  B8  MOV M, RA
+0853  [1175] ldi $F_TMP_BASE_H
+      0853  C0  LDL RA, #0
+0854  [1176] mov marh, ra
+      0854  A0  MOV MARH, RA
+0855  [1177] ldi $F_T5_L
+      0855  C5  LDL RA, #5
+0856  [1178] mov marl, ra
+      0856  98  MOV MARL, RA
+0857  [1179] mov rb, m
+      0857  97  MOV RB, M
+0858  [1180] call oled_write_command
+      0858  D0  LDL RA, #16
+      0859  37  LDH RA, #7
+      085A  A8  MOV PRL, RA
+      085B  B4  MOV PRH, ZERO
+      085C  07  JAL
+085D  [1181] mov rd, rb
+      085D  8A  MOV RD, RB
+085E  [1182] cmp zero
+      085E  7C  CMP ZERO
+085F  [1183] jne @OLED_FILL_SCREEN__FAIL
+      085F  D5  LDL RA, #21
+      0860  36  LDH RA, #6
+      0861  A8  MOV PRL, RA
+      0862  C8  LDL RA, #8
+      0863  B0  MOV PRH, RA
+      0864  19  JNE
+0865  [1185] ldi #0xFF
+      0865  DF  LDL RA, #31
+      0866  37  LDH RA, #7
+0867  [1186] mov rb, ra
+      0867  90  MOV RB, RA
+0868  [1187] call oled_write_command
+      0868  D0  LDL RA, #16
+      0869  37  LDH RA, #7
+      086A  A8  MOV PRL, RA
+      086B  B4  MOV PRH, ZERO
+      086C  07  JAL
+086D  [1188] mov rd, rb
+      086D  8A  MOV RD, RB
+086E  [1189] cmp zero
+      086E  7C  CMP ZERO
+086F  [1190] jne @OLED_FILL_SCREEN__FAIL
+      086F  D5  LDL RA, #21
+      0870  36  LDH RA, #6
       0871  A8  MOV PRL, RA
-      0872  C5  LDL RA, #5
-      0873  30  LDH RA, #0
-      0874  B0  MOV PRH, RA
-      0875  07  JAL
-0876  [1056] mov rd, rb
-      0876  8A  MOV RD, RB
-0877  [1057] cmp zero
-      0877  7C  CMP ZERO
-0878  [1058] jne @OLED_SET_PAGE_COLUMN__FAIL
-      0878  CE  LDL RA, #14
-      0879  36  LDH RA, #6
-      087A  A8  MOV PRL, RA
-      087B  C8  LDL RA, #8
-      087C  30  LDH RA, #0
-      087D  B0  MOV PRH, RA
-      087E  19  JNE
-087F  [1061] ldi $F_T6_L
-      087F  C6  LDL RA, #6
-0880  [1062] mov marl, ra
-      0880  98  MOV MARL, RA
-0881  [1063] ldi #0x10
-      0881  D0  LDL RA, #16
-0882  [1064] mov m, ra
-      0882  B8  MOV M, RA
-0883  [1066] ldi $F_T5_L
-      0883  C5  LDL RA, #5
-0884  [1067] mov marl, ra
-      0884  98  MOV MARL, RA
-0885  [1068] mov rd, m
-      0885  8F  MOV RD, M
-0886  [1069] ldi #0x10
-      0886  D0  LDL RA, #16
-0887  [1070] and rd
-      0887  11  AND RD
-0888  [1071] mov rd, acc
-      0888  8B  MOV RD, ACC
-0889  [1072] cmp zero
-      0889  7C  CMP ZERO
-088A  [1073] jeq @OLED_SET_PAGE_COLUMN__SKIP_ADD1
-      088A  D7  LDL RA, #23
-      088B  34  LDH RA, #4
-      088C  A8  MOV PRL, RA
-      088D  C8  LDL RA, #8
-      088E  30  LDH RA, #0
-      088F  B0  MOV PRH, RA
-      0890  18  JEQ
-0891  [1074] ldi $F_T6_L
-      0891  C6  LDL RA, #6
-0892  [1075] mov marl, ra
-      0892  98  MOV MARL, RA
-0893  [1076] mov rd, m
-      0893  8F  MOV RD, M
-0894  [1077] addi #1
-      0894  49  ADDI #1
-0895  [1078] mov rd, acc
-      0895  8B  MOV RD, ACC
-0896  [1079] mov m, rd
-      0896  B9  MOV M, RD
-0897  [1082] ldi $F_T5_L
-      0897  C5  LDL RA, #5
-0898  [1083] mov marl, ra
-      0898  98  MOV MARL, RA
-0899  [1084] mov rd, m
-      0899  8F  MOV RD, M
-089A  [1085] ldi #0x20
-      089A  C0  LDL RA, #0
-      089B  31  LDH RA, #1
-089C  [1086] and rd
-      089C  11  AND RD
-089D  [1087] mov rd, acc
-      089D  8B  MOV RD, ACC
-089E  [1088] cmp zero
-      089E  7C  CMP ZERO
-089F  [1089] jeq @OLED_SET_PAGE_COLUMN__SKIP_ADD2
-      089F  CC  LDL RA, #12
-      08A0  35  LDH RA, #5
-      08A1  A8  MOV PRL, RA
-      08A2  C8  LDL RA, #8
-      08A3  30  LDH RA, #0
-      08A4  B0  MOV PRH, RA
-      08A5  18  JEQ
-08A6  [1090] ldi $F_T6_L
-      08A6  C6  LDL RA, #6
-08A7  [1091] mov marl, ra
-      08A7  98  MOV MARL, RA
-08A8  [1092] mov rd, m
-      08A8  8F  MOV RD, M
-08A9  [1093] addi #2
-      08A9  4A  ADDI #2
-08AA  [1094] mov rd, acc
-      08AA  8B  MOV RD, ACC
-08AB  [1095] mov m, rd
-      08AB  B9  MOV M, RD
-08AC  [1098] ldi $F_T5_L
-      08AC  C5  LDL RA, #5
-08AD  [1099] mov marl, ra
-      08AD  98  MOV MARL, RA
-08AE  [1100] mov rd, m
-      08AE  8F  MOV RD, M
-08AF  [1101] ldi #0x40
-      08AF  C0  LDL RA, #0
-      08B0  32  LDH RA, #2
-08B1  [1102] and rd
-      08B1  11  AND RD
-08B2  [1103] mov rd, acc
+      0872  C8  LDL RA, #8
+      0873  B0  MOV PRH, RA
+      0874  19  JNE
+0875  [1192] ldi #0x10
+      0875  D0  LDL RA, #16
+0876  [1193] mov rb, ra
+      0876  90  MOV RB, RA
+0877  [1194] call oled_write_command
+      0877  D0  LDL RA, #16
+      0878  37  LDH RA, #7
+      0879  A8  MOV PRL, RA
+      087A  B4  MOV PRH, ZERO
+      087B  07  JAL
+087C  [1195] mov rd, rb
+      087C  8A  MOV RD, RB
+087D  [1196] cmp zero
+      087D  7C  CMP ZERO
+087E  [1197] jne @OLED_FILL_SCREEN__FAIL
+      087E  D5  LDL RA, #21
+      087F  36  LDH RA, #6
+      0880  A8  MOV PRL, RA
+      0881  C8  LDL RA, #8
+      0882  B0  MOV PRH, RA
+      0883  19  JNE
+0884  [1199] call oled_begin_data_stream
+      0884  D8  LDL RA, #24
+      0885  35  LDH RA, #5
+      0886  A8  MOV PRL, RA
+      0887  C3  LDL RA, #3
+      0888  B0  MOV PRH, RA
+      0889  07  JAL
+088A  [1200] mov rd, rb
+      088A  8A  MOV RD, RB
+088B  [1201] cmp zero
+      088B  7C  CMP ZERO
+088C  [1202] jne @OLED_FILL_SCREEN__FAIL
+      088C  D5  LDL RA, #21
+      088D  36  LDH RA, #6
+      088E  A8  MOV PRL, RA
+      088F  C8  LDL RA, #8
+      0890  B0  MOV PRH, RA
+      0891  19  JNE
+0892  [1204] ldi $F_TMP_BASE_H
+      0892  C0  LDL RA, #0
+0893  [1205] mov marh, ra
+      0893  A0  MOV MARH, RA
+0894  [1206] ldi $F_T6_L
+      0894  C6  LDL RA, #6
+0895  [1207] mov marl, ra
+      0895  98  MOV MARL, RA
+0896  [1208] ldi #0x80
+      0896  C0  LDL RA, #0
+      0897  34  LDH RA, #4
+0898  [1209] mov m, ra
+      0898  B8  MOV M, RA
+0899  [1212] ldi $F_TMP_BASE_H
+      0899  C0  LDL RA, #0
+089A  [1213] mov marh, ra
+      089A  A0  MOV MARH, RA
+089B  [1214] ldi $F_T4_L
+      089B  C4  LDL RA, #4
+089C  [1215] mov marl, ra
+      089C  98  MOV MARL, RA
+089D  [1216] mov rb, m
+      089D  97  MOV RB, M
+089E  [1217] call oled_stream_data_byte
+      089E  D2  LDL RA, #18
+      089F  36  LDH RA, #6
+      08A0  A8  MOV PRL, RA
+      08A1  C5  LDL RA, #5
+      08A2  B0  MOV PRH, RA
+      08A3  07  JAL
+08A4  [1218] mov rd, rb
+      08A4  8A  MOV RD, RB
+08A5  [1219] cmp zero
+      08A5  7C  CMP ZERO
+08A6  [1220] jne @OLED_FILL_SCREEN__FAIL
+      08A6  D5  LDL RA, #21
+      08A7  36  LDH RA, #6
+      08A8  A8  MOV PRL, RA
+      08A9  C8  LDL RA, #8
+      08AA  B0  MOV PRH, RA
+      08AB  19  JNE
+08AC  [1222] ldi $F_TMP_BASE_H
+      08AC  C0  LDL RA, #0
+08AD  [1223] mov marh, ra
+      08AD  A0  MOV MARH, RA
+08AE  [1224] ldi $F_T6_L
+      08AE  C6  LDL RA, #6
+08AF  [1225] mov marl, ra
+      08AF  98  MOV MARL, RA
+08B0  [1226] mov rd, m
+      08B0  8F  MOV RD, M
+08B1  [1227] subi #1
+      08B1  69  SUBI #1
+08B2  [1228] mov rd, acc
       08B2  8B  MOV RD, ACC
-08B3  [1104] cmp zero
-      08B3  7C  CMP ZERO
-08B4  [1105] jeq @OLED_SET_PAGE_COLUMN__SEND_UPPER
-      08B4  C1  LDL RA, #1
-      08B5  36  LDH RA, #6
+08B3  [1229] mov m, rd
+      08B3  B9  MOV M, RD
+08B4  [1230] jne @OLED_FILL_SCREEN__DATA_LOOP
+      08B4  D9  LDL RA, #25
+      08B5  34  LDH RA, #4
       08B6  A8  MOV PRL, RA
       08B7  C8  LDL RA, #8
-      08B8  30  LDH RA, #0
-      08B9  B0  MOV PRH, RA
-      08BA  18  JEQ
-08BB  [1106] ldi $F_T6_L
-      08BB  C6  LDL RA, #6
-08BC  [1107] mov marl, ra
-      08BC  98  MOV MARL, RA
-08BD  [1108] mov rd, m
-      08BD  8F  MOV RD, M
-08BE  [1109] addi #4
-      08BE  4C  ADDI #4
-08BF  [1110] mov rd, acc
-      08BF  8B  MOV RD, ACC
-08C0  [1111] mov m, rd
-      08C0  B9  MOV M, RD
-08C1  [1114] ldi $F_T6_L
-      08C1  C6  LDL RA, #6
-08C2  [1115] mov marl, ra
-      08C2  98  MOV MARL, RA
-08C3  [1116] mov rb, m
-      08C3  97  MOV RB, M
-08C4  [1117] call oled_write_command
-      08C4  D1  LDL RA, #17
-      08C5  31  LDH RA, #1
-      08C6  A8  MOV PRL, RA
-      08C7  C5  LDL RA, #5
-      08C8  30  LDH RA, #0
-      08C9  B0  MOV PRH, RA
-      08CA  07  JAL
-08CB  [1118] ret :stack
-      08CB  2E  POP PRH
-      08CC  2D  POP PRL
-      08CD  1F  JMP
-08CE  [1121] ret :stack
-      08CE  2E  POP PRH
-      08CF  2D  POP PRL
-      08D0  1F  JMP
+      08B8  B0  MOV PRH, RA
+      08B9  19  JNE
+08BA  [1232] call oled_end_stream
+      08BA  D6  LDL RA, #22
+      08BB  34  LDH RA, #4
+      08BC  A8  MOV PRL, RA
+      08BD  C7  LDL RA, #7
+      08BE  B0  MOV PRH, RA
+      08BF  07  JAL
+08C0  [1234] ldi $F_TMP_BASE_H
+      08C0  C0  LDL RA, #0
+08C1  [1235] mov marh, ra
+      08C1  A0  MOV MARH, RA
+08C2  [1236] ldi $F_T5_L
+      08C2  C5  LDL RA, #5
+08C3  [1237] mov marl, ra
+      08C3  98  MOV MARL, RA
+08C4  [1238] mov rd, m
+      08C4  8F  MOV RD, M
+08C5  [1239] addi #1
+      08C5  49  ADDI #1
+08C6  [1240] mov rd, acc
+      08C6  8B  MOV RD, ACC
+08C7  [1241] mov m, rd
+      08C7  B9  MOV M, RD
+08C8  [1243] ldi #0xB8
+      08C8  D8  LDL RA, #24
+      08C9  35  LDH RA, #5
+08CA  [1244] cmp ra
+      08CA  78  CMP RA
+08CB  [1245] jne @OLED_FILL_SCREEN__PAGE_LOOP
+      08CB  D3  LDL RA, #19
+      08CC  32  LDH RA, #2
+      08CD  A8  MOV PRL, RA
+      08CE  C8  LDL RA, #8
+      08CF  B0  MOV PRH, RA
+      08D0  19  JNE
+08D1  [1247] mov rb, zero
+      08D1  94  MOV RB, ZERO
+08D2  [1248] ret :stack
+      08D2  2E  POP PRH
+      08D3  2D  POP PRL
+      08D4  1F  JMP
+08D5  [1251] ret :stack
+      08D5  2E  POP PRH
+      08D6  2D  POP PRL
+      08D7  1F  JMP
+08D8  [2043] pop ra
+      08D8  28  POP RA
+08D9  [2044] push ra
+      08D9  20  PUSH RA
+08DA  [2046] push lrl
+      08DA  25  PUSH LRL
+08DB  [2047] push lrh
+      08DB  26  PUSH LRH
+08DC  [2050] call oled_set_page_column_direct
+      08DC  D8  LDL RA, #24
+      08DD  31  LDH RA, #1
+      08DE  A8  MOV PRL, RA
+      08DF  C3  LDL RA, #3
+      08E0  B0  MOV PRH, RA
+      08E1  07  JAL
+08E2  [2051] mov rd, rb
+      08E2  8A  MOV RD, RB
+08E3  [2052] cmp zero
+      08E3  7C  CMP ZERO
+08E4  [2053] jne OLED_DRAW_SQUARE__FAIL
+      08E4  D3  LDL RA, #19
+      08E5  31  LDH RA, #1
+      08E6  A8  MOV PRL, RA
+      08E7  C9  LDL RA, #9
+      08E8  B0  MOV PRH, RA
+      08E9  19  JNE
+08EA  [2055] call oled_begin_data_stream
+      08EA  D8  LDL RA, #24
+      08EB  35  LDH RA, #5
+      08EC  A8  MOV PRL, RA
+      08ED  C3  LDL RA, #3
+      08EE  B0  MOV PRH, RA
+      08EF  07  JAL
+08F0  [2056] mov rd, rb
+      08F0  8A  MOV RD, RB
+08F1  [2057] cmp zero
+      08F1  7C  CMP ZERO
+08F2  [2058] jne OLED_DRAW_SQUARE__FAIL
+      08F2  D3  LDL RA, #19
+      08F3  31  LDH RA, #1
+      08F4  A8  MOV PRL, RA
+      08F5  C9  LDL RA, #9
+      08F6  B0  MOV PRH, RA
+      08F7  19  JNE
+08F8  [2062] pop rb
+      08F8  2A  POP RB
+08F9  [2063] pop rd
+      08F9  29  POP RD
+08FA  [2064] pop ra
+      08FA  28  POP RA
+08FB  [2065] push rd
+      08FB  21  PUSH RD
+08FC  [2066] push rb
+      08FC  22  PUSH RB
+08FD  [2067] mov rd, ra
+      08FD  88  MOV RD, RA
+08FE  [2070] cmp zero
+      08FE  7C  CMP ZERO
+08FF  [2071] jeq OLED_DRAW_SQUARE__END_STREAM
+      08FF  C1  LDL RA, #1
+      0900  31  LDH RA, #1
+      0901  A8  MOV PRL, RA
+      0902  C9  LDL RA, #9
+      0903  B0  MOV PRH, RA
+      0904  18  JEQ
+0905  [2073] ldi #0xFF
+      0905  DF  LDL RA, #31
+      0906  37  LDH RA, #7
+0907  [2074] mov rb, ra
+      0907  90  MOV RB, RA
+0908  [2075] push rd
+      0908  21  PUSH RD
+0909  [2076] call oled_stream_data_byte
+      0909  D2  LDL RA, #18
+      090A  36  LDH RA, #6
+      090B  A8  MOV PRL, RA
+      090C  C5  LDL RA, #5
+      090D  B0  MOV PRH, RA
+      090E  07  JAL
+090F  [2077] pop ra
+      090F  28  POP RA
+0910  [2078] mov rd, rb
+      0910  8A  MOV RD, RB
+0911  [2079] cmp zero
+      0911  7C  CMP ZERO
+0912  [2080] mov rd, ra
+      0912  88  MOV RD, RA
+0913  [2081] jne OLED_DRAW_SQUARE__FAIL
+      0913  D3  LDL RA, #19
+      0914  31  LDH RA, #1
+      0915  A8  MOV PRL, RA
+      0916  C9  LDL RA, #9
+      0917  B0  MOV PRH, RA
+      0918  19  JNE
+0919  [2083] subi #1
+      0919  69  SUBI #1
+091A  [2084] mov rd, acc
+      091A  8B  MOV RD, ACC
+091B  [2085] jmp OLED_DRAW_SQUARE__SQUARE_LOOP
+      091B  DE  LDL RA, #30
+      091C  37  LDH RA, #7
+      091D  A8  MOV PRL, RA
+      091E  C8  LDL RA, #8
+      091F  B0  MOV PRH, RA
+      0920  1F  JMP
+0921  [2089] call oled_end_stream
+      0921  D6  LDL RA, #22
+      0922  34  LDH RA, #4
+      0923  A8  MOV PRL, RA
+      0924  C7  LDL RA, #7
+      0925  B0  MOV PRH, RA
+      0926  07  JAL
+0927  [2090] mov rd, rb
+      0927  8A  MOV RD, RB
+0928  [2091] cmp zero
+      0928  7C  CMP ZERO
+0929  [2092] jne OLED_DRAW_SQUARE__FAIL
+      0929  D3  LDL RA, #19
+      092A  31  LDH RA, #1
+      092B  A8  MOV PRL, RA
+      092C  C9  LDL RA, #9
+      092D  B0  MOV PRH, RA
+      092E  19  JNE
+092F  [2095] mov rb, zero
+      092F  94  MOV RB, ZERO
+0930  [2096] ret :stack
+      0930  2E  POP PRH
+      0931  2D  POP PRL
+      0932  1F  JMP
+0933  [2099] ret :stack
+      0933  2E  POP PRH
+      0934  2D  POP PRL
+      0935  1F  JMP
+0936  [2119] pop ra
+      0936  28  POP RA
+0937  [2120] push ra
+      0937  20  PUSH RA
+0938  [2122] push lrl
+      0938  25  PUSH LRL
+0939  [2123] push lrh
+      0939  26  PUSH LRH
+093A  [2126] call oled_set_page_column_direct
+      093A  D8  LDL RA, #24
+      093B  31  LDH RA, #1
+      093C  A8  MOV PRL, RA
+      093D  C3  LDL RA, #3
+      093E  B0  MOV PRH, RA
+      093F  07  JAL
+0940  [2127] mov rd, rb
+      0940  8A  MOV RD, RB
+0941  [2128] cmp zero
+      0941  7C  CMP ZERO
+0942  [2129] jne OLED_CLEAR_SQUARE__FAIL
+      0942  D0  LDL RA, #16
+      0943  34  LDH RA, #4
+      0944  A8  MOV PRL, RA
+      0945  C9  LDL RA, #9
+      0946  B0  MOV PRH, RA
+      0947  19  JNE
+0948  [2131] call oled_begin_data_stream
+      0948  D8  LDL RA, #24
+      0949  35  LDH RA, #5
+      094A  A8  MOV PRL, RA
+      094B  C3  LDL RA, #3
+      094C  B0  MOV PRH, RA
+      094D  07  JAL
+094E  [2132] mov rd, rb
+      094E  8A  MOV RD, RB
+094F  [2133] cmp zero
+      094F  7C  CMP ZERO
+0950  [2134] jne OLED_CLEAR_SQUARE__FAIL
+      0950  D0  LDL RA, #16
+      0951  34  LDH RA, #4
+      0952  A8  MOV PRL, RA
+      0953  C9  LDL RA, #9
+      0954  B0  MOV PRH, RA
+      0955  19  JNE
+0956  [2138] pop rb
+      0956  2A  POP RB
+0957  [2139] pop rd
+      0957  29  POP RD
+0958  [2140] pop ra
+      0958  28  POP RA
+0959  [2141] push rd
+      0959  21  PUSH RD
+095A  [2142] push rb
+      095A  22  PUSH RB
+095B  [2143] mov rd, ra
+      095B  88  MOV RD, RA
+095C  [2146] cmp zero
+      095C  7C  CMP ZERO
+095D  [2147] jeq OLED_CLEAR_SQUARE__END_STREAM
+      095D  DE  LDL RA, #30
+      095E  33  LDH RA, #3
+      095F  A8  MOV PRL, RA
+      0960  C9  LDL RA, #9
+      0961  B0  MOV PRH, RA
+      0962  18  JEQ
+0963  [2149] ldi #0x00
+      0963  C0  LDL RA, #0
+0964  [2150] mov rb, ra
+      0964  90  MOV RB, RA
+0965  [2151] push rd
+      0965  21  PUSH RD
+0966  [2152] call oled_stream_data_byte
+      0966  D2  LDL RA, #18
+      0967  36  LDH RA, #6
+      0968  A8  MOV PRL, RA
+      0969  C5  LDL RA, #5
+      096A  B0  MOV PRH, RA
+      096B  07  JAL
+096C  [2153] pop ra
+      096C  28  POP RA
+096D  [2154] mov rd, rb
+      096D  8A  MOV RD, RB
+096E  [2155] cmp zero
+      096E  7C  CMP ZERO
+096F  [2156] mov rd, ra
+      096F  88  MOV RD, RA
+0970  [2157] jne OLED_CLEAR_SQUARE__FAIL
+      0970  D0  LDL RA, #16
+      0971  34  LDH RA, #4
+      0972  A8  MOV PRL, RA
+      0973  C9  LDL RA, #9
+      0974  B0  MOV PRH, RA
+      0975  19  JNE
+0976  [2159] subi #1
+      0976  69  SUBI #1
+0977  [2160] mov rd, acc
+      0977  8B  MOV RD, ACC
+0978  [2161] jmp OLED_CLEAR_SQUARE__SQUARE_LOOP
+      0978  DC  LDL RA, #28
+      0979  32  LDH RA, #2
+      097A  A8  MOV PRL, RA
+      097B  C9  LDL RA, #9
+      097C  B0  MOV PRH, RA
+      097D  1F  JMP
+097E  [2165] call oled_end_stream
+      097E  D6  LDL RA, #22
+      097F  34  LDH RA, #4
+      0980  A8  MOV PRL, RA
+      0981  C7  LDL RA, #7
+      0982  B0  MOV PRH, RA
+      0983  07  JAL
+0984  [2166] mov rd, rb
+      0984  8A  MOV RD, RB
+0985  [2167] cmp zero
+      0985  7C  CMP ZERO
+0986  [2168] jne OLED_CLEAR_SQUARE__FAIL
+      0986  D0  LDL RA, #16
+      0987  34  LDH RA, #4
+      0988  A8  MOV PRL, RA
+      0989  C9  LDL RA, #9
+      098A  B0  MOV PRH, RA
+      098B  19  JNE
+098C  [2171] mov rb, zero
+      098C  94  MOV RB, ZERO
+098D  [2172] ret :stack
+      098D  2E  POP PRH
+      098E  2D  POP PRL
+      098F  1F  JMP
+0990  [2175] ret :stack
+      0990  2E  POP PRH
+      0991  2D  POP PRL
+      0992  1F  JMP

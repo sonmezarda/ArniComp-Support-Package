@@ -92,7 +92,7 @@ setup:
     mov rd, rb
     cmp zero
     jne fail
-
+    
     ldi #0xB1
     mov rb, ra
     call clear_page

@@ -13,6 +13,7 @@ from typing import Dict, List, Optional, Tuple
 
 from .LayoutDirectiveHandler import LayoutDirectiveHandler
 from .MacroExpander import MacroExpander
+from .Optimizer import Optimizer
 from .Preprocessor import Preprocessor
 from .FunctionImportResolver import FunctionImportResolver
 
@@ -218,6 +219,7 @@ class AssemblyHelper:
             source_line_factory=lambda line_number, text, src: SourceLine(line_number, text, source_name=src),
             preprocessor_expand=lambda raw_lines, source_name: self.preprocessor.expand(raw_lines, source_name=source_name),
         )
+        self.optimizer = Optimizer(self)
 
     def format_line_ref(self, source_line: SourceLine) -> str:
         return f"{source_line.source_name}:{source_line.line_number}"
@@ -392,6 +394,9 @@ class AssemblyHelper:
                 if allow_unresolved and labels[name] is None:
                     return None
                 variables[name] = labels[name]
+                continue
+            if allow_unresolved:
+                return None
 
         return self.evaluate_expression(rewritten_expression, variables)
 
@@ -460,16 +465,23 @@ class AssemblyHelper:
         return match.group(1).upper(), match.group(2).strip()
 
     def rewrite_local_label_references(self, text: str, current_scope: Optional[str], source_line: SourceLine) -> str:
-        def replace_local_ref(match: re.Match[str]) -> str:
+        def scoped_local_name(local_name: str) -> str:
             if current_scope is None:
                 raise ValueError(
                     f"Error on line {self.format_line_ref(source_line)} ('{source_line.text}'): "
                     "Local label reference requires a preceding global label scope"
                 )
-            local_name = match.group(1).upper()
-            return f"@{current_scope}__{local_name}"
+            return f"{current_scope}__{local_name.upper()}"
 
-        return re.sub(r"@\*([A-Za-z_][A-Za-z0-9_]*)", replace_local_ref, text)
+        def replace_at_local_ref(match: re.Match[str]) -> str:
+            return f"@{scoped_local_name(match.group(1))}"
+
+        def replace_bare_local_ref(match: re.Match[str]) -> str:
+            return scoped_local_name(match.group(1))
+
+        rewritten = re.sub(r"@\*([A-Za-z_][A-Za-z0-9_]*)", replace_at_local_ref, text)
+        rewritten = re.sub(r"(?<![@A-Za-z0-9_])\*([A-Za-z_][A-Za-z0-9_]*)", replace_bare_local_ref, rewritten)
+        return rewritten
 
     def rewrite_local_labels(self, lines: List[SourceLine]) -> List[SourceLine]:
         rewritten: List[SourceLine] = []
@@ -735,6 +747,13 @@ class AssemblyHelper:
                 raise ValueError(f"Undefined label reference: {token}")
             return ResolvedValue(raw_text=token, value=labels[name], kind="label")
 
+        if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", token):
+            name = token_upper
+            if name in labels:
+                return ResolvedValue(raw_text=token, value=labels[name], kind="label")
+            if allow_unresolved:
+                return ResolvedValue(raw_text=token, value=None, kind="label")
+
         try:
             evaluated = self.evaluate_operand_expression(token, labels, constants, allow_unresolved=allow_unresolved)
             if evaluated is None:
@@ -862,6 +881,36 @@ class AssemblyHelper:
             return 1 if low_byte <= 31 else 2
 
         macro_size = self.macro_expander.estimate_size(instruction, args, current_pc, labels, constants)
+        if macro_size is not None:
+            return macro_size
+
+        layout_size = self.layout_directives.estimate_size(instruction, args, current_pc, labels, constants)
+        if layout_size is not None:
+            return layout_size
+
+        return 1
+
+    def estimate_min_instruction_size(
+        self,
+        instruction: str,
+        args: List[str],
+        current_pc: int,
+        labels: Dict[str, int],
+        constants: Dict[str, int],
+    ) -> int:
+        instruction, args = self.normalize_instruction(instruction, args)
+
+        if instruction == "LDI":
+            _, value_token = self.normalize_ldi_args(args)
+            resolved = self.resolve_value(value_token, labels, constants, allow_unresolved=True)
+            if resolved.value is None:
+                return 1
+            if resolved.sliced and resolved.width != 8:
+                raise ValueError("LDI sliced operands must be exactly 8 bits wide")
+            low_byte = resolved.value & 0xFF
+            return 1 if low_byte <= 31 else 2
+
+        macro_size = self.macro_expander.estimate_min_size(instruction, args, current_pc, labels, constants)
         if macro_size is not None:
             return macro_size
 
@@ -1047,6 +1096,7 @@ class AssemblyHelper:
         self,
         raw_lines: List[str],
         source_name: str = "<input>",
+        optimize: bool = False,
     ) -> Tuple[List[str], Dict[str, int], Dict[str, int]]:
         self.last_warnings = []
         self.last_listing = []
@@ -1055,6 +1105,23 @@ class AssemblyHelper:
         lines = self.clean_source_lines(expanded_lines)
         lines = self.rewrite_local_labels(lines)
         constants, lines = self.extract_constants(lines)
+
+        if optimize:
+            # Validate the canonical path first so optimize mode never hides real assembly errors.
+            self.build_labels(lines, constants)
+            binary_lines, labels, listing_rows = self.optimizer.optimize(lines, constants)
+            for source_line, address, binary_bytes in listing_rows:
+                self.last_listing.append(
+                    ListingEntry(
+                        source_name=source_line.source_name,
+                        line_number=source_line.line_number,
+                        address=address,
+                        binary_bytes=list(binary_bytes),
+                        source_text=source_line.text,
+                    )
+                )
+            return binary_lines, labels, constants
+
         labels = self.build_labels(lines, constants)
 
         binary_lines: List[str] = []

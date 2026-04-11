@@ -1004,10 +1004,14 @@ oled_init_basic:
     ret :stack
 .endfunc
 
-.export oled_set_page_column
+.export oled_set_page_column_direct
 .func
-oled_set_page_column:
-    ; oled_set_page_column
+oled_set_page_column_direct:
+    ; oled_set_page_column_direct
+    ; Sends the proven direct command sequence:
+    ;   page command
+    ;   lower-column command 0x00..0x0F
+    ;   upper-column command 0x10..0x17
     ; in :
     ;   RB = page command (0xB0..0xB7)
     ;   RD = column address (0x00..0x7F)
@@ -1021,7 +1025,7 @@ oled_set_page_column:
     ; scratch:
     ;   F_T4_L = saved page command
     ;   F_T5_L = saved column address
-    ;   F_T6_L = upper-column command (0x10..0x17)
+    ;   F_T6_L = mask / upper-column command scratch
 
     push lrl
     push lrh
@@ -1045,17 +1049,31 @@ oled_set_page_column:
     cmp zero
     jne @*fail
 
+    ; oled_write_command does not preserve MARH; restore scratch page.
+    ldi $F_TMP_BASE_H
+    mov marh, ra
+
     ; Send lower column nibble command (0x00..0x0F).
+    ldi $F_T6_L
+    mov marl, ra
+    ldi #0x0F
+    mov m, ra
+
     ldi $F_T5_L
     mov marl, ra
     mov rd, m
-    ldi #0x0F
-    and rd
+    ldi $F_T6_L
+    mov marl, ra
+    and m
     mov rb, acc
     call oled_write_command
     mov rd, rb
     cmp zero
     jne @*fail
+
+    ; oled_write_command does not preserve MARH; restore scratch page.
+    ldi $F_TMP_BASE_H
+    mov marh, ra
 
     ; Build upper column command (0x10..0x17).
     ldi $F_T6_L
@@ -1067,7 +1085,7 @@ oled_set_page_column:
     mov marl, ra
     mov rd, m
     ldi #0x10
-    and rd
+    and ra
     mov rd, acc
     cmp zero
     jeq @*skip_add1
@@ -1075,15 +1093,14 @@ oled_set_page_column:
     mov marl, ra
     mov rd, m
     addi #1
-    mov rd, acc
-    mov m, rd
+    mov m, acc
 *skip_add1:
 
     ldi $F_T5_L
     mov marl, ra
     mov rd, m
     ldi #0x20
-    and rd
+    and ra
     mov rd, acc
     cmp zero
     jeq @*skip_add2
@@ -1091,15 +1108,14 @@ oled_set_page_column:
     mov marl, ra
     mov rd, m
     addi #2
-    mov rd, acc
-    mov m, rd
+    mov m, acc
 *skip_add2:
 
     ldi $F_T5_L
     mov marl, ra
     mov rd, m
     ldi #0x40
-    and rd
+    and ra
     mov rd, acc
     cmp zero
     jeq @*send_upper
@@ -1107,8 +1123,7 @@ oled_set_page_column:
     mov marl, ra
     mov rd, m
     addi #4
-    mov rd, acc
-    mov m, rd
+    mov m, acc
 
 *send_upper:
     ldi $F_T6_L
@@ -1118,6 +1133,14 @@ oled_set_page_column:
     ret :stack
 
 *fail:
+    ret :stack
+.endfunc
+
+.export oled_set_page_column
+.func
+oled_set_page_column:
+    ; Backward-compatible alias for the direct page/column helper.
+    call oled_set_page_column_direct
     ret :stack
 .endfunc
 
@@ -1159,7 +1182,7 @@ oled_fill_screen:
     cmp zero
     jne @*fail
 
-    ldi #0x00
+    ldi #0xFF
     mov rb, ra
     call oled_write_command
     mov rd, rb
@@ -1998,5 +2021,156 @@ oled_fill_screen_noack:
     jne @*page_loop
 
     mov rb, zero
+    ret :stack
+.endfunc
+
+.export oled_draw_square
+.func
+oled_draw_square:
+    ; oled_draw_square
+    ; in :
+    ;   RB = Page Select
+    ;   RD = Column Select
+    ;   Stack Top = Square size (number of 0xFF bytes)
+    ; out:
+    ;   RB = 0
+    ; clobbers:
+    ;   RA, RD, ACC, flags, MARL, MARH, PRL, PRH
+    ; import note:
+    ;   this routine calls oled_set_page_column_direct,
+    ;   oled_begin_data_stream, oled_stream_data_byte,
+    ;   and oled_end_stream.
+    pop ra
+    push ra          ; keep size on stack until the stream is ready
+
+    push lrl
+    push lrh
+
+    ; rb = page, rd = column
+    call oled_set_page_column_direct 
+    mov rd, rb
+    cmp zero
+    jne *fail
+
+    call oled_begin_data_stream
+    mov rd, rb
+    cmp zero
+    jne *fail
+
+    ; Stack currently holds: [size][saved LRL][saved LRH] with LRH on top.
+    ; Recover size without disturbing the return-address pair expected by ret :stack.
+    pop rb           ; saved LRH
+    pop rd           ; saved LRL
+    pop ra           ; size
+    push rd          ; restore saved LRL
+    push rb          ; restore saved LRH
+    mov rd, ra       ; RD = remaining column count
+
+*square_loop:
+    cmp zero
+    jeq *end_stream
+
+    ldi #0xFF
+    mov rb, ra
+    push rd
+    call oled_stream_data_byte
+    pop ra
+    mov rd, rb
+    cmp zero
+    mov rd, ra
+    jne *fail
+
+    subi #1
+    mov rd, acc
+    jmp *square_loop
+
+*end_stream:
+
+    call oled_end_stream
+    mov rd, rb
+    cmp zero
+    jne *fail
+
+*success:
+    mov rb, zero
+    ret :stack
+
+*fail:
+    ret :stack
+.endfunc
+
+
+.export oled_clear_square
+.func
+oled_clear_square:
+    ; oled_clear_square
+    ; in :
+    ;   RB = Page Select
+    ;   RD = Column Select
+    ;   Stack Top = Square size (number of 0xFF bytes)
+    ; out:
+    ;   RB = 0
+    ; clobbers:
+    ;   RA, RD, ACC, flags, MARL, MARH, PRL, PRH
+    ; import note:
+    ;   this routine calls oled_set_page_column_direct,
+    ;   oled_begin_data_stream, oled_stream_data_byte,
+    ;   and oled_end_stream.
+    pop ra
+    push ra          ; keep size on stack until the stream is ready
+
+    push lrl
+    push lrh
+
+    ; rb = page, rd = column
+    call oled_set_page_column_direct 
+    mov rd, rb
+    cmp zero
+    jne *fail
+
+    call oled_begin_data_stream
+    mov rd, rb
+    cmp zero
+    jne *fail
+
+    ; Stack currently holds: [size][saved LRL][saved LRH] with LRH on top.
+    ; Recover size without disturbing the return-address pair expected by ret :stack.
+    pop rb           ; saved LRH
+    pop rd           ; saved LRL
+    pop ra           ; size
+    push rd          ; restore saved LRL
+    push rb          ; restore saved LRH
+    mov rd, ra       ; RD = remaining column count
+
+*square_loop:
+    cmp zero
+    jeq *end_stream
+
+    ldi #0x00
+    mov rb, ra
+    push rd
+    call oled_stream_data_byte
+    pop ra
+    mov rd, rb
+    cmp zero
+    mov rd, ra
+    jne *fail
+
+    subi #1
+    mov rd, acc
+    jmp *square_loop
+
+*end_stream:
+
+    call oled_end_stream
+    mov rd, rb
+    cmp zero
+    jne *fail
+
+*success:
+    mov rb, zero
+    ret :stack
+
+*fail:
     ret :stack
 .endfunc

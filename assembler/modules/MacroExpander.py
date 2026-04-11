@@ -94,12 +94,102 @@ class MacroExpander:
             raise ValueError(f"Byte load value out of range: {byte_value}")
         return 3
 
+    def minimum_address_byte_transfer_size(self) -> int:
+        return 1
+
+    def estimate_address_byte_transfer_variant_size(self, variant: str, byte_value: int) -> int:
+        if variant == "long":
+            return self.estimate_address_byte_transfer_size(byte_value)
+        if variant == "short":
+            if not (0 <= byte_value <= 31):
+                raise ValueError(f"Short address-byte transfer requires a 0..31 byte, got {byte_value}")
+            return 2
+        if variant == "zero":
+            if byte_value != 0:
+                raise ValueError(f"Zero address-byte transfer requires byte value 0, got {byte_value}")
+            return 1
+        raise ValueError(f"Unknown address-byte transfer variant: {variant}")
+
     def emit_address_byte_transfer(self, pointer_reg: str, temp_reg: str, byte_value: int) -> List[str]:
+        return self.emit_address_byte_transfer_variant(pointer_reg, temp_reg, byte_value, "long")
+
+    def emit_address_byte_transfer_variant(
+        self,
+        pointer_reg: str,
+        temp_reg: str,
+        byte_value: int,
+        variant: str,
+    ) -> List[str]:
         if not (0 <= byte_value <= 0xFF):
             raise ValueError(f"Byte load value out of range: {byte_value}")
-        emitted = self.emit_load_byte_long(temp_reg, byte_value)
-        emitted.append(self.encoder.encode_mov(pointer_reg, temp_reg))
-        return emitted
+        if variant == "long":
+            emitted = self.emit_load_byte_long(temp_reg, byte_value)
+            emitted.append(self.encoder.encode_mov(pointer_reg, temp_reg))
+            return emitted
+        if variant == "short":
+            if not (0 <= byte_value <= 31):
+                raise ValueError(f"Short address-byte transfer requires a 0..31 byte, got {byte_value}")
+            emitted = self.emit_load_byte(temp_reg, byte_value)
+            emitted.append(self.encoder.encode_mov(pointer_reg, temp_reg))
+            return emitted
+        if variant == "zero":
+            if byte_value != 0:
+                raise ValueError(f"Zero address-byte transfer requires byte value 0, got {byte_value}")
+            return [self.encoder.encode_mov(pointer_reg, "ZERO")]
+        raise ValueError(f"Unknown address-byte transfer variant: {variant}")
+
+    def estimate_min_size(
+        self,
+        instruction: str,
+        args: List[str],
+        current_pc: int,
+        labels: Dict[str, int],
+        constants: Dict[str, int],
+    ) -> Optional[int]:
+        if instruction in {"CALL", "JMPA"}:
+            return 3
+
+        if instruction in self.jump_conditions and args:
+            return 3
+
+        if instruction == "JLE":
+            return 4 if args else 2
+
+        if instruction == "JGE":
+            return 4 if args else 2
+
+        if instruction == "JLEU":
+            return 4 if args else 2
+
+        if instruction == "JGTU":
+            if not args:
+                raise ValueError("JGTU requires an explicit target operand under the current ISA")
+            return 7
+
+        if instruction == "RET":
+            self.parse_ret_args(args)
+            return 3
+
+        if instruction == "PUSHI":
+            value_token, _ = self.parse_pushi_args(args)
+            resolved = self.helper.resolve_value(value_token, labels, constants, allow_unresolved=True)
+            if resolved.value is None:
+                return 2
+            if resolved.sliced and resolved.width != 8:
+                raise ValueError("PUSHI sliced operands must be exactly 8 bits wide")
+            byte_value = resolved.value & 0xFF
+            return self.estimate_load_byte_size(byte_value) + 1
+
+        if instruction == "PUSHSTR":
+            string_token, trailing_values, _ = self.parse_pushstr_args(args)
+            literal = self.parse_string_literal(string_token, "PUSHSTR")
+            size = 0
+            for token in trailing_values:
+                size += self.estimate_value_load_size(token, labels, constants, "PUSHSTR") + 1
+            size += len(literal) * 2
+            return size
+
+        return None
 
     def resolve_address_operand(
         self,

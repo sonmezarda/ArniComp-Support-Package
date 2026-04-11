@@ -15,6 +15,7 @@ Final ISA assembler for ArniComp's 8-bit CPU.
 - layout directives: `.org`, `.align`, `.fill`
 - conditional assembly: `.define`, `.if`, `.else`, `.endif`
 - optional listing/debug output for assembled source
+- optional `--optimize` relaxation pass for smaller address-macro codegen
 - function-calling guide and scratch-page include
 - `PUSHSTR "text"[, trailingValue] [:RA|:RD]`
 - Final ISA encoder plus a small disassembler
@@ -66,8 +67,8 @@ global label:
 ```assembly
 my_func:
 *loop:
-    jeq @*done
-    jmp @*loop
+    jeq *done
+    jmp *loop
 *done:
     ret
 ```
@@ -75,7 +76,7 @@ my_func:
 Rules:
 
 - `*name:` defines a local label in the current global-label scope
-- `@*name` references that local label
+- `*name` or `@*name` references that local label
 - local labels require a preceding global label
 - the assembler rewrites local labels into unique global names internally
 - the same local name may be reused under different global labels
@@ -616,6 +617,9 @@ python main.py assemble program.asm output.txt --listing program.lst --listing-m
 python main.py createsvhex program.asm program.mem --listing program.lst --listing-mode asm
 python main.py createsvmi program.asm program.mi --depth 2048 --listing program.lst --listing-mode asm
 python main.py creategowinprom program.asm ../verilog/src/gowin_prom/gowin_prom.v --depth 2048
+
+python main.py assemble program.asm output.txt --optimize
+python main.py createsvmi program.asm program.mi --depth 4096 --optimize
 python main.py disassemble program.txt output.asm
 python main.py createbin program.txt program.bin
 python main.py load program.bin
@@ -631,6 +635,14 @@ python main.py assemble program.asm output.txt --listing program.lst --listing-m
 python main.py createsvhex program.asm program.mem --listing program.lst --listing-mode asm
 python main.py createsvmi program.asm program.mi --depth 2048 --listing program.lst --listing-mode asm
 python main.py creategowinprom program.asm ../verilog/src/gowin_prom/gowin_prom.v --depth 2048 --listing program.lst --listing-mode asm
+
+`assemble`, `createihex`, `createsvhex`, `createsvmi`, and `creategowinprom` also accept `--optimize`.
+
+Behavior:
+
+- default output is deterministic canonical codegen
+- `--optimize` runs the monotonic address-path relaxation pass
+- v1 optimization scope is intentionally narrow: `CALL`, `JMPA`, and target-taking jump macros
 ```
 
 Supported modes:

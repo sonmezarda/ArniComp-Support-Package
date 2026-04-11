@@ -5,13 +5,13 @@ A command-line interface for assembling, disassembling, and managing binary file
 for the ArniComp custom ISA architecture.
 
 Usage:
-    python main.py assemble <input.asm> [output.txt] [--listing output.lst] [--listing-mode hex|asm|both]
+    python main.py assemble <input.asm> [output.txt] [--listing output.lst] [--listing-mode hex|asm|both] [--optimize]
     python main.py disassemble <input.txt> [output.asm]
     python main.py createbin <input.txt> [output.bin]
-    python main.py createihex <input.asm> [output.hex]
-    python main.py createsvhex <input.asm> [output.mem] [--listing output.lst] [--listing-mode hex|asm|both]
-    python main.py createsvmi <input.asm> [output.mi] [--depth N] [--listing output.lst] [--listing-mode hex|asm|both]
-    python main.py creategowinprom <input.asm> <gowin_prom.v> [--depth N] [--listing output.lst] [--listing-mode hex|asm|both]
+    python main.py createihex <input.asm> [output.hex] [--optimize]
+    python main.py createsvhex <input.asm> [output.mem] [--listing output.lst] [--listing-mode hex|asm|both] [--optimize]
+    python main.py createsvmi <input.asm> [output.mi] [--depth N] [--listing output.lst] [--listing-mode hex|asm|both] [--optimize]
+    python main.py creategowinprom <input.asm> <gowin_prom.v> [--depth N] [--listing output.lst] [--listing-mode hex|asm|both] [--optimize]
     python main.py load <binary.bin>
     python main.py help
 """
@@ -44,6 +44,7 @@ class AssemblerCLI:
         output_file: Optional[str] = None,
         listing_file: Optional[str] = None,
         listing_mode: str = "hex",
+        optimize: bool = False,
     ) -> None:
         """Assemble an assembly file to binary machine code"""
         # Determine output file
@@ -61,7 +62,11 @@ class AssemblerCLI:
         
         # Assemble
         try:
-            binary_lines, labels, constants = self.helper.convert_to_machine_code(raw_lines, source_name=input_file)
+            binary_lines, labels, constants = self.helper.convert_to_machine_code(
+                raw_lines,
+                source_name=input_file,
+                optimize=optimize,
+            )
             warnings = self.helper.last_warnings
             
             # Display info
@@ -72,6 +77,7 @@ class AssemblerCLI:
             print(f"  Labels: {len(labels)}")
             print(f"  Constants: {len(constants)}")
             print(f"  Warnings: {len(warnings)}")
+            print(f"  Mode: {'optimized' if optimize else 'canonical'}")
             
             if labels:
                 print("\n  Defined labels:")
@@ -183,7 +189,7 @@ class AssemblerCLI:
             print(f"Error creating binary file: {e}")
             sys.exit(1)
     
-    def create_ihex(self, input_file: str, output_file: Optional[str] = None) -> None:
+    def create_ihex(self, input_file: str, output_file: Optional[str] = None, optimize: bool = False) -> None:
         """Convert assembly file to Intel HEX format for Digital circuit simulator"""
         from modules.HexConverter import save_intelHexFile
         # Determine output file
@@ -201,7 +207,11 @@ class AssemblerCLI:
         
         # Assemble and convert to Intel HEX
         try:
-            binary_lines, labels, constants = self.helper.convert_to_machine_code(raw_lines, source_name=input_file)
+            binary_lines, labels, constants = self.helper.convert_to_machine_code(
+                raw_lines,
+                source_name=input_file,
+                optimize=optimize,
+            )
             warnings = self.helper.last_warnings
             
             # Save as Intel HEX format
@@ -213,6 +223,7 @@ class AssemblerCLI:
             print(f"  Instructions: {len(binary_lines)}")
             print(f"  Format: Intel HEX (for Digital circuit simulator)")
             print(f"  Warnings: {len(warnings)}")
+            print(f"  Mode: {'optimized' if optimize else 'canonical'}")
             
             if labels:
                 print(f"  Labels: {len(labels)}")
@@ -233,6 +244,7 @@ class AssemblerCLI:
         output_file: Optional[str] = None,
         listing_file: Optional[str] = None,
         listing_mode: str = "hex",
+        optimize: bool = False,
     ) -> None:
         """Convert assembly file to HEX format for SystemVerilog Program Mem"""
         # Determine output file
@@ -250,7 +262,11 @@ class AssemblerCLI:
         
         # Assemble and convert to Intel HEX
         try:
-            binary_lines, labels, constants = self.helper.convert_to_machine_code(raw_lines, source_name=input_file)
+            binary_lines, labels, constants = self.helper.convert_to_machine_code(
+                raw_lines,
+                source_name=input_file,
+                optimize=optimize,
+            )
             warnings = self.helper.last_warnings
             
             with open(output_file, 'w') as f:
@@ -270,6 +286,7 @@ class AssemblerCLI:
             print(f"  Instructions: {len(binary_lines)}")
             print(f"  Format: HEX (for SystemVerilog)")
             print(f"  Warnings: {len(warnings)}")
+            print(f"  Mode: {'optimized' if optimize else 'canonical'}")
             
             if labels:
                 print(f"  Labels: {len(labels)}")
@@ -293,6 +310,7 @@ class AssemblerCLI:
         depth: Optional[int] = None,
         listing_file: Optional[str] = None,
         listing_mode: str = "hex",
+        optimize: bool = False,
     ) -> None:
         """Convert assembly file to Gowin MI format for pROM initialization"""
         if output_file is None:
@@ -307,7 +325,11 @@ class AssemblerCLI:
             sys.exit(1)
 
         try:
-            binary_lines, labels, constants = self.helper.convert_to_machine_code(raw_lines, source_name=input_file)
+            binary_lines, labels, constants = self.helper.convert_to_machine_code(
+                raw_lines,
+                source_name=input_file,
+                optimize=optimize,
+            )
             warnings = self.helper.last_warnings
             byte_values = [format(int(binline, 2) & 0xFF, "02X") for binline in binary_lines]
 
@@ -341,6 +363,7 @@ class AssemblerCLI:
                 print(f"  Padded depth: {depth}")
             print("  Format: Gowin MI (for pROM initialization)")
             print(f"  Warnings: {len(warnings)}")
+            print(f"  Mode: {'optimized' if optimize else 'canonical'}")
 
             if labels:
                 print(f"  Labels: {len(labels)}")
@@ -364,6 +387,7 @@ class AssemblerCLI:
         depth: int = 4096,
         listing_file: Optional[str] = None,
         listing_mode: str = "hex",
+        optimize: bool = False,
     ) -> None:
         """Patch Gowin_pROM INIT_RAM_xx defparams in a generated gowin_prom.v file."""
         try:
@@ -381,7 +405,11 @@ class AssemblerCLI:
             sys.exit(1)
 
         try:
-            binary_lines, labels, constants = self.helper.convert_to_machine_code(raw_lines, source_name=input_file)
+            binary_lines, labels, constants = self.helper.convert_to_machine_code(
+                raw_lines,
+                source_name=input_file,
+                optimize=optimize,
+            )
             warnings = self.helper.last_warnings
             byte_values = [format(int(binline, 2) & 0xFF, "02X") for binline in binary_lines]
 
@@ -478,6 +506,7 @@ class AssemblerCLI:
             )
             print("  Format: prom_inst_N.INIT_RAM_00..XX defparams")
             print(f"  Warnings: {len(warnings)}")
+            print(f"  Mode: {'optimized' if optimize else 'canonical'}")
 
             if labels:
                 print(f"  Labels: {len(labels)}")
@@ -568,9 +597,9 @@ USAGE:
     python main.py <command> [arguments]
 
 COMMANDS:
-    assemble <input.asm> [output.txt] [--listing output.lst] [--listing-mode hex|asm|both]
+    assemble <input.asm> [output.txt] [--listing output.lst] [--listing-mode hex|asm|both] [--optimize]
         Assemble assembly code to binary text format
-        Example: python main.py assemble program.asm program.txt --listing program.lst --listing-mode both
+        Example: python main.py assemble program.asm program.txt --listing program.lst --listing-mode both --optimize
 
     disassemble <input.txt> [output.asm]
         Disassemble binary text format back to assembly
@@ -580,21 +609,21 @@ COMMANDS:
         Convert binary text format to .bin file
         Example: python main.py createbin program.txt program.bin
 
-    createihex <input.asm> [output.hex]
+    createihex <input.asm> [output.hex] [--optimize]
         Assemble and convert to Intel HEX format (for Digital circuit simulator)
-        Example: python main.py createihex program.asm program.hex
+        Example: python main.py createihex program.asm program.hex --optimize
 
-    createsvhex <input.asm> [output.mem] [--listing output.lst] [--listing-mode hex|asm|both]
+    createsvhex <input.asm> [output.mem] [--listing output.lst] [--listing-mode hex|asm|both] [--optimize]
         Assemble and convert to SystemVerilog HEX format
-        Example: python main.py createsvhex program.asm program.mem --listing program.lst --listing-mode asm
+        Example: python main.py createsvhex program.asm program.mem --listing program.lst --listing-mode asm --optimize
 
-    createsvmi <input.asm> [output.mi] [--depth N] [--listing output.lst] [--listing-mode hex|asm|both]
+    createsvmi <input.asm> [output.mi] [--depth N] [--listing output.lst] [--listing-mode hex|asm|both] [--optimize]
         Assemble and convert to Gowin MI format for pROM initialization
-        Example: python main.py createsvmi program.asm program.mi --depth 2048 --listing program.lst --listing-mode asm
+        Example: python main.py createsvmi program.asm program.mi --depth 2048 --listing program.lst --listing-mode asm --optimize
 
-    creategowinprom <input.asm> <gowin_prom.v> [--depth N] [--listing output.lst] [--listing-mode hex|asm|both]
+    creategowinprom <input.asm> <gowin_prom.v> [--depth N] [--listing output.lst] [--listing-mode hex|asm|both] [--optimize]
         Assemble and patch Gowin_pROM INIT_RAM_xx defparams directly
-        Example: python main.py creategowinprom program.asm ../verilog/src/gowin_prom/gowin_prom.v --depth 2048
+        Example: python main.py creategowinprom program.asm ../verilog/src/gowin_prom/gowin_prom.v --depth 2048 --optimize
 
     load <binary.bin>
         Load a binary file to EEPROM
@@ -671,7 +700,8 @@ REGISTERS:
         #0b1010     Binary
         $CONST      Constant reference
         @label      Label reference
-        @*local     Local label reference
+        *local      Bare local label reference
+        @*local     Explicit local label reference
         value[hi:lo] Bit slice syntax
 
     LISTING OUTPUT:
@@ -683,6 +713,8 @@ REGISTERS:
         - original source text
         --listing-mode hex|asm|both
         Choose hex summary view, expanded assembly view, or both
+        --optimize
+        Enable monotonic address-path relaxation for smaller codegen
 
 EXAMPLES:
     equ TARGET 0x1234
@@ -724,6 +756,7 @@ def main():
         depth = None
         listing_file = None
         listing_mode = "hex"
+        optimize = False
         index = 1
 
         while index < len(arguments):
@@ -758,6 +791,11 @@ def main():
                 index += 2
                 continue
 
+            if token == "--optimize":
+                optimize = True
+                index += 1
+                continue
+
             if output_file is None:
                 output_file = token
                 index += 1
@@ -765,7 +803,7 @@ def main():
 
             raise ValueError(f"Unexpected assemble argument: {token}")
 
-        return input_file, output_file, depth, listing_file, listing_mode
+        return input_file, output_file, depth, listing_file, listing_mode, optimize
 
     # Parse command line arguments
     if len(sys.argv) < 2:
@@ -785,17 +823,17 @@ def main():
     elif command == "assemble":
         if len(sys.argv) < 3:
             print("Error: Input file required")
-            print("Usage: python main.py assemble <input.asm> [output.txt] [--listing output.lst] [--listing-mode hex|asm|both]")
+            print("Usage: python main.py assemble <input.asm> [output.txt] [--listing output.lst] [--listing-mode hex|asm|both] [--optimize]")
             sys.exit(1)
 
         try:
-            input_file, output_file, _, listing_file, listing_mode = parse_assemble_args(sys.argv[2:])
+            input_file, output_file, _, listing_file, listing_mode, optimize = parse_assemble_args(sys.argv[2:])
         except ValueError as e:
             print(f"Error: {e}")
-            print("Usage: python main.py assemble <input.asm> [output.txt] [--listing output.lst] [--listing-mode hex|asm|both]")
+            print("Usage: python main.py assemble <input.asm> [output.txt] [--listing output.lst] [--listing-mode hex|asm|both] [--optimize]")
             sys.exit(1)
 
-        cli.assemble(input_file, output_file, listing_file, listing_mode)
+        cli.assemble(input_file, output_file, listing_file, listing_mode, optimize)
     
     elif command == "disassemble":
         if len(sys.argv) < 3:
@@ -820,55 +858,58 @@ def main():
     elif command == "createihex":
         if len(sys.argv) < 3:
             print("Error: Input file required")
-            print("Usage: python main.py createihex <input.asm> [output.hex]")
+            print("Usage: python main.py createihex <input.asm> [output.hex] [--optimize]")
             sys.exit(1)
-        
-        input_file = sys.argv[2]
-        output_file = sys.argv[3] if len(sys.argv) >= 4 else None
-        cli.create_ihex(input_file, output_file)
+        try:
+            input_file, output_file, _, _, _, optimize = parse_assemble_args(sys.argv[2:])
+        except ValueError as e:
+            print(f"Error: {e}")
+            print("Usage: python main.py createihex <input.asm> [output.hex] [--optimize]")
+            sys.exit(1)
+        cli.create_ihex(input_file, output_file, optimize=optimize)
 
     elif command == "createsvhex":
         if len(sys.argv) < 3:
             print("Error: Input file required")
-            print("Usage: python main.py createsvhex <input.asm> [output.mem] [--listing output.lst] [--listing-mode hex|asm|both]")
+            print("Usage: python main.py createsvhex <input.asm> [output.mem] [--listing output.lst] [--listing-mode hex|asm|both] [--optimize]")
             sys.exit(1)
         try:
-            input_file, output_file, _, listing_file, listing_mode = parse_assemble_args(sys.argv[2:])
+            input_file, output_file, _, listing_file, listing_mode, optimize = parse_assemble_args(sys.argv[2:])
         except ValueError as e:
             print(f"Error: {e}")
-            print("Usage: python main.py createsvhex <input.asm> [output.mem] [--listing output.lst] [--listing-mode hex|asm|both]")
+            print("Usage: python main.py createsvhex <input.asm> [output.mem] [--listing output.lst] [--listing-mode hex|asm|both] [--optimize]")
             sys.exit(1)
-        cli.create_svhex(input_file, output_file, listing_file, listing_mode)
+        cli.create_svhex(input_file, output_file, listing_file, listing_mode, optimize)
 
     elif command == "createsvmi":
         if len(sys.argv) < 3:
             print("Error: Input file required")
-            print("Usage: python main.py createsvmi <input.asm> [output.mi] [--depth N] [--listing output.lst] [--listing-mode hex|asm|both]")
+            print("Usage: python main.py createsvmi <input.asm> [output.mi] [--depth N] [--listing output.lst] [--listing-mode hex|asm|both] [--optimize]")
             sys.exit(1)
         try:
-            input_file, output_file, depth, listing_file, listing_mode = parse_assemble_args(sys.argv[2:], allow_depth=True)
+            input_file, output_file, depth, listing_file, listing_mode, optimize = parse_assemble_args(sys.argv[2:], allow_depth=True)
         except ValueError as e:
             print(f"Error: {e}")
-            print("Usage: python main.py createsvmi <input.asm> [output.mi] [--depth N] [--listing output.lst] [--listing-mode hex|asm|both]")
+            print("Usage: python main.py createsvmi <input.asm> [output.mi] [--depth N] [--listing output.lst] [--listing-mode hex|asm|both] [--optimize]")
             sys.exit(1)
-        cli.create_svmi(input_file, output_file, depth, listing_file, listing_mode)
+        cli.create_svmi(input_file, output_file, depth, listing_file, listing_mode, optimize)
 
     elif command == "creategowinprom":
         if len(sys.argv) < 4:
             print("Error: Input assembly file and Gowin pROM file required")
-            print("Usage: python main.py creategowinprom <input.asm> <gowin_prom.v> [--depth N] [--listing output.lst] [--listing-mode hex|asm|both]")
+            print("Usage: python main.py creategowinprom <input.asm> <gowin_prom.v> [--depth N] [--listing output.lst] [--listing-mode hex|asm|both] [--optimize]")
             sys.exit(1)
         try:
-            input_file, output_file, depth, listing_file, listing_mode = parse_assemble_args(sys.argv[2:], allow_depth=True)
+            input_file, output_file, depth, listing_file, listing_mode, optimize = parse_assemble_args(sys.argv[2:], allow_depth=True)
         except ValueError as e:
             print(f"Error: {e}")
-            print("Usage: python main.py creategowinprom <input.asm> <gowin_prom.v> [--depth N] [--listing output.lst] [--listing-mode hex|asm|both]")
+            print("Usage: python main.py creategowinprom <input.asm> <gowin_prom.v> [--depth N] [--listing output.lst] [--listing-mode hex|asm|both] [--optimize]")
             sys.exit(1)
         if output_file is None:
             print("Error: Gowin pROM file path required")
-            print("Usage: python main.py creategowinprom <input.asm> <gowin_prom.v> [--depth N] [--listing output.lst] [--listing-mode hex|asm|both]")
+            print("Usage: python main.py creategowinprom <input.asm> <gowin_prom.v> [--depth N] [--listing output.lst] [--listing-mode hex|asm|both] [--optimize]")
             sys.exit(1)
-        cli.create_gowin_prom(input_file, output_file, depth or 4096, listing_file, listing_mode)
+        cli.create_gowin_prom(input_file, output_file, depth or 4096, listing_file, listing_mode, optimize)
 
     elif command == "load":
         if len(sys.argv) < 3:

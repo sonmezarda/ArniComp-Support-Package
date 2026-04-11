@@ -5,7 +5,7 @@
 - Comments start with `;`
 - Constants use `equ NAME expr`
 - Labels may stand alone or share a line with an instruction: `loop:` / `done: HLT`
-- Local labels use `*name:` and are referenced as `@*name`
+- Local labels use `*name:` and can be referenced as `*name` or `@*name`
 - Prefixes:
   - `#` direct number or character literal: `#10`, `#0x2A`, `#0b1010`, `#'A'`
   - `$` constant reference: `$COUNT`
@@ -25,8 +25,8 @@ Local-label example:
 ```assembly
 my_func:
 *loop:
-    JEQ @*done
-    JMP @*loop
+    JEQ *done
+    JMP *loop
 *done:
     RET
 ```
@@ -305,8 +305,10 @@ PUSH MARL
 ```bash
 python main.py assemble program.asm output.txt
 python main.py assemble program.asm output.txt --listing program.lst --listing-mode both
+python main.py assemble program.asm output.txt --optimize
 python main.py createsvhex program.asm program.mem --listing program.lst --listing-mode asm
 python main.py createsvmi program.asm program.mi --depth 2048 --listing program.lst --listing-mode asm
+python main.py createsvmi program.asm program.mi --depth 4096 --optimize
 python main.py creategowinprom program.asm ../verilog/src/gowin_prom/gowin_prom.v --depth 2048
 python main.py disassemble program.txt output.asm
 python main.py createbin program.txt program.bin
@@ -316,3 +318,5 @@ python main.py help
 ```
 
 Listing modes: `hex`, `asm`, `both`
+
+Optimization: use `--optimize` for monotonic address-path relaxation on `CALL`, `JMPA`, and target-taking jump macros.

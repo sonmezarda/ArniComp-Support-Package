@@ -17,9 +17,9 @@ def to_hex_list(binary_lines):
     return [f"{int(line.strip(), 2):02X}" for line in binary_lines]
 
 
-def assemble_case(name, source_lines, expected_hex, expected_warnings=0):
+def assemble_case(name, source_lines, expected_hex, expected_warnings=0, optimize=False):
     helper = AssemblyHelper()
-    binary_lines, _, _ = helper.convert_to_machine_code(source_lines)
+    binary_lines, _, _ = helper.convert_to_machine_code(source_lines, optimize=optimize)
     actual_hex = to_hex_list(binary_lines)
 
     if actual_hex != expected_hex:
@@ -31,10 +31,10 @@ def assemble_case(name, source_lines, expected_hex, expected_warnings=0):
         )
 
 
-def expect_error(name, source_lines, expected_substring):
+def expect_error(name, source_lines, expected_substring, optimize=False):
     helper = AssemblyHelper()
     try:
-        helper.convert_to_machine_code(source_lines)
+        helper.convert_to_machine_code(source_lines, optimize=optimize)
     except Exception as exc:
         message = str(exc)
         if expected_substring.lower() not in message.lower():
@@ -43,9 +43,9 @@ def expect_error(name, source_lines, expected_substring):
     raise AssertionError(f"{name}: expected assembly to fail")
 
 
-def assert_listing_case(name, source_lines, expected_listing_fragments, mode="hex"):
+def assert_listing_case(name, source_lines, expected_listing_fragments, mode="hex", optimize=False):
     helper = AssemblyHelper()
-    helper.convert_to_machine_code(source_lines, source_name="listing_case.asm")
+    helper.convert_to_machine_code(source_lines, source_name="listing_case.asm", optimize=optimize)
     listing_lines = helper.format_listing(mode)
     listing_text = "".join(listing_lines)
 
@@ -57,7 +57,7 @@ def assert_listing_case(name, source_lines, expected_listing_fragments, mode="he
             raise AssertionError(f"{name}: expected listing fragment '{fragment}' in:\n{listing_text}")
 
 
-def assemble_file_case(name, root_file_contents, expected_hex, include_files=None, expected_warnings=0):
+def assemble_file_case(name, root_file_contents, expected_hex, include_files=None, expected_warnings=0, optimize=False):
     include_files = include_files or {}
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp_path = Path(tmpdir)
@@ -69,7 +69,11 @@ def assemble_file_case(name, root_file_contents, expected_hex, include_files=Non
             file_path.write_text(contents, encoding="utf-8")
 
         helper = AssemblyHelper()
-        binary_lines, _, _ = helper.convert_to_machine_code(root_path.read_text(encoding="utf-8").splitlines(), source_name=str(root_path))
+        binary_lines, _, _ = helper.convert_to_machine_code(
+            root_path.read_text(encoding="utf-8").splitlines(),
+            source_name=str(root_path),
+            optimize=optimize,
+        )
         actual_hex = to_hex_list(binary_lines)
 
         if actual_hex != expected_hex:
@@ -81,7 +85,7 @@ def assemble_file_case(name, root_file_contents, expected_hex, include_files=Non
             )
 
 
-def expect_file_error(name, root_file_contents, expected_substring, include_files=None):
+def expect_file_error(name, root_file_contents, expected_substring, include_files=None, optimize=False):
     include_files = include_files or {}
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp_path = Path(tmpdir)
@@ -94,13 +98,28 @@ def expect_file_error(name, root_file_contents, expected_substring, include_file
 
         helper = AssemblyHelper()
         try:
-            helper.convert_to_machine_code(root_path.read_text(encoding="utf-8").splitlines(), source_name=str(root_path))
+            helper.convert_to_machine_code(
+                root_path.read_text(encoding="utf-8").splitlines(),
+                source_name=str(root_path),
+                optimize=optimize,
+            )
         except Exception as exc:
             message = str(exc)
             if expected_substring.lower() not in message.lower():
                 raise AssertionError(f"{name}: expected error containing '{expected_substring}', got '{message}'")
             return
         raise AssertionError(f"{name}: expected assembly to fail")
+
+
+def assert_optimized_smaller(name, source_lines):
+    helper = AssemblyHelper()
+    canonical_lines, _, _ = helper.convert_to_machine_code(source_lines, optimize=False)
+    optimized_lines, _, _ = helper.convert_to_machine_code(source_lines, optimize=True)
+
+    if len(optimized_lines) > len(canonical_lines):
+        raise AssertionError(
+            f"{name}: expected optimized output <= canonical size, got {len(optimized_lines)} > {len(canonical_lines)}"
+        )
 
 
 def main():
@@ -177,6 +196,11 @@ def main():
             ["C2", "00", "01"],
         ),
         (
+            "LDI forward local label bare ref",
+            ["root: LDI RA, *done", "NOP", "*done: HLT"],
+            ["C2", "00", "01"],
+        ),
+        (
             "local labels scoped per global label",
             ["foo: LDI RA, @*done", "NOP", "*done: HLT", "bar: LDI RA, @*done", "NOP", "*done: HLT"],
             ["C2", "00", "01", "C5", "00", "01"],
@@ -184,6 +208,11 @@ def main():
         (
             "local label in helper expression",
             ["root: NOP", "LDI LOW(@*done)", "*done: HLT"],
+            ["00", "C2", "01"],
+        ),
+        (
+            "local label in helper expression bare ref",
+            ["root: NOP", "LDI LOW(*done)", "*done: HLT"],
             ["00", "C2", "01"],
         ),
         (
@@ -363,6 +392,11 @@ def main():
             "preceding global label scope",
         ),
         (
+            "bare local label reference without global scope",
+            ["JMP *loop"],
+            "preceding global label scope",
+        ),
+        (
             "duplicate local label in same scope",
             ["root: NOP", "*loop: NOP", "*loop: HLT"],
             "duplicate local label definition",
@@ -438,7 +472,7 @@ def main():
                 ".export local_func\n"
                 ".func\n"
                 "local_func:\n"
-                "    JEQ @*done\n"
+                "    JEQ *done\n"
                 "*done:\n"
                 "    ret\n"
                 ".endfunc\n"
@@ -669,6 +703,62 @@ def main():
         mode="asm",
     )
     passed += 1
+
+    optimized_cases = [
+        (
+            "optimized CALL shrinks high zero and low short",
+            ["CALL target", ".fill 24", "target: NOP"],
+            ["DC", "A8", "B4", "07"] + ["00"] * 24 + ["00"],
+        ),
+        (
+            "optimized JEQ target shrinks",
+            ["JEQ done", ".fill 24", "done: HLT"],
+            ["DC", "A8", "B4", "18"] + ["00"] * 24 + ["01"],
+        ),
+        (
+            "optimized local-label import still assembles",
+            [
+                "root: CALL @*done",
+                ".fill 3",
+                "*done: HLT",
+            ],
+            ["C7", "A8", "B4", "07", "00", "00", "00", "01"],
+        ),
+    ]
+
+    for name, source_lines, expected_hex in optimized_cases:
+        assemble_case(name, source_lines, expected_hex, optimize=True)
+        passed += 1
+
+    oscillation_case = [
+        "start: CALL write_fail_addr",
+        ".fill 28",
+        "write_fail_addr: HLT",
+    ]
+    assemble_case(
+        "canonical oscillation case remains stable",
+        oscillation_case,
+        ["C3", "31", "A8", "C0", "30", "B0", "07"] + ["00"] * 28 + ["01"],
+        optimize=False,
+    )
+    passed += 1
+    assert_optimized_smaller("optimized oscillation case shrinks", oscillation_case)
+    passed += 1
+
+    smoke_examples = [
+        ROOT / "examples" / "fpga" / "gpio_ssd1306_init_only.asm",
+        ROOT / "examples" / "fpga" / "gpio_ssd1306_fill_screen.asm",
+    ]
+    for example_path in smoke_examples:
+        helper = AssemblyHelper()
+        source_lines = example_path.read_text(encoding="utf-8").splitlines()
+        canonical_binary, _, _ = helper.convert_to_machine_code(source_lines, source_name=str(example_path), optimize=False)
+        optimized_binary, _, _ = helper.convert_to_machine_code(source_lines, source_name=str(example_path), optimize=True)
+        if len(optimized_binary) > len(canonical_binary):
+            raise AssertionError(
+                f"optimized smoke test should not grow {example_path.name}: {len(optimized_binary)} > {len(canonical_binary)}"
+            )
+        passed += 1
 
     print(f"verify_final_isa.py: {passed} checks passed")
 
