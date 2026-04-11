@@ -453,6 +453,76 @@ class AssemblyHelper:
             return None, text.strip()
         return match.group(1).upper(), match.group(2).strip()
 
+    def split_local_label_prefix(self, text: str) -> Tuple[Optional[str], str]:
+        match = re.match(r"^\s*\*([A-Za-z_][A-Za-z0-9_]*)\:(.*)$", text)
+        if not match:
+            return None, text.strip()
+        return match.group(1).upper(), match.group(2).strip()
+
+    def rewrite_local_label_references(self, text: str, current_scope: Optional[str], source_line: SourceLine) -> str:
+        def replace_local_ref(match: re.Match[str]) -> str:
+            if current_scope is None:
+                raise ValueError(
+                    f"Error on line {self.format_line_ref(source_line)} ('{source_line.text}'): "
+                    "Local label reference requires a preceding global label scope"
+                )
+            local_name = match.group(1).upper()
+            return f"@{current_scope}__{local_name}"
+
+        return re.sub(r"@\*([A-Za-z_][A-Za-z0-9_]*)", replace_local_ref, text)
+
+    def rewrite_local_labels(self, lines: List[SourceLine]) -> List[SourceLine]:
+        rewritten: List[SourceLine] = []
+        current_scope: Optional[str] = None
+        local_defs_in_scope: set[str] = set()
+
+        for source_line in lines:
+            text = source_line.text
+
+            global_match = re.match(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\:(.*)$", text)
+            if global_match:
+                original_global_label = global_match.group(1)
+                current_scope = original_global_label.upper()
+                local_defs_in_scope = set()
+                remainder = global_match.group(2).strip()
+                rewritten_remainder = self.rewrite_local_label_references(remainder, current_scope, source_line) if remainder else ""
+                rewritten_text = f"{original_global_label}:"
+                if rewritten_remainder:
+                    rewritten_text = f"{rewritten_text} {rewritten_remainder}"
+                rewritten.append(
+                    SourceLine(source_line.line_number, rewritten_text, source_name=source_line.source_name)
+                )
+                continue
+
+            local_label, remainder = self.split_local_label_prefix(text)
+            if local_label is not None:
+                if current_scope is None:
+                    raise ValueError(
+                        f"Error on line {self.format_line_ref(source_line)} ('{source_line.text}'): "
+                        "Local label definition requires a preceding global label scope"
+                    )
+                if local_label in local_defs_in_scope:
+                    raise ValueError(
+                        f"Error on line {self.format_line_ref(source_line)} ('{source_line.text}'): "
+                        f"Duplicate local label definition in scope {current_scope}: *{local_label.lower()}"
+                    )
+                local_defs_in_scope.add(local_label)
+                rewritten_remainder = self.rewrite_local_label_references(remainder, current_scope, source_line) if remainder else ""
+                rewritten_text = f"{current_scope}__{local_label}:"
+                if rewritten_remainder:
+                    rewritten_text = f"{rewritten_text} {rewritten_remainder}"
+                rewritten.append(
+                    SourceLine(source_line.line_number, rewritten_text, source_name=source_line.source_name)
+                )
+                continue
+
+            rewritten_text = self.rewrite_local_label_references(text, current_scope, source_line)
+            rewritten.append(
+                SourceLine(source_line.line_number, rewritten_text, source_name=source_line.source_name)
+            )
+
+        return rewritten
+
     def split_operands(self, operand_text: str) -> List[str]:
         raw_operands: List[str] = []
         current: List[str] = []
@@ -983,6 +1053,7 @@ class AssemblyHelper:
         expanded_lines = self.preprocessor.expand(raw_lines, source_name=source_name)
         expanded_lines = self.import_resolver.resolve_imports(expanded_lines)
         lines = self.clean_source_lines(expanded_lines)
+        lines = self.rewrite_local_labels(lines)
         constants, lines = self.extract_constants(lines)
         labels = self.build_labels(lines, constants)
 

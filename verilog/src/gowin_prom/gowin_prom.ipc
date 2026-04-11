@@ -7,7 +7,7 @@ type=ram_prom
 version=1.0
 
 [Config]
-DEPTH=2048
+DEPTH=4096
 LANG=0
 MEM_FILE=../../rom/program.mi
 READ=0

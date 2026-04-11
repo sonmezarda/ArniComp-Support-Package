@@ -133,15 +133,15 @@ def main():
         ("JCS", ["JCS"], ["1A"]),
         ("JLT", ["JLT"], ["1E"]),
         ("JMP", ["JMP"], ["1F"]),
-        ("JEQ target default RA", ["JEQ done", "done:", "NOP"], ["C4", "A8", "B4", "18", "00"]),
-        ("JMP target with RD", ["JMP done :RD", "done:", "NOP"], ["E4", "A9", "B4", "1F", "00"]),
-        ("JLE target macro", ["JLE done", "done:", "NOP"], ["C5", "A8", "B4", "18", "1E", "00"]),
+        ("JEQ target default RA", ["JEQ done", "done:", "NOP"], ["C7", "30", "A8", "C0", "30", "B0", "18", "00"]),
+        ("JMP target with RD", ["JMP done :RD", "done:", "NOP"], ["E7", "38", "A9", "E0", "38", "B1", "1F", "00"]),
+        ("JLE target macro", ["JLE done", "done:", "NOP"], ["C8", "30", "A8", "C0", "30", "B0", "18", "1E", "00"]),
         ("JLEU macro", ["JLEU"], ["1B", "18"]),
-        ("JLEU target macro", ["JLEU done", "done:", "NOP"], ["C5", "A8", "B4", "1B", "18", "00"]),
+        ("JLEU target macro", ["JLEU done", "done:", "NOP"], ["C8", "30", "A8", "C0", "30", "B0", "1B", "18", "00"]),
         ("JGT opcode", ["JGT"], ["06"]),
         ("JLE macro", ["JLE"], ["18", "1E"]),
         ("JGE macro", ["JGE"], ["18", "06"]),
-        ("JGTU target macro", ["JGTU done", "done:", "NOP"], ["C9", "A8", "B4", "1B", "18", "C9", "A8", "B4", "1F", "00"]),
+        ("JGTU target macro", ["JGTU done", "done:", "NOP"], ["CF", "30", "A8", "C0", "30", "B0", "1B", "18", "CF", "30", "A8", "C0", "30", "B0", "1F", "00"]),
         ("JZ alias", ["JZ"], ["18"]),
         ("JGEU alias", ["JGEU"], ["1A"]),
         (
@@ -172,6 +172,21 @@ def main():
             ["C2", "00", "01"],
         ),
         (
+            "LDI forward local label",
+            ["root: LDI RA, @*done", "NOP", "*done: HLT"],
+            ["C2", "00", "01"],
+        ),
+        (
+            "local labels scoped per global label",
+            ["foo: LDI RA, @*done", "NOP", "*done: HLT", "bar: LDI RA, @*done", "NOP", "*done: HLT"],
+            ["C2", "00", "01", "C5", "00", "01"],
+        ),
+        (
+            "local label in helper expression",
+            ["root: NOP", "LDI LOW(@*done)", "*done: HLT"],
+            ["00", "C2", "01"],
+        ),
+        (
             "LDI wide constant warning",
             ["equ WIDE 0x123", "LDI RD, $WIDE"],
             ["E3", "39"],
@@ -197,19 +212,19 @@ def main():
         ("LDI HIGH label", ["NOP", "target:", "LDI HIGH(@target)"], ["00", "C0"]),
         ("LDL BITS const", ["equ VALUE 0xE5", "LDL RA, BITS($VALUE, 4, 0)"], ["C5"]),
         ("LDH BITS const", ["equ VALUE 0xE5", "LDH RD, BITS($VALUE, 7, 5)"], ["3F"]),
-        ("CALL bare label default RA", ["CALL target", "target:", "NOP"], ["C4", "A8", "B4", "07", "00"]),
-        ("CALL label with RD temp", ["CALL target :RD", "target:", "NOP"], ["E4", "A9", "B4", "07", "00"]),
+        ("CALL bare label default RA", ["CALL target", "target:", "NOP"], ["C7", "30", "A8", "C0", "30", "B0", "07", "00"]),
+        ("CALL label with RD temp", ["CALL target :RD", "target:", "NOP"], ["E7", "38", "A9", "E0", "38", "B1", "07", "00"]),
         (
             "CALL constant high byte",
             ["equ TARGET 0x0123", "CALL $TARGET"],
-            ["C3", "31", "A8", "C1", "B0", "07"],
+            ["C3", "31", "A8", "C1", "30", "B0", "07"],
         ),
-        ("JMPA bare label default RA", ["JMPA target", "target:", "NOP"], ["C4", "A8", "B4", "1F", "00"]),
-        ("JMPA label with RD temp", ["JMPA target :RD", "target:", "NOP"], ["E4", "A9", "B4", "1F", "00"]),
+        ("JMPA bare label default RA", ["JMPA target", "target:", "NOP"], ["C7", "30", "A8", "C0", "30", "B0", "1F", "00"]),
+        ("JMPA label with RD temp", ["JMPA target :RD", "target:", "NOP"], ["E7", "38", "A9", "E0", "38", "B1", "1F", "00"]),
         (
             "JMPA constant high byte",
             ["equ TARGET 0x0123", "JMPA $TARGET"],
-            ["C3", "31", "A8", "C1", "B0", "1F"],
+            ["C3", "31", "A8", "C1", "30", "B0", "1F"],
         ),
         ("RET via LR", ["RET"], ["AD", "B6", "1F"]),
         ("RET via stack", ["RET :STACK"], ["2E", "2D", "1F"]),
@@ -337,6 +352,21 @@ def main():
             [".fill 1, 256"],
             "out of range",
         ),
+        (
+            "local label without global scope",
+            ["*loop: NOP"],
+            "preceding global label scope",
+        ),
+        (
+            "local label reference without global scope",
+            ["JMP @*loop"],
+            "preceding global label scope",
+        ),
+        (
+            "duplicate local label in same scope",
+            ["root: NOP", "*loop: NOP", "*loop: HLT"],
+            "duplicate local label definition",
+        ),
     ]
 
     passed = 0
@@ -392,6 +422,24 @@ def main():
                 ".func\n"
                 "mul_func:\n"
                 "    ldi #5\n"
+                "    ret\n"
+                ".endfunc\n"
+            ),
+        },
+    )
+    passed += 1
+
+    assemble_file_case(
+        "imported function with local labels",
+        '.import "lib/local.asm" local_func\nstart: NOP\n',
+        ["00", "C8", "30", "A8", "C0", "30", "B0", "18", "AD", "B6", "1F"],
+        include_files={
+            "lib/local.asm": (
+                ".export local_func\n"
+                ".func\n"
+                "local_func:\n"
+                "    JEQ @*done\n"
+                "*done:\n"
                 "    ret\n"
                 ".endfunc\n"
             ),
@@ -559,8 +607,8 @@ def main():
             "[1] start: NOP",
             "[2] CALL done",
             "[3] done: HLT",
-            "0001  C5 A8 B4 07",
-            "0005  01",
+            "0001  C8 30 A8 C0 30 B0 07",
+            "0008  01",
         ],
     )
     passed += 1
@@ -576,12 +624,15 @@ def main():
             "; Source: listing_case.asm",
             "0000  [1] start: NOP",
             "0001  [2] CALL done",
-            "0005  [3] done: HLT",
-            "0001  C5  LDL RA, #5",
-            "0002  A8  MOV PRL, RA",
-            "0003  B4  MOV PRH, ZERO",
-            "0004  07  JAL",
-            "0005  01  HLT",
+            "0008  [3] done: HLT",
+            "0001  C8  LDL RA, #8",
+            "0002  30  LDH RA, #0",
+            "0003  A8  MOV PRL, RA",
+            "0004  C0  LDL RA, #0",
+            "0005  30  LDH RA, #0",
+            "0006  B0  MOV PRH, RA",
+            "0007  07  JAL",
+            "0008  01  HLT",
         ],
         mode="asm",
     )
@@ -597,8 +648,8 @@ def main():
         [
             "; Source: listing_case.asm",
             "[2] CALL done",
-            "0001  C5 A8 B4 07",
-            "0001  C5  LDL RA, #5",
+            "0001  C8 30 A8 C0 30 B0 07",
+            "0001  C8  LDL RA, #8",
             "00",
         ],
         mode="both",

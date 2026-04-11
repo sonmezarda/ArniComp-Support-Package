@@ -66,6 +66,11 @@ class MacroExpander:
     def estimate_load_byte_size(self, byte_value: int) -> int:
         return 1 if 0 <= byte_value <= 31 else 2
 
+    def estimate_load_byte_long_size(self, byte_value: int) -> int:
+        if not (0 <= byte_value <= 0xFF):
+            raise ValueError(f"Byte load value out of range: {byte_value}")
+        return 2
+
     def emit_load_byte(self, dest: str, byte_value: int) -> List[str]:
         if not (0 <= byte_value <= 0xFF):
             raise ValueError(f"Byte load value out of range: {byte_value}")
@@ -75,6 +80,26 @@ class MacroExpander:
             self.encoder.encode_ldl(dest, byte_value & 0x1F),
             self.encoder.encode_ldh(dest, (byte_value >> 5) & 0x07),
         ]
+
+    def emit_load_byte_long(self, dest: str, byte_value: int) -> List[str]:
+        if not (0 <= byte_value <= 0xFF):
+            raise ValueError(f"Byte load value out of range: {byte_value}")
+        return [
+            self.encoder.encode_ldl(dest, byte_value & 0x1F),
+            self.encoder.encode_ldh(dest, (byte_value >> 5) & 0x07),
+        ]
+
+    def estimate_address_byte_transfer_size(self, byte_value: int) -> int:
+        if not (0 <= byte_value <= 0xFF):
+            raise ValueError(f"Byte load value out of range: {byte_value}")
+        return 3
+
+    def emit_address_byte_transfer(self, pointer_reg: str, temp_reg: str, byte_value: int) -> List[str]:
+        if not (0 <= byte_value <= 0xFF):
+            raise ValueError(f"Byte load value out of range: {byte_value}")
+        emitted = self.emit_load_byte_long(temp_reg, byte_value)
+        emitted.append(self.encoder.encode_mov(pointer_reg, temp_reg))
+        return emitted
 
     def resolve_address_operand(
         self,
@@ -190,16 +215,13 @@ class MacroExpander:
 
         resolved = self.resolve_address_operand(target_token, labels, constants, instruction, allow_unresolved=True)
         if resolved.value is None:
-            return 4 + final_op_size
+            return 7
 
         target_value = resolved.value & 0xFFFF
         low_byte = target_value & 0xFF
         high_byte = (target_value >> 8) & 0xFF
-        size = self.estimate_load_byte_size(low_byte) + 1 + final_op_size
-        if high_byte == 0:
-            size += 1
-        else:
-            size += self.estimate_load_byte_size(high_byte) + 1
+        size = self.estimate_address_byte_transfer_size(low_byte) + final_op_size
+        size += self.estimate_address_byte_transfer_size(high_byte)
         return size
 
     def estimate_jump_with_target_size(
@@ -213,16 +235,13 @@ class MacroExpander:
         target_token, _ = self.parse_jump_target_args(args, instruction)
         resolved = self.resolve_address_operand(target_token, labels, constants, instruction, allow_unresolved=True)
         if resolved.value is None:
-            return 4 + len(final_ops)
+            return 6 + len(final_ops)
 
         target_value = resolved.value & 0xFFFF
         low_byte = target_value & 0xFF
         high_byte = (target_value >> 8) & 0xFF
-        size = self.estimate_load_byte_size(low_byte) + 1 + len(final_ops)
-        if high_byte == 0:
-            size += 1
-        else:
-            size += self.estimate_load_byte_size(high_byte) + 1
+        size = self.estimate_address_byte_transfer_size(low_byte) + len(final_ops)
+        size += self.estimate_address_byte_transfer_size(high_byte)
         return size
 
     def estimate_unsigned_gt_target_size(
@@ -242,18 +261,18 @@ class MacroExpander:
             skip_addr = current_pc + unresolved_skip_size
             skip_low = skip_addr & 0xFF
             skip_high = (skip_addr >> 8) & 0xFF
-            skip_load_size = self.estimate_load_byte_size(skip_low) + 1
-            skip_load_size += 1 if skip_high == 0 else self.estimate_load_byte_size(skip_high) + 1
+            skip_load_size = self.estimate_address_byte_transfer_size(skip_low)
+            skip_load_size += self.estimate_address_byte_transfer_size(skip_high)
 
             target_resolved = self.resolve_address_operand(target_token, labels, constants, instruction, allow_unresolved=True)
             if target_resolved.value is None:
-                target_load_size = 4
+                target_load_size = 6
             else:
                 target_value = target_resolved.value & 0xFFFF
                 target_low = target_value & 0xFF
                 target_high = (target_value >> 8) & 0xFF
-                target_load_size = self.estimate_load_byte_size(target_low) + 1
-                target_load_size += 1 if target_high == 0 else self.estimate_load_byte_size(target_high) + 1
+                target_load_size = self.estimate_address_byte_transfer_size(target_low)
+                target_load_size += self.estimate_address_byte_transfer_size(target_high)
 
             size = skip_load_size + 2 + target_load_size + 1
             if size == unresolved_skip_size:
@@ -284,13 +303,8 @@ class MacroExpander:
         high_byte = (target_value >> 8) & 0xFF
 
         emitted: List[str] = []
-        emitted.extend(self.emit_load_byte(temp_reg, low_byte))
-        emitted.append(self.encoder.encode_mov("PRL", temp_reg))
-        if high_byte == 0:
-            emitted.append(self.encoder.encode_mov("PRH", "ZERO"))
-        else:
-            emitted.extend(self.emit_load_byte(temp_reg, high_byte))
-            emitted.append(self.encoder.encode_mov("PRH", temp_reg))
+        emitted.extend(self.emit_address_byte_transfer("PRL", temp_reg, low_byte))
+        emitted.extend(self.emit_address_byte_transfer("PRH", temp_reg, high_byte))
         if final_op == "JAL":
             emitted.append(self.encoder.encode_special("JAL"))
         elif final_op == "JMP":
@@ -317,13 +331,8 @@ class MacroExpander:
         high_byte = (target_value >> 8) & 0xFF
 
         emitted: List[str] = []
-        emitted.extend(self.emit_load_byte(temp_reg, low_byte))
-        emitted.append(self.encoder.encode_mov("PRL", temp_reg))
-        if high_byte == 0:
-            emitted.append(self.encoder.encode_mov("PRH", "ZERO"))
-        else:
-            emitted.extend(self.emit_load_byte(temp_reg, high_byte))
-            emitted.append(self.encoder.encode_mov("PRH", temp_reg))
+        emitted.extend(self.emit_address_byte_transfer("PRL", temp_reg, low_byte))
+        emitted.extend(self.emit_address_byte_transfer("PRH", temp_reg, high_byte))
 
         for op in final_ops:
             if op == "JGT":
@@ -351,13 +360,8 @@ class MacroExpander:
         emitted: List[str] = []
         skip_low = skip_addr & 0xFF
         skip_high = (skip_addr >> 8) & 0xFF
-        emitted.extend(self.emit_load_byte(temp_reg, skip_low))
-        emitted.append(self.encoder.encode_mov("PRL", temp_reg))
-        if skip_high == 0:
-            emitted.append(self.encoder.encode_mov("PRH", "ZERO"))
-        else:
-            emitted.extend(self.emit_load_byte(temp_reg, skip_high))
-            emitted.append(self.encoder.encode_mov("PRH", temp_reg))
+        emitted.extend(self.emit_address_byte_transfer("PRL", temp_reg, skip_low))
+        emitted.extend(self.emit_address_byte_transfer("PRH", temp_reg, skip_high))
 
         emitted.append(self.encoder.encode_jump("JCC"))
         emitted.append(self.encoder.encode_jump("JEQ"))
@@ -365,13 +369,8 @@ class MacroExpander:
         target_value = target_resolved.value & 0xFFFF
         target_low = target_value & 0xFF
         target_high = (target_value >> 8) & 0xFF
-        emitted.extend(self.emit_load_byte(temp_reg, target_low))
-        emitted.append(self.encoder.encode_mov("PRL", temp_reg))
-        if target_high == 0:
-            emitted.append(self.encoder.encode_mov("PRH", "ZERO"))
-        else:
-            emitted.extend(self.emit_load_byte(temp_reg, target_high))
-            emitted.append(self.encoder.encode_mov("PRH", temp_reg))
+        emitted.extend(self.emit_address_byte_transfer("PRL", temp_reg, target_low))
+        emitted.extend(self.emit_address_byte_transfer("PRH", temp_reg, target_high))
         emitted.append(self.encoder.encode_jump("JMP"))
         return emitted
 

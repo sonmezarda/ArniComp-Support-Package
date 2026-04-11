@@ -60,6 +60,26 @@ loop:
 done: hlt
 ```
 
+Local labels are also supported inside the scope of the nearest preceding
+global label:
+
+```assembly
+my_func:
+*loop:
+    jeq @*done
+    jmp @*loop
+*done:
+    ret
+```
+
+Rules:
+
+- `*name:` defines a local label in the current global-label scope
+- `@*name` references that local label
+- local labels require a preceding global label
+- the assembler rewrites local labels into unique global names internally
+- the same local name may be reused under different global labels
+
 ## Includes
 
 The assembler supports quoted include paths resolved relative to the current file.

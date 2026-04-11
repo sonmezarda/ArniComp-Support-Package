@@ -5,6 +5,7 @@
 - Comments start with `;`
 - Constants use `equ NAME expr`
 - Labels may stand alone or share a line with an instruction: `loop:` / `done: HLT`
+- Local labels use `*name:` and are referenced as `@*name`
 - Prefixes:
   - `#` direct number or character literal: `#10`, `#0x2A`, `#0b1010`, `#'A'`
   - `$` constant reference: `$COUNT`
@@ -18,6 +19,17 @@
   - `LOW(x)` / `BYTE0(x)`
   - `HIGH(x)` / `BYTE1(x)`
   - `BITS(x, hi, lo)`
+
+Local-label example:
+
+```assembly
+my_func:
+*loop:
+    JEQ @*done
+    JMP @*loop
+*done:
+    RET
+```
 
 ## Preprocessor and Layout
 

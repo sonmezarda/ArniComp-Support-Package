@@ -22,7 +22,6 @@ equ OLED_DELAY_COUNT    16
 .export oled_gpio_bus_init
 .func
 oled_gpio_bus_init:
-    
     ; oled_gpio_bus_init
     ; in :
     ;   none
@@ -80,58 +79,58 @@ oled_write_command:
     mov marl, ra
     mov m, rb
 
-    call oled_wc_i2c_start
+    call @*i2c_start
 
     ldi $OLED_ADDR_W
     mov rb, ra
-    call oled_wc_send_byte
-    call oled_wc_read_ack
+    call @*send_byte
+    call @*read_ack
     mov rd, rb
     cmp zero
-    jne oled_wc_fail_addr
+    jne @*fail_addr
 
     ldi $OLED_CTRL_CMD
     mov rb, ra
-    call oled_wc_send_byte
-    call oled_wc_read_ack
+    call @*send_byte
+    call @*read_ack
     mov rd, rb
     cmp zero
-    jne oled_wc_fail_ctrl
+    jne @*fail_ctrl
 
     ldi $F_TMP_BASE_H
     mov marh, ra
     ldi $F_T0_L
     mov marl, ra
     mov rb, m
-    call oled_wc_send_byte
-    call oled_wc_read_ack
+    call @*send_byte
+    call @*read_ack
     mov rd, rb
     cmp zero
-    jne oled_wc_fail_cmd
+    jne @*fail_cmd
 
-    call oled_wc_i2c_stop
+    call @*i2c_stop
     mov rb, zero
     ret :stack
 
-oled_wc_fail_addr:
-    call oled_wc_i2c_stop
+*fail_addr:
+    call @*i2c_stop
     ldi $OLED_ERR_ADDR
     mov rb, ra
     ret :stack
 
-oled_wc_fail_ctrl:
-    call oled_wc_i2c_stop
+*fail_ctrl:
+    call @*i2c_stop
     ldi $OLED_ERR_CTRL
     mov rb, ra
     ret :stack
 
-oled_wc_fail_cmd:
-    call oled_wc_i2c_stop
+*fail_cmd:
+    call @*i2c_stop
     ldi $OLED_ERR_CMD
     mov rb, ra
     ret :stack
 
-oled_wc_i2c_start:
+*i2c_start:
     push lrl
     push lrh
 
@@ -143,22 +142,22 @@ oled_wc_i2c_start:
     ldi $OLED_GPIO_DIR1_L
     mov marl, ra
     mov m, zero
-    call oled_wc_delay_short
+    call @*delay_short
 
     ldi $OLED_GPIO_DIR1_L
     mov marl, ra
     ldi $OLED_SDA_DRIVE_LOW
     mov m, ra
-    call oled_wc_delay_short
+    call @*delay_short
 
     ldi $OLED_GPIO_DIR0_L
     mov marl, ra
     ldi $OLED_SCL_DRIVE_LOW
     mov m, ra
-    call oled_wc_delay_short
+    call @*delay_short
     ret :stack
 
-oled_wc_i2c_stop:
+*i2c_stop:
     push lrl
     push lrh
 
@@ -169,20 +168,20 @@ oled_wc_i2c_stop:
     mov marl, ra
     ldi $OLED_SDA_DRIVE_LOW
     mov m, ra
-    call oled_wc_delay_short
+    call @*delay_short
 
     ldi $OLED_GPIO_DIR0_L
     mov marl, ra
     mov m, zero
-    call oled_wc_delay_short
+    call @*delay_short
 
     ldi $OLED_GPIO_DIR1_L
     mov marl, ra
     mov m, zero
-    call oled_wc_delay_short
+    call @*delay_short
     ret :stack
 
-oled_wc_read_ack:
+*read_ack:
     push lrl
     push lrh
 
@@ -191,13 +190,13 @@ oled_wc_read_ack:
     ldi $OLED_GPIO_DIR1_L
     mov marl, ra
     mov m, zero
-    call oled_wc_delay_short
+    call @*delay_short
 
     ldi $OLED_GPIO_DIR0_L
     mov marl, ra
     mov m, zero
-    call oled_wc_delay_short
-    call oled_wc_delay_short
+    call @*delay_short
+    call @*delay_short
 
     ldi $OLED_GPIO_IN1_L
     mov marl, ra
@@ -208,10 +207,10 @@ oled_wc_read_ack:
     mov marl, ra
     ldi $OLED_SCL_DRIVE_LOW
     mov m, ra
-    call oled_wc_delay_short
+    call @*delay_short
     ret :stack
 
-oled_wc_send_byte:
+*send_byte:
     push lrl
     push lrh
 
@@ -220,103 +219,103 @@ oled_wc_send_byte:
     and ra
     mov rd, acc
     cmp zero
-    jeq oled_wc_b7_zero
-    call oled_wc_send_bit_one
-    jmp oled_wc_b6
-oled_wc_b7_zero:
-    call oled_wc_send_bit_zero
+    jeq @*b7_zero
+    call @*send_bit_one
+    jmp @*b6
+*b7_zero:
+    call @*send_bit_zero
 
-oled_wc_b6:
+*b6:
     mov rd, rb
     ldi #0x40
     and ra
     mov rd, acc
     cmp zero
-    jeq oled_wc_b6_zero
-    call oled_wc_send_bit_one
-    jmp oled_wc_b5
-oled_wc_b6_zero:
-    call oled_wc_send_bit_zero
+    jeq @*b6_zero
+    call @*send_bit_one
+    jmp @*b5
+*b6_zero:
+    call @*send_bit_zero
 
-oled_wc_b5:
+*b5:
     mov rd, rb
     ldi #0x20
     and ra
     mov rd, acc
     cmp zero
-    jeq oled_wc_b5_zero
-    call oled_wc_send_bit_one
-    jmp oled_wc_b4
-oled_wc_b5_zero:
-    call oled_wc_send_bit_zero
+    jeq @*b5_zero
+    call @*send_bit_one
+    jmp @*b4
+*b5_zero:
+    call @*send_bit_zero
 
-oled_wc_b4:
+*b4:
     mov rd, rb
     ldi #0x10
     and ra
     mov rd, acc
     cmp zero
-    jeq oled_wc_b4_zero
-    call oled_wc_send_bit_one
-    jmp oled_wc_b3
-oled_wc_b4_zero:
-    call oled_wc_send_bit_zero
+    jeq @*b4_zero
+    call @*send_bit_one
+    jmp @*b3
+*b4_zero:
+    call @*send_bit_zero
 
-oled_wc_b3:
+*b3:
     mov rd, rb
     ldi #0x08
     and ra
     mov rd, acc
     cmp zero
-    jeq oled_wc_b3_zero
-    call oled_wc_send_bit_one
-    jmp oled_wc_b2
-oled_wc_b3_zero:
-    call oled_wc_send_bit_zero
+    jeq @*b3_zero
+    call @*send_bit_one
+    jmp @*b2
+*b3_zero:
+    call @*send_bit_zero
 
-oled_wc_b2:
+*b2:
     mov rd, rb
     ldi #0x04
     and ra
     mov rd, acc
     cmp zero
-    jeq oled_wc_b2_zero
-    call oled_wc_send_bit_one
-    jmp oled_wc_b1
-oled_wc_b2_zero:
-    call oled_wc_send_bit_zero
+    jeq @*b2_zero
+    call @*send_bit_one
+    jmp @*b1
+*b2_zero:
+    call @*send_bit_zero
 
-oled_wc_b1:
+*b1:
     mov rd, rb
     ldi #0x02
     and ra
     mov rd, acc
     cmp zero
-    jeq oled_wc_b1_zero
-    call oled_wc_send_bit_one
-    jmp oled_wc_b0
+    jeq @*b1_zero
+    call @*send_bit_one
+    jmp @*b0
     nop
     nop
     nop
     nop
     nop
-oled_wc_b1_zero:
-    call oled_wc_send_bit_zero
+*b1_zero:
+    call @*send_bit_zero
 
-oled_wc_b0:
+*b0:
     mov rd, rb
     ldi #0x01
     and ra
     mov rd, acc
     cmp zero
-    jeq oled_wc_b0_zero
-    call oled_wc_send_bit_one
+    jeq @*b0_zero
+    call @*send_bit_one
     ret :stack
-oled_wc_b0_zero:
-    call oled_wc_send_bit_zero
+*b0_zero:
+    call @*send_bit_zero
     ret :stack
 
-oled_wc_send_bit_zero:
+*send_bit_zero:
     push lrl
     push lrh
 
@@ -326,10 +325,10 @@ oled_wc_send_bit_zero:
     mov marl, ra
     ldi $OLED_SDA_DRIVE_LOW
     mov m, ra
-    call oled_wc_pulse_scl
+    call @*pulse_scl
     ret :stack
 
-oled_wc_send_bit_one:
+*send_bit_one:
     push lrl
     push lrh
 
@@ -338,34 +337,34 @@ oled_wc_send_bit_one:
     ldi $OLED_GPIO_DIR1_L
     mov marl, ra
     mov m, zero
-    call oled_wc_pulse_scl
+    call @*pulse_scl
     ret :stack
 
-oled_wc_pulse_scl:
+*pulse_scl:
     push lrl
     push lrh
 
-    call oled_wc_delay_short
+    call @*delay_short
     ldi $OLED_GPIO_BASE_H
     mov marh, ra
     ldi $OLED_GPIO_DIR0_L
     mov marl, ra
     mov m, zero
-    call oled_wc_delay_short
-    call oled_wc_delay_short
+    call @*delay_short
+    call @*delay_short
     ldi $OLED_GPIO_DIR0_L
     mov marl, ra
     ldi $OLED_SCL_DRIVE_LOW
     mov m, ra
-    call oled_wc_delay_short
+    call @*delay_short
     ret :stack
 
-oled_wc_delay_short:
+*delay_short:
     ldi rd, $OLED_DELAY_COUNT
-oled_wc_delay_loop:
+*delay_loop:
     subi #1
     mov rd, acc
-    jne oled_wc_delay_loop
+    jne @*delay_loop
     ret
 .endfunc
 
@@ -381,40 +380,40 @@ oled_begin_data_stream:
     push lrl
     push lrh
 
-    call oled_bds_i2c_start
+    call @*i2c_start
 
     ldi $OLED_ADDR_W
     mov rb, ra
-    call oled_bds_send_byte
-    call oled_bds_read_ack
+    call @*send_byte
+    call @*read_ack
     mov rd, rb
     cmp zero
-    jne oled_bds_fail_addr
+    jne @*fail_addr
 
     ldi $OLED_CTRL_DATA
     mov rb, ra
-    call oled_bds_send_byte
-    call oled_bds_read_ack
+    call @*send_byte
+    call @*read_ack
     mov rd, rb
     cmp zero
-    jne oled_bds_fail_ctrl
+    jne @*fail_ctrl
 
     mov rb, zero
     ret :stack
 
-oled_bds_fail_addr:
-    call oled_bds_i2c_stop
+*fail_addr:
+    call @*i2c_stop
     ldi $OLED_ERR_ADDR
     mov rb, ra
     ret :stack
 
-oled_bds_fail_ctrl:
-    call oled_bds_i2c_stop
+*fail_ctrl:
+    call @*i2c_stop
     ldi $OLED_ERR_CTRL
     mov rb, ra
     ret :stack
 
-oled_bds_i2c_start:
+*i2c_start:
     push lrl
     push lrh
 
@@ -426,22 +425,22 @@ oled_bds_i2c_start:
     ldi $OLED_GPIO_DIR1_L
     mov marl, ra
     mov m, zero
-    call oled_bds_delay_short
+    call @*delay_short
 
     ldi $OLED_GPIO_DIR1_L
     mov marl, ra
     ldi $OLED_SDA_DRIVE_LOW
     mov m, ra
-    call oled_bds_delay_short
+    call @*delay_short
 
     ldi $OLED_GPIO_DIR0_L
     mov marl, ra
     ldi $OLED_SCL_DRIVE_LOW
     mov m, ra
-    call oled_bds_delay_short
+    call @*delay_short
     ret :stack
 
-oled_bds_i2c_stop:
+*i2c_stop:
     push lrl
     push lrh
 
@@ -452,20 +451,20 @@ oled_bds_i2c_stop:
     mov marl, ra
     ldi $OLED_SDA_DRIVE_LOW
     mov m, ra
-    call oled_bds_delay_short
+    call @*delay_short
 
     ldi $OLED_GPIO_DIR0_L
     mov marl, ra
     mov m, zero
-    call oled_bds_delay_short
+    call @*delay_short
 
     ldi $OLED_GPIO_DIR1_L
     mov marl, ra
     mov m, zero
-    call oled_bds_delay_short
+    call @*delay_short
     ret :stack
 
-oled_bds_read_ack:
+*read_ack:
     push lrl
     push lrh
 
@@ -474,13 +473,13 @@ oled_bds_read_ack:
     ldi $OLED_GPIO_DIR1_L
     mov marl, ra
     mov m, zero
-    call oled_bds_delay_short
+    call @*delay_short
 
     ldi $OLED_GPIO_DIR0_L
     mov marl, ra
     mov m, zero
-    call oled_bds_delay_short
-    call oled_bds_delay_short
+    call @*delay_short
+    call @*delay_short
 
     ldi $OLED_GPIO_IN1_L
     mov marl, ra
@@ -491,10 +490,10 @@ oled_bds_read_ack:
     mov marl, ra
     ldi $OLED_SCL_DRIVE_LOW
     mov m, ra
-    call oled_bds_delay_short
+    call @*delay_short
     ret :stack
 
-oled_bds_send_byte:
+*send_byte:
     push lrl
     push lrh
 
@@ -503,103 +502,103 @@ oled_bds_send_byte:
     and ra
     mov rd, acc
     cmp zero
-    jeq oled_bds_b7_zero
-    call oled_bds_send_bit_one
-    jmp oled_bds_b6
-oled_bds_b7_zero:
-    call oled_bds_send_bit_zero
+    jeq @*b7_zero
+    call @*send_bit_one
+    jmp @*b6
+*b7_zero:
+    call @*send_bit_zero
 
-oled_bds_b6:
+*b6:
     mov rd, rb
     ldi #0x40
     and ra
     mov rd, acc
     cmp zero
-    jeq oled_bds_b6_zero
-    call oled_bds_send_bit_one
-    jmp oled_bds_b5
-oled_bds_b6_zero:
-    call oled_bds_send_bit_zero
+    jeq @*b6_zero
+    call @*send_bit_one
+    jmp @*b5
+*b6_zero:
+    call @*send_bit_zero
 
-oled_bds_b5:
+*b5:
     mov rd, rb
     ldi #0x20
     and ra
     mov rd, acc
     cmp zero
-    jeq oled_bds_b5_zero
-    call oled_bds_send_bit_one
-    jmp oled_bds_b4
-oled_bds_b5_zero:
-    call oled_bds_send_bit_zero
+    jeq @*b5_zero
+    call @*send_bit_one
+    jmp @*b4
+*b5_zero:
+    call @*send_bit_zero
 
-oled_bds_b4:
+*b4:
     mov rd, rb
     ldi #0x10
     and ra
     mov rd, acc
     cmp zero
-    jeq oled_bds_b4_zero
-    call oled_bds_send_bit_one
-    jmp oled_bds_b3
-oled_bds_b4_zero:
-    call oled_bds_send_bit_zero
+    jeq @*b4_zero
+    call @*send_bit_one
+    jmp @*b3
+*b4_zero:
+    call @*send_bit_zero
 
-oled_bds_b3:
+*b3:
     mov rd, rb
     ldi #0x08
     and ra
     mov rd, acc
     cmp zero
-    jeq oled_bds_b3_zero
-    call oled_bds_send_bit_one
-    jmp oled_bds_b2
-oled_bds_b3_zero:
-    call oled_bds_send_bit_zero
+    jeq @*b3_zero
+    call @*send_bit_one
+    jmp @*b2
+*b3_zero:
+    call @*send_bit_zero
 
-oled_bds_b2:
+*b2:
     mov rd, rb
     ldi #0x04
     and ra
     mov rd, acc
     cmp zero
-    jeq oled_bds_b2_zero
-    call oled_bds_send_bit_one
-    jmp oled_bds_b1
-oled_bds_b2_zero:
-    call oled_bds_send_bit_zero
+    jeq @*b2_zero
+    call @*send_bit_one
+    jmp @*b1
+*b2_zero:
+    call @*send_bit_zero
 
-oled_bds_b1:
+*b1:
     mov rd, rb
     ldi #0x02
     and ra
     mov rd, acc
     cmp zero
-    jeq oled_bds_b1_zero
-    call oled_bds_send_bit_one
-    jmp oled_bds_b0
+    jeq @*b1_zero
+    call @*send_bit_one
+    jmp @*b0
     nop
     nop
     nop
     nop
     nop
-oled_bds_b1_zero:
-    call oled_bds_send_bit_zero
+*b1_zero:
+    call @*send_bit_zero
 
-oled_bds_b0:
+*b0:
     mov rd, rb
     ldi #0x01
     and ra
     mov rd, acc
     cmp zero
-    jeq oled_bds_b0_zero
-    call oled_bds_send_bit_one
+    jeq @*b0_zero
+    call @*send_bit_one
     ret :stack
-oled_bds_b0_zero:
-    call oled_bds_send_bit_zero
+*b0_zero:
+    call @*send_bit_zero
     ret :stack
 
-oled_bds_send_bit_zero:
+*send_bit_zero:
     push lrl
     push lrh
 
@@ -609,10 +608,10 @@ oled_bds_send_bit_zero:
     mov marl, ra
     ldi $OLED_SDA_DRIVE_LOW
     mov m, ra
-    call oled_bds_pulse_scl
+    call @*pulse_scl
     ret :stack
 
-oled_bds_send_bit_one:
+*send_bit_one:
     push lrl
     push lrh
 
@@ -621,34 +620,34 @@ oled_bds_send_bit_one:
     ldi $OLED_GPIO_DIR1_L
     mov marl, ra
     mov m, zero
-    call oled_bds_pulse_scl
+    call @*pulse_scl
     ret :stack
 
-oled_bds_pulse_scl:
+*pulse_scl:
     push lrl
     push lrh
 
-    call oled_bds_delay_short
+    call @*delay_short
     ldi $OLED_GPIO_BASE_H
     mov marh, ra
     ldi $OLED_GPIO_DIR0_L
     mov marl, ra
     mov m, zero
-    call oled_bds_delay_short
-    call oled_bds_delay_short
+    call @*delay_short
+    call @*delay_short
     ldi $OLED_GPIO_DIR0_L
     mov marl, ra
     ldi $OLED_SCL_DRIVE_LOW
     mov m, ra
-    call oled_bds_delay_short
+    call @*delay_short
     ret :stack
 
-oled_bds_delay_short:
+*delay_short:
     ldi rd, $OLED_DELAY_COUNT
-oled_bds_delay_loop:
+*delay_loop:
     subi #1
     mov rd, acc
-    jne oled_bds_delay_loop
+    jne @*delay_loop
     ret
 .endfunc
 
@@ -665,22 +664,22 @@ oled_stream_data_byte:
     push lrl
     push lrh
 
-    call oled_sdb_send_byte
-    call oled_sdb_read_ack
+    call @*send_byte
+    call @*read_ack
     mov rd, rb
     cmp zero
-    jne oled_sdb_fail_data
+    jne @*fail_data
 
     mov rb, zero
     ret :stack
 
-oled_sdb_fail_data:
-    call oled_sdb_i2c_stop
+*fail_data:
+    call @*i2c_stop
     ldi $OLED_ERR_DATA
     mov rb, ra
     ret :stack
 
-oled_sdb_i2c_stop:
+*i2c_stop:
     push lrl
     push lrh
 
@@ -691,20 +690,20 @@ oled_sdb_i2c_stop:
     mov marl, ra
     ldi $OLED_SDA_DRIVE_LOW
     mov m, ra
-    call oled_sdb_delay_short
+    call @*delay_short
 
     ldi $OLED_GPIO_DIR0_L
     mov marl, ra
     mov m, zero
-    call oled_sdb_delay_short
+    call @*delay_short
 
     ldi $OLED_GPIO_DIR1_L
     mov marl, ra
     mov m, zero
-    call oled_sdb_delay_short
+    call @*delay_short
     ret :stack
 
-oled_sdb_read_ack:
+*read_ack:
     push lrl
     push lrh
 
@@ -713,13 +712,13 @@ oled_sdb_read_ack:
     ldi $OLED_GPIO_DIR1_L
     mov marl, ra
     mov m, zero
-    call oled_sdb_delay_short
+    call @*delay_short
 
     ldi $OLED_GPIO_DIR0_L
     mov marl, ra
     mov m, zero
-    call oled_sdb_delay_short
-    call oled_sdb_delay_short
+    call @*delay_short
+    call @*delay_short
 
     ldi $OLED_GPIO_IN1_L
     mov marl, ra
@@ -730,10 +729,10 @@ oled_sdb_read_ack:
     mov marl, ra
     ldi $OLED_SCL_DRIVE_LOW
     mov m, ra
-    call oled_sdb_delay_short
+    call @*delay_short
     ret :stack
 
-oled_sdb_send_byte:
+*send_byte:
     push lrl
     push lrh
 
@@ -742,103 +741,103 @@ oled_sdb_send_byte:
     and ra
     mov rd, acc
     cmp zero
-    jeq oled_sdb_b7_zero
-    call oled_sdb_send_bit_one
-    jmp oled_sdb_b6
-oled_sdb_b7_zero:
-    call oled_sdb_send_bit_zero
+    jeq @*b7_zero
+    call @*send_bit_one
+    jmp @*b6
+*b7_zero:
+    call @*send_bit_zero
 
-oled_sdb_b6:
+*b6:
     mov rd, rb
     ldi #0x40
     and ra
     mov rd, acc
     cmp zero
-    jeq oled_sdb_b6_zero
-    call oled_sdb_send_bit_one
-    jmp oled_sdb_b5
-oled_sdb_b6_zero:
-    call oled_sdb_send_bit_zero
+    jeq @*b6_zero
+    call @*send_bit_one
+    jmp @*b5
+*b6_zero:
+    call @*send_bit_zero
 
-oled_sdb_b5:
+*b5:
     mov rd, rb
     ldi #0x20
     and ra
     mov rd, acc
     cmp zero
-    jeq oled_sdb_b5_zero
-    call oled_sdb_send_bit_one
-    jmp oled_sdb_b4
-oled_sdb_b5_zero:
-    call oled_sdb_send_bit_zero
+    jeq @*b5_zero
+    call @*send_bit_one
+    jmp @*b4
+*b5_zero:
+    call @*send_bit_zero
 
-oled_sdb_b4:
+*b4:
     mov rd, rb
     ldi #0x10
     and ra
     mov rd, acc
     cmp zero
-    jeq oled_sdb_b4_zero
-    call oled_sdb_send_bit_one
-    jmp oled_sdb_b3
-oled_sdb_b4_zero:
-    call oled_sdb_send_bit_zero
+    jeq @*b4_zero
+    call @*send_bit_one
+    jmp @*b3
+*b4_zero:
+    call @*send_bit_zero
 
-oled_sdb_b3:
+*b3:
     mov rd, rb
     ldi #0x08
     and ra
     mov rd, acc
     cmp zero
-    jeq oled_sdb_b3_zero
-    call oled_sdb_send_bit_one
-    jmp oled_sdb_b2
-oled_sdb_b3_zero:
-    call oled_sdb_send_bit_zero
+    jeq @*b3_zero
+    call @*send_bit_one
+    jmp @*b2
+*b3_zero:
+    call @*send_bit_zero
 
-oled_sdb_b2:
+*b2:
     mov rd, rb
     ldi #0x04
     and ra
     mov rd, acc
     cmp zero
-    jeq oled_sdb_b2_zero
-    call oled_sdb_send_bit_one
-    jmp oled_sdb_b1
-oled_sdb_b2_zero:
-    call oled_sdb_send_bit_zero
+    jeq @*b2_zero
+    call @*send_bit_one
+    jmp @*b1
+*b2_zero:
+    call @*send_bit_zero
 
-oled_sdb_b1:
+*b1:
     mov rd, rb
     ldi #0x02
     and ra
     mov rd, acc
     cmp zero
-    jeq oled_sdb_b1_zero
-    call oled_sdb_send_bit_one
-    jmp oled_sdb_b0
+    jeq @*b1_zero
+    call @*send_bit_one
+    jmp @*b0
     nop
     nop
     nop
     nop
     nop
-oled_sdb_b1_zero:
-    call oled_sdb_send_bit_zero
+*b1_zero:
+    call @*send_bit_zero
 
-oled_sdb_b0:
+*b0:
     mov rd, rb
     ldi #0x01
     and ra
     mov rd, acc
     cmp zero
-    jeq oled_sdb_b0_zero
-    call oled_sdb_send_bit_one
+    jeq @*b0_zero
+    call @*send_bit_one
     ret :stack
-oled_sdb_b0_zero:
-    call oled_sdb_send_bit_zero
+*b0_zero:
+    call @*send_bit_zero
     ret :stack
 
-oled_sdb_send_bit_zero:
+*send_bit_zero:
     push lrl
     push lrh
 
@@ -848,10 +847,10 @@ oled_sdb_send_bit_zero:
     mov marl, ra
     ldi $OLED_SDA_DRIVE_LOW
     mov m, ra
-    call oled_sdb_pulse_scl
+    call @*pulse_scl
     ret :stack
 
-oled_sdb_send_bit_one:
+*send_bit_one:
     push lrl
     push lrh
 
@@ -860,34 +859,34 @@ oled_sdb_send_bit_one:
     ldi $OLED_GPIO_DIR1_L
     mov marl, ra
     mov m, zero
-    call oled_sdb_pulse_scl
+    call @*pulse_scl
     ret :stack
 
-oled_sdb_pulse_scl:
+*pulse_scl:
     push lrl
     push lrh
 
-    call oled_sdb_delay_short
+    call @*delay_short
     ldi $OLED_GPIO_BASE_H
     mov marh, ra
     ldi $OLED_GPIO_DIR0_L
     mov marl, ra
     mov m, zero
-    call oled_sdb_delay_short
-    call oled_sdb_delay_short
+    call @*delay_short
+    call @*delay_short
     ldi $OLED_GPIO_DIR0_L
     mov marl, ra
     ldi $OLED_SCL_DRIVE_LOW
     mov m, ra
-    call oled_sdb_delay_short
+    call @*delay_short
     ret :stack
 
-oled_sdb_delay_short:
+*delay_short:
     ldi rd, $OLED_DELAY_COUNT
-oled_sdb_delay_loop:
+*delay_loop:
     subi #1
     mov rd, acc
-    jne oled_sdb_delay_loop
+    jne @*delay_loop
     ret
 .endfunc
 
@@ -908,28 +907,218 @@ oled_end_stream:
     mov marl, ra
     ldi $OLED_SDA_DRIVE_LOW
     mov m, ra
-    call oled_es_delay_short
+    call @*delay_short
 
     ldi $OLED_GPIO_DIR0_L
     mov marl, ra
     mov m, zero
-    call oled_es_delay_short
+    call @*delay_short
 
     ldi $OLED_GPIO_DIR1_L
     mov marl, ra
     mov m, zero
-    call oled_es_delay_short
+    call @*delay_short
 
     mov rb, zero
     ret :stack
 
-oled_es_delay_short:
+*delay_short:
     ldi rd, $OLED_DELAY_COUNT
-oled_es_delay_loop:
+*delay_loop:
     subi #1
     mov rd, acc
-    jne oled_es_delay_loop
+    jne @*delay_loop
     ret
+.endfunc
+
+.export oled_init_basic
+.func
+oled_init_basic:
+    ; oled_init_basic
+    ; out:
+    ;   RB = 0 on success
+    ;   RB = 0x02 address ACK failed
+    ;   RB = 0x03 control ACK failed
+    ;   RB = 0x04 command ACK failed
+    ; import note:
+    ;   import oled_write_command too.
+
+    push lrl
+    push lrh
+
+    ldi #0xAE
+    mov rb, ra
+    call oled_write_command
+    mov rd, rb
+    cmp zero
+    jne @*fail
+
+    ldi #0x8D
+    mov rb, ra
+    call oled_write_command
+    mov rd, rb
+    cmp zero
+    jne @*fail
+
+    ldi #0x14
+    mov rb, ra
+    call oled_write_command
+    mov rd, rb
+    cmp zero
+    jne @*fail
+
+    ldi #0x20
+    mov rb, ra
+    call oled_write_command
+    mov rd, rb
+    cmp zero
+    jne @*fail
+
+    ldi #0x02
+    mov rb, ra
+    call oled_write_command
+    mov rd, rb
+    cmp zero
+    jne @*fail
+
+    ldi #0xA4
+    mov rb, ra
+    call oled_write_command
+    mov rd, rb
+    cmp zero
+    jne @*fail
+
+    ldi #0xA6
+    mov rb, ra
+    call oled_write_command
+    mov rd, rb
+    cmp zero
+    jne @*fail
+
+    ldi #0xAF
+    mov rb, ra
+    call oled_write_command
+    ret :stack
+
+*fail:
+    ret :stack
+.endfunc
+
+.export oled_set_page_column
+.func
+oled_set_page_column:
+    ; oled_set_page_column
+    ; in :
+    ;   RB = page command (0xB0..0xB7)
+    ;   RD = column address (0x00..0x7F)
+    ; out:
+    ;   RB = 0 on success
+    ;   RB = 0x02 address ACK failed
+    ;   RB = 0x03 control ACK failed
+    ;   RB = 0x04 command ACK failed
+    ; import note:
+    ;   import oled_write_command too.
+    ; scratch:
+    ;   F_T4_L = saved page command
+    ;   F_T5_L = saved column address
+    ;   F_T6_L = upper-column command (0x10..0x17)
+
+    push lrl
+    push lrh
+
+    ldi $F_TMP_BASE_H
+    mov marh, ra
+    ldi $F_T4_L
+    mov marl, ra
+    mov m, rb
+
+    ldi $F_T5_L
+    mov marl, ra
+    mov m, rd
+
+    ; Send page command.
+    ldi $F_T4_L
+    mov marl, ra
+    mov rb, m
+    call oled_write_command
+    mov rd, rb
+    cmp zero
+    jne @*fail
+
+    ; Send lower column nibble command (0x00..0x0F).
+    ldi $F_T5_L
+    mov marl, ra
+    mov rd, m
+    ldi #0x0F
+    and rd
+    mov rb, acc
+    call oled_write_command
+    mov rd, rb
+    cmp zero
+    jne @*fail
+
+    ; Build upper column command (0x10..0x17).
+    ldi $F_T6_L
+    mov marl, ra
+    ldi #0x10
+    mov m, ra
+
+    ldi $F_T5_L
+    mov marl, ra
+    mov rd, m
+    ldi #0x10
+    and rd
+    mov rd, acc
+    cmp zero
+    jeq @*skip_add1
+    ldi $F_T6_L
+    mov marl, ra
+    mov rd, m
+    addi #1
+    mov rd, acc
+    mov m, rd
+*skip_add1:
+
+    ldi $F_T5_L
+    mov marl, ra
+    mov rd, m
+    ldi #0x20
+    and rd
+    mov rd, acc
+    cmp zero
+    jeq @*skip_add2
+    ldi $F_T6_L
+    mov marl, ra
+    mov rd, m
+    addi #2
+    mov rd, acc
+    mov m, rd
+*skip_add2:
+
+    ldi $F_T5_L
+    mov marl, ra
+    mov rd, m
+    ldi #0x40
+    and rd
+    mov rd, acc
+    cmp zero
+    jeq @*send_upper
+    ldi $F_T6_L
+    mov marl, ra
+    mov rd, m
+    addi #4
+    mov rd, acc
+    mov m, rd
+
+*send_upper:
+    ldi $F_T6_L
+    mov marl, ra
+    mov rb, m
+    call oled_write_command
+    ret :stack
+
+*fail:
+    ret :stack
 .endfunc
 
 .export oled_fill_screen
@@ -959,7 +1148,7 @@ oled_fill_screen:
     ldi #0xB0
     mov m, ra
 
-oled_fill_screen_page_loop:
+*page_loop:
     ldi $F_TMP_BASE_H
     mov marh, ra
     ldi $F_T5_L
@@ -968,26 +1157,26 @@ oled_fill_screen_page_loop:
     call oled_write_command
     mov rd, rb
     cmp zero
-    jne oled_fill_screen_fail
+    jne @*fail
 
     ldi #0x00
     mov rb, ra
     call oled_write_command
     mov rd, rb
     cmp zero
-    jne oled_fill_screen_fail
+    jne @*fail
 
     ldi #0x10
     mov rb, ra
     call oled_write_command
     mov rd, rb
     cmp zero
-    jne oled_fill_screen_fail
+    jne @*fail
 
     call oled_begin_data_stream
     mov rd, rb
     cmp zero
-    jne oled_fill_screen_fail
+    jne @*fail
 
     ldi $F_TMP_BASE_H
     mov marh, ra
@@ -996,7 +1185,7 @@ oled_fill_screen_page_loop:
     ldi #0x80
     mov m, ra
 
-oled_fill_screen_data_loop:
+*data_loop:
     ldi $F_TMP_BASE_H
     mov marh, ra
     ldi $F_T4_L
@@ -1005,7 +1194,7 @@ oled_fill_screen_data_loop:
     call oled_stream_data_byte
     mov rd, rb
     cmp zero
-    jne oled_fill_screen_fail
+    jne @*fail
 
     ldi $F_TMP_BASE_H
     mov marh, ra
@@ -1015,7 +1204,7 @@ oled_fill_screen_data_loop:
     subi #1
     mov rd, acc
     mov m, rd
-    jne oled_fill_screen_data_loop
+    jne @*data_loop
 
     call oled_end_stream
 
@@ -1030,12 +1219,28 @@ oled_fill_screen_data_loop:
 
     ldi #0xB8
     cmp ra
-    jne oled_fill_screen_page_loop
+    jne @*page_loop
 
     mov rb, zero
     ret :stack
 
-oled_fill_screen_fail:
+*fail:
+    ret :stack
+.endfunc
+
+.export oled_clear_screen
+.func
+oled_clear_screen:
+    ; oled_clear_screen
+    ; out:
+    ;   RB = 0 on success
+    ;   non-zero on first write/data error
+
+    push lrl
+    push lrh
+
+    mov rb, zero
+    call oled_fill_screen
     ret :stack
 .endfunc
 
@@ -1086,13 +1291,13 @@ oled_write_stack_noack:
     mov marl, ra
     mov m, lrh
 
-    call oled_ws_i2c_start
+    call @*i2c_start
 
     ; Slave address + write
     ldi $OLED_ADDR_W
     mov rb, ra
-    call oled_ws_send_byte
-    call oled_ws_ack_clock_only
+    call @*send_byte
+    call @*ack_clock_only
 
     ; Control byte
     ldi $F_TMP_BASE_H
@@ -1100,21 +1305,21 @@ oled_write_stack_noack:
     ldi $F_T1_L
     mov marl, ra
     mov rb, m
-    call oled_ws_send_byte
-    call oled_ws_ack_clock_only
+    call @*send_byte
+    call @*ack_clock_only
 
-oled_ws_loop:
+*loop:
     ldi $F_TMP_BASE_H
     mov marh, ra
     ldi $F_T0_L
     mov marl, ra
     mov rd, m
     cmp zero
-    jeq oled_ws_done
+    jeq @*done
 
     pop rb
-    call oled_ws_send_byte
-    call oled_ws_ack_clock_only
+    call @*send_byte
+    call @*ack_clock_only
 
     ldi $F_TMP_BASE_H
     mov marh, ra
@@ -1124,10 +1329,10 @@ oled_ws_loop:
     subi #1
     mov rd, acc
     mov m, rd
-    jmpa oled_ws_loop
+    jmpa @*loop
 
-oled_ws_done:
-    call oled_ws_i2c_stop
+*done:
+    call @*i2c_stop
     mov rb, zero
     ldi $F_TMP_BASE_H
     mov marh, ra
@@ -1141,7 +1346,7 @@ oled_ws_done:
     mov prh, ra
     jmp
 
-oled_ws_i2c_start:
+*i2c_start:
     push lrl
     push lrh
 
@@ -1154,22 +1359,22 @@ oled_ws_i2c_start:
     ldi $OLED_GPIO_DIR1_L
     mov marl, ra
     mov m, zero
-    call oled_ws_delay_short
+    call @*delay_short
 
     ldi $OLED_GPIO_DIR1_L
     mov marl, ra
     ldi $OLED_SDA_DRIVE_LOW
     mov m, ra
-    call oled_ws_delay_short
+    call @*delay_short
 
     ldi $OLED_GPIO_DIR0_L
     mov marl, ra
     ldi $OLED_SCL_DRIVE_LOW
     mov m, ra
-    call oled_ws_delay_short
+    call @*delay_short
     ret :stack
 
-oled_ws_i2c_stop:
+*i2c_stop:
     push lrl
     push lrh
 
@@ -1180,20 +1385,20 @@ oled_ws_i2c_stop:
     mov marl, ra
     ldi $OLED_SDA_DRIVE_LOW
     mov m, ra
-    call oled_ws_delay_short
+    call @*delay_short
 
     ldi $OLED_GPIO_DIR0_L
     mov marl, ra
     mov m, zero
-    call oled_ws_delay_short
+    call @*delay_short
 
     ldi $OLED_GPIO_DIR1_L
     mov marl, ra
     mov m, zero
-    call oled_ws_delay_short
+    call @*delay_short
     ret :stack
 
-oled_ws_ack_clock_only:
+*ack_clock_only:
     push lrl
     push lrh
 
@@ -1203,22 +1408,22 @@ oled_ws_ack_clock_only:
     ldi $OLED_GPIO_DIR1_L
     mov marl, ra
     mov m, zero
-    call oled_ws_delay_short
+    call @*delay_short
 
     ldi $OLED_GPIO_DIR0_L
     mov marl, ra
     mov m, zero
-    call oled_ws_delay_short
-    call oled_ws_delay_short
+    call @*delay_short
+    call @*delay_short
 
     ldi $OLED_GPIO_DIR0_L
     mov marl, ra
     ldi $OLED_SCL_DRIVE_LOW
     mov m, ra
-    call oled_ws_delay_short
+    call @*delay_short
     ret :stack
 
-oled_ws_send_byte:
+*send_byte:
     ; In: RB = byte to send, MSB first.
     push lrl
     push lrh
@@ -1228,98 +1433,98 @@ oled_ws_send_byte:
     and ra
     mov rd, acc
     cmp zero
-    jeq oled_ws_b7_zero
-    call oled_ws_send_bit_one
-    jmpa oled_ws_b6
-oled_ws_b7_zero:
-    call oled_ws_send_bit_zero
+    jeq @*b7_zero
+    call @*send_bit_one
+    jmpa @*b6
+*b7_zero:
+    call @*send_bit_zero
 
-oled_ws_b6:
+*b6:
     mov rd, rb
     ldi #0x40
     and ra
     mov rd, acc
     cmp zero
-    jeq oled_ws_b6_zero
-    call oled_ws_send_bit_one
-    jmpa oled_ws_b5
-oled_ws_b6_zero:
-    call oled_ws_send_bit_zero
+    jeq @*b6_zero
+    call @*send_bit_one
+    jmpa @*b5
+*b6_zero:
+    call @*send_bit_zero
 
-oled_ws_b5:
+*b5:
     mov rd, rb
     ldi #0x20
     and ra
     mov rd, acc
     cmp zero
-    jeq oled_ws_b5_zero
-    call oled_ws_send_bit_one
-    jmpa oled_ws_b4
-oled_ws_b5_zero:
-    call oled_ws_send_bit_zero
+    jeq @*b5_zero
+    call @*send_bit_one
+    jmpa @*b4
+*b5_zero:
+    call @*send_bit_zero
 
-oled_ws_b4:
+*b4:
     mov rd, rb
     ldi #0x10
     and ra
     mov rd, acc
     cmp zero
-    jeq oled_ws_b4_zero
-    call oled_ws_send_bit_one
-    jmpa oled_ws_b3
-oled_ws_b4_zero:
-    call oled_ws_send_bit_zero
+    jeq @*b4_zero
+    call @*send_bit_one
+    jmpa @*b3
+*b4_zero:
+    call @*send_bit_zero
 
-oled_ws_b3:
+*b3:
     mov rd, rb
     ldi #0x08
     and ra
     mov rd, acc
     cmp zero
-    jeq oled_ws_b3_zero
-    call oled_ws_send_bit_one
-    jmpa oled_ws_b2
-oled_ws_b3_zero:
-    call oled_ws_send_bit_zero
+    jeq @*b3_zero
+    call @*send_bit_one
+    jmpa @*b2
+*b3_zero:
+    call @*send_bit_zero
 
-oled_ws_b2:
+*b2:
     mov rd, rb
     ldi #0x04
     and ra
     mov rd, acc
     cmp zero
-    jeq oled_ws_b2_zero
-    call oled_ws_send_bit_one
-    jmpa oled_ws_b1
-oled_ws_b2_zero:
-    call oled_ws_send_bit_zero
+    jeq @*b2_zero
+    call @*send_bit_one
+    jmpa @*b1
+*b2_zero:
+    call @*send_bit_zero
 
-oled_ws_b1:
+*b1:
     mov rd, rb
     ldi #0x02
     and ra
     mov rd, acc
     cmp zero
-    jeq oled_ws_b1_zero
-    call oled_ws_send_bit_one
-    jmpa oled_ws_b0
-oled_ws_b1_zero:
-    call oled_ws_send_bit_zero
+    jeq @*b1_zero
+    call @*send_bit_one
+    jmpa @*b0
+*b1_zero:
+    call @*send_bit_zero
 
-oled_ws_b0:
+*b0:
     mov rd, rb
     ldi #0x01
     and ra
     mov rd, acc
     cmp zero
-    jeq oled_ws_b0_zero
-    call oled_ws_send_bit_one
+    jeq @*b0_zero
+    call @*send_bit_one
     ret :stack
-oled_ws_b0_zero:
-    call oled_ws_send_bit_zero
+*b0_zero:
+    call @*send_bit_zero
     ret :stack
 
-oled_ws_send_bit_zero:
+*send_bit_zero:
     push lrl
     push lrh
 
@@ -1329,10 +1534,10 @@ oled_ws_send_bit_zero:
     mov marl, ra
     ldi $OLED_SDA_DRIVE_LOW
     mov m, ra
-    call oled_ws_pulse_scl
+    call @*pulse_scl
     ret :stack
 
-oled_ws_send_bit_one:
+*send_bit_one:
     push lrl
     push lrh
 
@@ -1341,34 +1546,34 @@ oled_ws_send_bit_one:
     ldi $OLED_GPIO_DIR1_L
     mov marl, ra
     mov m, zero
-    call oled_ws_pulse_scl
+    call @*pulse_scl
     ret :stack
 
-oled_ws_pulse_scl:
+*pulse_scl:
     push lrl
     push lrh
 
-    call oled_ws_delay_short
+    call @*delay_short
     ldi $OLED_GPIO_BASE_H
     mov marh, ra
     ldi $OLED_GPIO_DIR0_L
     mov marl, ra
     mov m, zero
-    call oled_ws_delay_short
-    call oled_ws_delay_short
+    call @*delay_short
+    call @*delay_short
     ldi $OLED_GPIO_DIR0_L
     mov marl, ra
     ldi $OLED_SCL_DRIVE_LOW
     mov m, ra
-    call oled_ws_delay_short
+    call @*delay_short
     ret :stack
 
-oled_ws_delay_short:
+*delay_short:
     ldi rd, $OLED_DELAY_COUNT
-oled_ws_delay_loop:
+*delay_loop:
     subi #1
     mov rd, acc
-    jne oled_ws_delay_loop
+    jne @*delay_loop
     ret
 .endfunc
 
@@ -1432,34 +1637,34 @@ oled_write_data_repeat_noack:
     mov marl, ra
     mov m, lrh
 
-    call oled_wdr_i2c_start
+    call @*i2c_start
 
     ; Slave address + write
     ldi $OLED_ADDR_W
     mov rb, ra
-    call oled_wdr_send_byte
-    call oled_wdr_ack_clock_only
+    call @*send_byte
+    call @*ack_clock_only
 
     ; Control byte = data stream
     ldi $OLED_CTRL_DATA
     mov rb, ra
-    call oled_wdr_send_byte
-    call oled_wdr_ack_clock_only
+    call @*send_byte
+    call @*ack_clock_only
 
-oled_wdr_loop:
+*loop:
     ldi $F_TMP_BASE_H
     mov marh, ra
     ldi $F_T0_L
     mov marl, ra
     mov rd, m
     cmp zero
-    jeq oled_wdr_done
+    jeq @*done
 
     ldi $F_T1_L
     mov marl, ra
     mov rb, m
-    call oled_wdr_send_byte
-    call oled_wdr_ack_clock_only
+    call @*send_byte
+    call @*ack_clock_only
 
     ldi $F_TMP_BASE_H
     mov marh, ra
@@ -1469,10 +1674,10 @@ oled_wdr_loop:
     subi #1
     mov rd, acc
     mov m, rd
-    jmpa oled_wdr_loop
+    jmpa @*loop
 
-oled_wdr_done:
-    call oled_wdr_i2c_stop
+*done:
+    call @*i2c_stop
     mov rb, zero
     ldi $F_TMP_BASE_H
     mov marh, ra
@@ -1486,7 +1691,7 @@ oled_wdr_done:
     mov prh, ra
     jmp
 
-oled_wdr_i2c_start:
+*i2c_start:
     push lrl
     push lrh
 
@@ -1498,22 +1703,22 @@ oled_wdr_i2c_start:
     ldi $OLED_GPIO_DIR1_L
     mov marl, ra
     mov m, zero
-    call oled_wdr_delay_short
+    call @*delay_short
 
     ldi $OLED_GPIO_DIR1_L
     mov marl, ra
     ldi $OLED_SDA_DRIVE_LOW
     mov m, ra
-    call oled_wdr_delay_short
+    call @*delay_short
 
     ldi $OLED_GPIO_DIR0_L
     mov marl, ra
     ldi $OLED_SCL_DRIVE_LOW
     mov m, ra
-    call oled_wdr_delay_short
+    call @*delay_short
     ret :stack
 
-oled_wdr_i2c_stop:
+*i2c_stop:
     push lrl
     push lrh
 
@@ -1523,20 +1728,20 @@ oled_wdr_i2c_stop:
     mov marl, ra
     ldi $OLED_SDA_DRIVE_LOW
     mov m, ra
-    call oled_wdr_delay_short
+    call @*delay_short
 
     ldi $OLED_GPIO_DIR0_L
     mov marl, ra
     mov m, zero
-    call oled_wdr_delay_short
+    call @*delay_short
 
     ldi $OLED_GPIO_DIR1_L
     mov marl, ra
     mov m, zero
-    call oled_wdr_delay_short
+    call @*delay_short
     ret :stack
 
-oled_wdr_ack_clock_only:
+*ack_clock_only:
     push lrl
     push lrh
 
@@ -1545,22 +1750,22 @@ oled_wdr_ack_clock_only:
     ldi $OLED_GPIO_DIR1_L
     mov marl, ra
     mov m, zero
-    call oled_wdr_delay_short
+    call @*delay_short
 
     ldi $OLED_GPIO_DIR0_L
     mov marl, ra
     mov m, zero
-    call oled_wdr_delay_short
-    call oled_wdr_delay_short
+    call @*delay_short
+    call @*delay_short
 
     ldi $OLED_GPIO_DIR0_L
     mov marl, ra
     ldi $OLED_SCL_DRIVE_LOW
     mov m, ra
-    call oled_wdr_delay_short
+    call @*delay_short
     ret :stack
 
-oled_wdr_send_byte:
+*send_byte:
     push lrl
     push lrh
 
@@ -1569,98 +1774,98 @@ oled_wdr_send_byte:
     and ra
     mov rd, acc
     cmp zero
-    jeq oled_wdr_b7_zero
-    call oled_wdr_send_bit_one
-    jmpa oled_wdr_b6
-oled_wdr_b7_zero:
-    call oled_wdr_send_bit_zero
+    jeq @*b7_zero
+    call @*send_bit_one
+    jmpa @*b6
+*b7_zero:
+    call @*send_bit_zero
 
-oled_wdr_b6:
+*b6:
     mov rd, rb
     ldi #0x40
     and ra
     mov rd, acc
     cmp zero
-    jeq oled_wdr_b6_zero
-    call oled_wdr_send_bit_one
-    jmpa oled_wdr_b5
-oled_wdr_b6_zero:
-    call oled_wdr_send_bit_zero
+    jeq @*b6_zero
+    call @*send_bit_one
+    jmpa @*b5
+*b6_zero:
+    call @*send_bit_zero
 
-oled_wdr_b5:
+*b5:
     mov rd, rb
     ldi #0x20
     and ra
     mov rd, acc
     cmp zero
-    jeq oled_wdr_b5_zero
-    call oled_wdr_send_bit_one
-    jmpa oled_wdr_b4
-oled_wdr_b5_zero:
-    call oled_wdr_send_bit_zero
+    jeq @*b5_zero
+    call @*send_bit_one
+    jmpa @*b4
+*b5_zero:
+    call @*send_bit_zero
 
-oled_wdr_b4:
+*b4:
     mov rd, rb
     ldi #0x10
     and ra
     mov rd, acc
     cmp zero
-    jeq oled_wdr_b4_zero
-    call oled_wdr_send_bit_one
-    jmpa oled_wdr_b3
-oled_wdr_b4_zero:
-    call oled_wdr_send_bit_zero
+    jeq @*b4_zero
+    call @*send_bit_one
+    jmpa @*b3
+*b4_zero:
+    call @*send_bit_zero
 
-oled_wdr_b3:
+*b3:
     mov rd, rb
     ldi #0x08
     and ra
     mov rd, acc
     cmp zero
-    jeq oled_wdr_b3_zero
-    call oled_wdr_send_bit_one
-    jmpa oled_wdr_b2
-oled_wdr_b3_zero:
-    call oled_wdr_send_bit_zero
+    jeq @*b3_zero
+    call @*send_bit_one
+    jmpa @*b2
+*b3_zero:
+    call @*send_bit_zero
 
-oled_wdr_b2:
+*b2:
     mov rd, rb
     ldi #0x04
     and ra
     mov rd, acc
     cmp zero
-    jeq oled_wdr_b2_zero
-    call oled_wdr_send_bit_one
-    jmpa oled_wdr_b1
-oled_wdr_b2_zero:
-    call oled_wdr_send_bit_zero
+    jeq @*b2_zero
+    call @*send_bit_one
+    jmpa @*b1
+*b2_zero:
+    call @*send_bit_zero
 
-oled_wdr_b1:
+*b1:
     mov rd, rb
     ldi #0x02
     and ra
     mov rd, acc
     cmp zero
-    jeq oled_wdr_b1_zero
-    call oled_wdr_send_bit_one
-    jmpa oled_wdr_b0
-oled_wdr_b1_zero:
-    call oled_wdr_send_bit_zero
+    jeq @*b1_zero
+    call @*send_bit_one
+    jmpa @*b0
+*b1_zero:
+    call @*send_bit_zero
 
-oled_wdr_b0:
+*b0:
     mov rd, rb
     ldi #0x01
     and ra
     mov rd, acc
     cmp zero
-    jeq oled_wdr_b0_zero
-    call oled_wdr_send_bit_one
+    jeq @*b0_zero
+    call @*send_bit_one
     ret :stack
-oled_wdr_b0_zero:
-    call oled_wdr_send_bit_zero
+*b0_zero:
+    call @*send_bit_zero
     ret :stack
 
-oled_wdr_send_bit_zero:
+*send_bit_zero:
     push lrl
     push lrh
 
@@ -1670,10 +1875,10 @@ oled_wdr_send_bit_zero:
     mov marl, ra
     ldi $OLED_SDA_DRIVE_LOW
     mov m, ra
-    call oled_wdr_pulse_scl
+    call @*pulse_scl
     ret :stack
 
-oled_wdr_send_bit_one:
+*send_bit_one:
     push lrl
     push lrh
 
@@ -1682,34 +1887,34 @@ oled_wdr_send_bit_one:
     ldi $OLED_GPIO_DIR1_L
     mov marl, ra
     mov m, zero
-    call oled_wdr_pulse_scl
+    call @*pulse_scl
     ret :stack
 
-oled_wdr_pulse_scl:
+*pulse_scl:
     push lrl
     push lrh
 
-    call oled_wdr_delay_short
+    call @*delay_short
     ldi $OLED_GPIO_BASE_H
     mov marh, ra
     ldi $OLED_GPIO_DIR0_L
     mov marl, ra
     mov m, zero
-    call oled_wdr_delay_short
-    call oled_wdr_delay_short
+    call @*delay_short
+    call @*delay_short
     ldi $OLED_GPIO_DIR0_L
     mov marl, ra
     ldi $OLED_SCL_DRIVE_LOW
     mov m, ra
-    call oled_wdr_delay_short
+    call @*delay_short
     ret :stack
 
-oled_wdr_delay_short:
+*delay_short:
     ldi rd, $OLED_DELAY_COUNT
-oled_wdr_delay_loop:
+*delay_loop:
     subi #1
     mov rd, acc
-    jne oled_wdr_delay_loop
+    jne @*delay_loop
     ret
 .endfunc
 
@@ -1743,7 +1948,7 @@ oled_fill_screen_noack:
     ldi #0xB0
     mov rb, ra
 
-oled_fill_page_loop:
+*page_loop:
     ; Save current page command.
     ldi $F_TMP_BASE_H
     mov marh, ra
@@ -1790,7 +1995,7 @@ oled_fill_page_loop:
     ldi #0xB8
     mov rd, rb
     cmp ra
-    jne oled_fill_page_loop
+    jne @*page_loop
 
     mov rb, zero
     ret :stack

@@ -82,7 +82,7 @@ module arnicomp_soc_top_gowin #(
         .oce(1'b1),
         .ce(1'b1),
         .reset(1'b0),
-        .ad(instr_addr[10:0])
+        .ad(instr_addr[11:0])
     );
 
     memory_map_unit #(

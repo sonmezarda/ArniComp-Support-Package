@@ -361,7 +361,7 @@ class AssemblerCLI:
         self,
         input_file: str,
         output_file: str,
-        depth: int = 2048,
+        depth: int = 4096,
         listing_file: Optional[str] = None,
         listing_mode: str = "hex",
     ) -> None:
@@ -397,25 +397,68 @@ class AssemblerCLI:
             if depth % 32 != 0:
                 raise ValueError("--depth must be a multiple of 32 for Gowin pROM INIT_RAM blocks")
 
-            init_count = depth // 32
-            init_lines = []
-            for block_index in range(init_count):
-                chunk = byte_values[block_index * 32:(block_index + 1) * 32]
-                hex_payload = "".join(reversed(chunk))
-                init_lines.append(
-                    f"defparam prom_inst_0.INIT_RAM_{block_index:02X} = 256'h{hex_payload};"
+            instance_defs = []
+            prom_instance_pattern = re.compile(r"pROM\s+(prom_inst_\d+)\s*\((.*?)\);\s*", re.DOTALL)
+            bit_width_pattern = re.compile(r"defparam\s+(prom_inst_\d+)\.BIT_WIDTH\s*=\s*(\d+)\s*;")
+            bit_widths = {name: int(width) for name, width in bit_width_pattern.findall(prom_text)}
+
+            for instance_name, body in prom_instance_pattern.findall(prom_text):
+                dout_match = re.search(r"dout\[(\d+):(\d+)\]", body)
+                if dout_match is None:
+                    continue
+                hi = int(dout_match.group(1))
+                lo = int(dout_match.group(2))
+                width = hi - lo + 1
+                configured_width = bit_widths.get(instance_name)
+                if configured_width is None:
+                    raise ValueError(f"Could not find BIT_WIDTH for {instance_name}")
+                if configured_width != width:
+                    raise ValueError(
+                        f"{instance_name} BIT_WIDTH={configured_width} does not match dout slice width {width}"
+                    )
+                if 256 % width != 0:
+                    raise ValueError(f"{instance_name} BIT_WIDTH={width} does not divide 256 bits evenly")
+                instance_defs.append((lo, instance_name, width))
+
+            if not instance_defs:
+                raise ValueError("Could not find any pROM instance dout slices in Gowin pROM file")
+
+            instance_defs.sort(key=lambda item: item[0])
+            total_width = sum(width for _, _, width in instance_defs)
+            if total_width != 8:
+                raise ValueError(
+                    f"Gowin pROM instances cover {total_width} output bits, expected 8"
                 )
 
-            new_init_block = "\n".join(init_lines)
-            pattern = re.compile(
-                r"defparam\s+prom_inst_0\.INIT_RAM_00\s*=.*?;\n(?:defparam\s+prom_inst_0\.INIT_RAM_[0-9A-F]{2}\s*=.*?;\n?)*",
-                re.DOTALL,
-            )
+            updated_text = prom_text
+            for lo, instance_name, width in instance_defs:
+                mask = (1 << width) - 1
+                entries_per_block = 256 // width
+                init_count = depth // entries_per_block
+                init_lines = []
+                for block_index in range(init_count):
+                    block_entries = byte_values[block_index * entries_per_block:(block_index + 1) * entries_per_block]
+                    value = 0
+                    for entry_index, byte_hex in enumerate(block_entries):
+                        byte_value = int(byte_hex, 16)
+                        lane_value = (byte_value >> lo) & mask
+                        value |= lane_value << (entry_index * width)
+                    init_lines.append(
+                        f"defparam {instance_name}.INIT_RAM_{block_index:02X} = 256'h{value:064X};"
+                    )
 
-            if not pattern.search(prom_text):
-                raise ValueError("Could not find existing prom_inst_0.INIT_RAM_00... block in Gowin pROM file")
+                new_init_block = "\n".join(init_lines)
+                pattern = re.compile(
+                    rf"defparam\s+{instance_name}\.INIT_RAM_00\s*=.*?;\n(?:defparam\s+{instance_name}\.INIT_RAM_[0-9A-F]{{2}}\s*=.*?;\n?)*",
+                    re.DOTALL,
+                )
 
-            updated_text = pattern.sub(new_init_block + "\n", prom_text, count=1)
+                if not pattern.search(updated_text):
+                    raise ValueError(
+                        f"Could not find existing {instance_name}.INIT_RAM_00... block in Gowin pROM file"
+                    )
+
+                updated_text = pattern.sub(new_init_block + "\n", updated_text, count=1)
 
             with open(output_file, 'w', encoding='utf-8') as f:
                 f.write(updated_text)
@@ -429,8 +472,11 @@ class AssemblerCLI:
             print(f"  Output: {output_file}")
             print(f"  Instructions: {len(binary_lines)}")
             print(f"  Padded depth: {depth}")
-            print(f"  INIT blocks written: {init_count}")
-            print("  Format: prom_inst_0.INIT_RAM_00..XX defparams")
+            print(
+                f"  INIT blocks written: {sum(depth // (256 // width) for _, _, width in instance_defs)} "
+                f"across {len(instance_defs)} pROM instance(s)"
+            )
+            print("  Format: prom_inst_N.INIT_RAM_00..XX defparams")
             print(f"  Warnings: {len(warnings)}")
 
             if labels:
@@ -573,6 +619,7 @@ ASSEMBLY SYNTAX:
     ; Comments start with semicolon
     equ CONSTANT_NAME value     ; Define constants
     label:                      ; Define labels
+    *local:                     ; Local label inside nearest global label scope
     .include "file.asm"         ; Textual include
     .import "lib.asm" fn1, fn2  ; Import selected functions to program end
     .export NAME                ; Library export marker
@@ -624,6 +671,7 @@ REGISTERS:
         #0b1010     Binary
         $CONST      Constant reference
         @label      Label reference
+        @*local     Local label reference
         value[hi:lo] Bit slice syntax
 
     LISTING OUTPUT:
@@ -820,7 +868,7 @@ def main():
             print("Error: Gowin pROM file path required")
             print("Usage: python main.py creategowinprom <input.asm> <gowin_prom.v> [--depth N] [--listing output.lst] [--listing-mode hex|asm|both]")
             sys.exit(1)
-        cli.create_gowin_prom(input_file, output_file, depth or 2048, listing_file, listing_mode)
+        cli.create_gowin_prom(input_file, output_file, depth or 4096, listing_file, listing_mode)
 
     elif command == "load":
         if len(sys.argv) < 3:
