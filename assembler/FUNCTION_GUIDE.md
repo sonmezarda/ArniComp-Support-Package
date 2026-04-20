@@ -32,7 +32,16 @@ The goal is not to imitate a large-system ABI. The goal is to make hand-written 
 
 - first argument: `RB`
 - second argument: `RD`
-- further arguments: stack or scratch memory
+- further arguments:
+  - stack, when values are naturally consumed in order
+  - memory via `MAR`, when the callee needs reusable random access to a caller-owned block
+  - optional `VA` virtual registers, when caller and callee explicitly agree on a fixed memory ABI
+
+Practical rule:
+
+- keep the fast path in registers (`RB`, `RD`)
+- use stack for payload-style or sequential arguments
+- if stacked arguments need random access, the callee may pop them into `VT` or `VS` on entry
 
 ### Multi-byte register pairs
 
@@ -216,14 +225,11 @@ call mul_u8      ; good, default temp is RA
 ; call mul_u8 :RD ; bad, would overwrite b before the call
 ```
 
-## Scratch Memory Convention
+## Virtual Register Page Convention
 
-ArniComp code often needs a small global scratch area for:
+ArniComp code often needs more working state than fits cleanly in `RA`, `RB`, and `RD`.
 
-- extra parameters
-- temporary bytes
-- 16-bit intermediate values
-- helper routines that outgrow register-only code
+Instead of treating low RAM as an unstructured scratch pool, this guide recommends treating page `0x0000..0x001F` as a small virtual register file.
 
 Recommended include:
 
@@ -231,7 +237,7 @@ Recommended include:
 .include "../includes/function_abi.asm"
 ```
 
-Recommended scratch page:
+Recommended virtual-register page:
 
 - high byte: `0x00`
 - address range reserved by convention: `0x0000..0x001F`
@@ -239,18 +245,84 @@ Recommended scratch page:
 Why this default:
 
 - this SoC maps writable data RAM starting at `0x0000`
-- using the first scratch page keeps helper code portable across the current examples and FPGA build
+- using the first RAM page keeps helper code portable across the current examples and FPGA build
 - the old `0x0E00` suggestion is not valid on the current memory map
+- `INC #1`, `INC #2`, `DEC #1`, and `DEC #2` make contiguous low-memory slots especially valuable
 
-This area is not automatic stack frame storage. It is a shared scratch page.
+This page is not an automatic stack frame. It is a shared virtual-register page with banked conventions.
+
+### Bank layout
+
+- `VT0..VT15` at `0x0000..0x000F`
+  - caller-clobbered temp virtual registers
+  - any function may use these freely unless it documents a stricter contract
+  - if the caller wants values to survive a call, the caller must move them elsewhere first
+- `VS0..VS7` at `0x0010..0x0017`
+  - preserved virtual registers
+  - general-purpose helper functions should not clobber these unless their contract explicitly says so
+  - use these for values that must survive nested calls
+- `VA0..VA7` at `0x0018..0x001F`
+  - optional argument / spill virtual registers
+  - use only when caller and callee intentionally agree on a fixed memory ABI
+  - this bank is useful for small pointer-free argument blocks, but it is not the default extra-argument path
+
+### Why banks are contiguous
+
+Contiguous slots matter on this ISA because routines often want to park `MARH = 0`, point `MARL` at the start of a bank, and then walk with `INC` / `DEC`.
+
+Example:
+
+```assembly
+clr marh
+clr marl          ; VT0
+mov m, rb         ; VT0 = RB
+inc #1
+mov m, rd         ; VT1 = RD
+inc #1
+mov m, zero       ; VT2 = 0
+```
+
+### Stack and virtual registers
+
+Stack arguments are still useful, especially for payload-style or sequential inputs.
+
+However, the current ISA does not provide stack-relative random access. Once arguments need to be revisited out of order, a useful pattern is to materialize them into virtual registers on function entry.
+
+Leaf-friendly example:
+
+```assembly
+clr marh
+clr marl          ; VT0
+
+pop m             ; stacked arg0 -> VT0
+inc #1
+pop m             ; stacked arg1 -> VT1
+inc #1
+pop m             ; stacked arg2 -> VT2
+```
+
+Then the function can revisit those values later by repositioning `MARL` and walking inside the contiguous `VT` bank.
+
+Rule of thumb:
+
+- use `VT` when the popped values are short-lived and may be clobbered by child calls
+- use `VS` when the values must survive nested calls
+- use `VA` only when both sides want a fixed memory-call contract instead of stack transport
+
+### Memory preservation rules
+
+- `VT` is caller-clobbered
+- `VS` is preserved by convention
+- `VA` is call-defined and should be considered volatile unless the routine contract says otherwise
+
+Because this is shared RAM rather than hardware-managed register state, preservation is still a convention.
 
 That means:
 
-- it is simple and cheap
-- it is fine for non-reentrant helper code
-- recursive code must use it carefully
-- nested routines should document which scratch slots they use
-- stack use is perfectly valid when it simplifies the routine, but core math helpers should avoid stack/scratch traffic when a register-only implementation is practical
+- routines should document which `VT`, `VS`, or `VA` slots they use
+- recursive code must manage both `LRL/LRH` and virtual-register contents deliberately
+- helper libraries should prefer `VT` for internal scratch
+- helper libraries should avoid undocumented writes to `VS`
 
 Library note:
 
@@ -258,9 +330,16 @@ Library note:
 - exported library routines should therefore prefer to be self-contained when practical
 - if a routine intentionally calls another imported helper, the caller must import both
 
-## Included Scratch Symbols
+## Included Virtual Register Symbols
 
-The scratch include defines:
+The ABI include defines:
+
+- `F_VR_BASE_H`
+- `F_VT0_L .. F_VT15_L`
+- `F_VS0_L .. F_VS7_L`
+- `F_VA0_L .. F_VA7_L`
+
+It also keeps compatibility aliases for older code:
 
 - `F_TMP_BASE_H`
 - `F_T0_L .. F_T7_L`
@@ -271,10 +350,10 @@ The scratch include defines:
 Suggested usage:
 
 ```assembly
-ldi $F_TMP_BASE_H
+ldi $F_VR_BASE_H
 mov marh, ra
 
-ldi $F_T0_L
+ldi $F_VT0_L
 mov marl, ra
 mov m, rb
 ```
@@ -306,10 +385,10 @@ Or, when scratch memory is used:
 ;   RB = parsed value
 ; clobbers:
 ;   RA, RD, ACC, flags, MARL, MARH
-; scratch:
-;   F_T0_L
-;   F_W0_LO_L
-;   F_W0_HI_L
+; vregs:
+;   F_VT0_L
+;   F_VT8_L
+;   F_VT9_L
 ```
 
 Example 16-bit header:
@@ -319,15 +398,32 @@ Example 16-bit header:
 ; in :
 ;   RD = a_lo
 ;   RB = a_hi
-;   [F_TMP_BASE_H:F_W0_LO_L] = b_lo
-;   [F_TMP_BASE_H:F_W0_HI_L] = b_hi
+;   [F_VR_BASE_H:F_VT8_L] = b_lo
+;   [F_VR_BASE_H:F_VT9_L] = b_hi
 ; out:
 ;   RD = sum_lo
 ;   RB = sum_hi
 ; clobbers:
 ;   RA, ACC, flags, MARL, MARH
-; scratch:
+; vregs:
 ;   none
+```
+
+Example with stacked extra arguments materialized into `VT`:
+
+```assembly
+; blend3_func
+; in :
+;   RB = base
+;   stack top = factor0, factor1, factor2
+; out:
+;   RB = blended result
+; clobbers:
+;   RA, RD, ACC, flags, MARL, MARH
+; vregs:
+;   F_VT0_L
+;   F_VT1_L
+;   F_VT2_L
 ```
 
 ## Practical Summary
@@ -338,5 +434,9 @@ Example 16-bit header:
 - treat `RA` as volatile scratch
 - assume `RD` is caller-saved unless the function contract says otherwise
 - save `LRL/LRH` before nested `CALL`s
-- use the shared scratch page for extra state
-- be careful with recursion, because both `LR` and scratch memory must be handled deliberately
+- use the virtual-register page for extra state
+- prefer `VT` for temp working state
+- use `VS` for values that must survive nested calls
+- use stack for sequential extra arguments, and materialize to `VT` or `VS` if random access is needed
+- use `VA` only for explicit fixed-memory calling contracts
+- be careful with recursion, because both `LR` and virtual-register contents must be handled deliberately

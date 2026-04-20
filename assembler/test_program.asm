@@ -43,7 +43,7 @@ start:
     
     ; Test special instructions
     SMSBRA             ; Set MSB of RA
-    INX                ; Increment MARL
+    INX                ; Increment memory address
     
 loop:
     ; Test conditional jumps

@@ -11,7 +11,7 @@ mul_u8:
     ;   RB = a*b (low 8 bits)
     ; clobbers:
     ;   RA, RD, ACC, flags, PRL, PRH
-    ; scratch:
+    ; vregs:
     ;   none
 
     ; Internal layout:
@@ -22,16 +22,16 @@ mul_u8:
     mov rb, rd
     clr rd
 
-mul_u8_check:
+*loop:
     ; PR <- mul_u8_done
     push ra
-    ldi LOW(@mul_u8_done)
+    ldi LOW(@*done)
     mov prl, ra
-    ldi HIGH(@mul_u8_done)
+    ldi HIGH(@*done)
     mov prh, ra
     pop ra
 
-    ; if (RA == 0) goto mul_u8_done
+    ; if (RA == 0) goto *done
     push rd
     mov rd, ra
     cmp zero
@@ -49,16 +49,16 @@ mul_u8_check:
     mov ra, acc
     pop rd
 
-    ; PR <- mul_u8_check
+    ; PR <- *loop
     push ra
-    ldi LOW(@mul_u8_check)
+    ldi LOW(@*loop)
     mov prl, ra
-    ldi HIGH(@mul_u8_check)
+    ldi HIGH(@*loop)
     mov prh, ra
     pop ra
     jmp
 
-mul_u8_done:
+*done:
     mov rb, rd
     ret
 .endfunc
@@ -77,7 +77,7 @@ add_u16_mem:
     ;   RB = sum_hi
     ; clobbers:
     ;   RA, ACC, flags, MARL
-    ; scratch:
+    ; vregs:
     ;   none
 
     add m
@@ -99,19 +99,19 @@ add_u16_scratch:
     ; in :
     ;   RD = a_lo
     ;   RB = a_hi
-    ;   [F_TMP_BASE_H:F_W0_LO_L] = b_lo
-    ;   [F_TMP_BASE_H:F_W0_HI_L] = b_hi
+    ;   [F_VR_BASE_H:F_VT8_L] = b_lo
+    ;   [F_VR_BASE_H:F_VT9_L] = b_hi
     ; out:
     ;   RD = sum_lo
     ;   RB = sum_hi
     ; clobbers:
     ;   RA, ACC, flags, MARL, MARH
-    ; scratch:
+    ; vregs:
     ;   none
 
-    ldi $F_TMP_BASE_H
+    ldi $F_VR_BASE_H
     mov marh, ra
-    ldi $F_W0_LO_L
+    ldi $F_VT8_L
     mov marl, ra
 
     add m

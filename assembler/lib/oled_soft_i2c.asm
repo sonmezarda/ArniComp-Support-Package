@@ -26,7 +26,7 @@ oled_gpio_bus_init:
     ; in :
     ;   none
     ; out:
-    ;   RB = 0
+    ;   RB = 0 if no error
     ; clobbers:
     ;   RA, RD, ACC, flags, MARL, MARH
     ; scratch:
