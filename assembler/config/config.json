@@ -1,6 +1,8 @@
 {
     "special_chars": {
         "comment": ";",
+        "block_comment_start": "/*",
+        "block_comment_end": "*/",
         "label": ":"
     },
     "keywords": {

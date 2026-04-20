@@ -4,6 +4,8 @@ import os
 import re
 from typing import Callable, Dict, List, Optional, Tuple
 
+from .CommentStripper import CommentStripper
+
 
 class Preprocessor:
     """Expand source-level constructs such as includes and repeat blocks."""
@@ -11,10 +13,14 @@ class Preprocessor:
     def __init__(
         self,
         comment_char: str,
+        block_comment_start: str,
+        block_comment_end: str,
         source_line_factory: Callable[[int, str, str], object],
         expression_evaluator: Callable[[str, Optional[Dict[str, int]]], int],
     ) -> None:
         self.comment_char = comment_char
+        self.block_comment_start = block_comment_start
+        self.block_comment_end = block_comment_end
         self.source_line_factory = source_line_factory
         self.expression_evaluator = expression_evaluator
         self.include_keyword = ".include"
@@ -24,13 +30,16 @@ class Preprocessor:
         self.else_keyword = ".else"
         self.endif_keyword = ".endif"
 
-    def strip_comments(self, line: str) -> str:
-        if self.comment_char in line:
-            line = line[: line.index(self.comment_char)]
-        return line.strip()
+    def strip_comments_from_lines(self, lines: List[str], source_name: str) -> List[str]:
+        stripper = CommentStripper(
+            line_comment=self.comment_char,
+            block_comment_start=self.block_comment_start,
+            block_comment_end=self.block_comment_end,
+        )
+        return stripper.strip_lines(lines, source_name=source_name)
 
     def parse_include_target(self, text: str) -> Optional[str]:
-        stripped = self.strip_comments(text)
+        stripped = text.strip()
         if not stripped:
             return None
 
@@ -44,7 +53,7 @@ class Preprocessor:
         return target[1:-1]
 
     def parse_repeat_count(self, text: str, defines: Dict[str, int]) -> Optional[int]:
-        stripped = self.strip_comments(text)
+        stripped = text.strip()
         if not stripped:
             return None
 
@@ -65,7 +74,7 @@ class Preprocessor:
         return count
 
     def parse_define(self, text: str) -> Optional[Tuple[str, str]]:
-        stripped = self.strip_comments(text)
+        stripped = text.strip()
         if not stripped:
             return None
 
@@ -79,7 +88,7 @@ class Preprocessor:
         return name, parts[2].strip()
 
     def parse_if_condition(self, text: str) -> Optional[str]:
-        stripped = self.strip_comments(text)
+        stripped = text.strip()
         if not stripped:
             return None
 
@@ -98,6 +107,7 @@ class Preprocessor:
         include_stack = include_stack or tuple()
         defines = defines if defines is not None else {}
         normalized_source = os.path.abspath(source_name) if source_name != "<input>" else source_name
+        sanitized_lines = self.strip_comments_from_lines(raw_lines, source_name)
 
         if normalized_source in include_stack:
             chain = " -> ".join([*include_stack, normalized_source])
@@ -108,12 +118,13 @@ class Preprocessor:
         index = 0
 
         while index < len(raw_lines):
-            raw_line = raw_lines[index]
+            raw_line = raw_lines[index].rstrip("\r\n")
+            sanitized_line = sanitized_lines[index]
             line_number = index + 1
-            stripped = self.strip_comments(raw_line)
+            stripped = sanitized_line
 
             try:
-                include_target = self.parse_include_target(raw_line)
+                include_target = self.parse_include_target(sanitized_line)
             except ValueError as exc:
                 raise ValueError(f"Error on line {source_name}:{line_number} ('{raw_line.strip()}'): {exc}") from exc
 
@@ -149,7 +160,7 @@ class Preprocessor:
                 continue
 
             try:
-                define_result = self.parse_define(raw_line)
+                define_result = self.parse_define(sanitized_line)
             except ValueError as exc:
                 raise ValueError(f"Error on line {source_name}:{line_number} ('{raw_line.strip()}'): {exc}") from exc
 
@@ -163,12 +174,17 @@ class Preprocessor:
                 continue
 
             try:
-                if_expr = self.parse_if_condition(raw_line)
+                if_expr = self.parse_if_condition(sanitized_line)
             except ValueError as exc:
                 raise ValueError(f"Error on line {source_name}:{line_number} ('{raw_line.strip()}'): {exc}") from exc
 
             if if_expr is not None:
-                true_lines, false_lines, next_index = self.collect_if_blocks(raw_lines, index + 1, source_name)
+                true_lines, false_lines, next_index = self.collect_if_blocks(
+                    raw_lines,
+                    sanitized_lines,
+                    index + 1,
+                    source_name,
+                )
                 try:
                     condition_value = self.expression_evaluator(if_expr, defines)
                 except ValueError as exc:
@@ -192,12 +208,12 @@ class Preprocessor:
                 raise ValueError(f"Error on line {source_name}:{line_number} ('{raw_line.strip()}'): unexpected .endif")
 
             try:
-                repeat_count = self.parse_repeat_count(raw_line, defines)
+                repeat_count = self.parse_repeat_count(sanitized_line, defines)
             except ValueError as exc:
                 raise ValueError(f"Error on line {source_name}:{line_number} ('{raw_line.strip()}'): {exc}") from exc
 
             if repeat_count is not None:
-                block_lines, next_index = self.collect_repeat_block(raw_lines, index + 1, source_name, defines)
+                block_lines, next_index = self.collect_repeat_block(raw_lines, sanitized_lines, index + 1, source_name, defines)
                 expanded_block = self.expand(
                     block_lines,
                     source_name=source_name,
@@ -209,7 +225,7 @@ class Preprocessor:
                 index = next_index
                 continue
 
-            expanded.append(self.source_line_factory(line_number, raw_line.rstrip("\n"), source_name))
+            expanded.append(self.source_line_factory(line_number, sanitized_line, source_name))
             index += 1
 
         return expanded
@@ -217,6 +233,7 @@ class Preprocessor:
     def collect_repeat_block(
         self,
         raw_lines: List[str],
+        sanitized_lines: List[str],
         start_index: int,
         source_name: str,
         defines: Dict[str, int],
@@ -226,19 +243,19 @@ class Preprocessor:
         index = start_index
 
         while index < len(raw_lines):
-            raw_line = raw_lines[index]
-            stripped = self.strip_comments(raw_line)
+            raw_line = raw_lines[index].rstrip("\r\n")
+            stripped = sanitized_lines[index]
 
             repeat_count = None
             if stripped:
                 try:
-                    repeat_count = self.parse_repeat_count(raw_line, defines)
+                    repeat_count = self.parse_repeat_count(stripped, defines)
                 except ValueError as exc:
                     raise ValueError(f"Error on line {source_name}:{index + 1} ('{raw_line.strip()}'): {exc}") from exc
 
             if repeat_count is not None:
                 depth += 1
-                block_lines.append(raw_line)
+                block_lines.append(stripped)
                 index += 1
                 continue
 
@@ -246,11 +263,11 @@ class Preprocessor:
                 depth -= 1
                 if depth == 0:
                     return block_lines, index + 1
-                block_lines.append(raw_line)
+                block_lines.append(stripped)
                 index += 1
                 continue
 
-            block_lines.append(raw_line)
+            block_lines.append(stripped)
             index += 1
 
         raise ValueError(f"Error in {source_name}: missing closing '}}' for .repeat block")
@@ -258,6 +275,7 @@ class Preprocessor:
     def collect_if_blocks(
         self,
         raw_lines: List[str],
+        sanitized_lines: List[str],
         start_index: int,
         source_name: str,
     ) -> Tuple[List[str], List[str], int]:
@@ -268,13 +286,12 @@ class Preprocessor:
         index = start_index
 
         while index < len(raw_lines):
-            raw_line = raw_lines[index]
-            stripped = self.strip_comments(raw_line)
+            stripped = sanitized_lines[index]
 
             if stripped:
-                if self.parse_if_condition(raw_line) is not None:
+                if self.parse_if_condition(stripped) is not None:
                     depth += 1
-                    active.append(raw_line)
+                    active.append(stripped)
                     index += 1
                     continue
 
@@ -283,7 +300,7 @@ class Preprocessor:
                         active = false_lines
                         index += 1
                         continue
-                    active.append(raw_line)
+                    active.append(stripped)
                     index += 1
                     continue
 
@@ -291,11 +308,11 @@ class Preprocessor:
                     depth -= 1
                     if depth == 0:
                         return true_lines, false_lines, index + 1
-                    active.append(raw_line)
+                    active.append(stripped)
                     index += 1
                     continue
 
-            active.append(raw_line)
+            active.append(stripped)
             index += 1
 
         raise ValueError(f"Error in {source_name}: missing closing '.endif' for .if block")

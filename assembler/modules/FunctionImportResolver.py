@@ -25,8 +25,6 @@ class FunctionImportResolver:
         self.endfunc_keyword = ".endfunc"
 
     def strip_comments(self, text: str) -> str:
-        if self.comment_char in text:
-            text = text[: text.index(self.comment_char)]
         return text.strip()
 
     def split_label_prefix(self, text: str) -> Tuple[Optional[str], str]:

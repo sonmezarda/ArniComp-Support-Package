@@ -275,6 +275,21 @@ def main():
         ("org custom fill", ["NOP", ".org 4, #0xFF", "HLT"], ["00", "FF", "FF", "FF", "01"]),
         ("align padding", ["NOP", ".align 4", "HLT"], ["00", "00", "00", "00", "01"]),
         ("align custom fill", ["NOP", ".align 4, #0x7E", "HLT"], ["00", "7E", "7E", "7E", "01"]),
+        (
+            "multiline block comment",
+            ["LDI #10 /* comment starts", "still comment", "comment ends */", "NOP"],
+            ["CA", "00"],
+        ),
+        (
+            "inline block comment",
+            ["LDI #10 /* trim this */", "NOP"],
+            ["CA", "00"],
+        ),
+        (
+            "string literal ignores line comment marker",
+            ['PUSHSTR "A;B"'],
+            ["C2", "32", "20", "DB", "31", "20", "C1", "32", "20"],
+        ),
     ]
 
     negative_cases = [
@@ -315,6 +330,11 @@ def main():
             "CALL bad suffix",
             ["CALL target :RB", "target:", "NOP"],
             "temporary register suffix must be :RA or :RD",
+        ),
+        (
+            "CALL undefined bare label",
+            ["CALL fail"],
+            "Undefined label reference: fail",
         ),
         (
             "JMPA bad suffix",
@@ -401,6 +421,11 @@ def main():
             ["root: NOP", "*loop: NOP", "*loop: HLT"],
             "duplicate local label definition",
         ),
+        (
+            "unterminated block comment",
+            ["LDI #10", "/* missing end"],
+            "Unterminated block comment",
+        ),
     ]
 
     passed = 0
@@ -417,6 +442,14 @@ def main():
     assemble_file_case(
         "include relative file",
         '.include "defs/common.inc"\nLDI $VALUE\n',
+        ["C5"],
+        include_files={"defs/common.inc": "equ VALUE 5\n"},
+    )
+    passed += 1
+
+    assemble_file_case(
+        "include target with block comment",
+        '.include "defs/common.inc" /* include defs */\nLDI $VALUE\n',
         ["C5"],
         include_files={"defs/common.inc": "equ VALUE 5\n"},
     )

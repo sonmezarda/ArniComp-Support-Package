@@ -219,6 +219,7 @@ class MacroExpander:
                 from .AssemblyHelper import ResolvedValue
 
                 return ResolvedValue(raw_text=token, value=None, kind="label")
+            raise ValueError(f"Undefined label reference: {token}")
 
         resolved = self.helper.resolve_value(token, labels, constants, allow_unresolved=allow_unresolved)
         if resolved.sliced:

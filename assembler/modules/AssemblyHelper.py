@@ -16,6 +16,7 @@ from .MacroExpander import MacroExpander
 from .Optimizer import Optimizer
 from .Preprocessor import Preprocessor
 from .FunctionImportResolver import FunctionImportResolver
+from .CommentStripper import CommentStripper
 
 
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), "..", "config", "config.json")
@@ -28,6 +29,8 @@ SOURCES = {name.upper(): bits for name, bits in config["sources"].items()}
 JUMP_CONDITIONS = {name.upper(): bits for name, bits in config["jump_conditions"].items()}
 JUMP_ALIASES = {name.upper(): target.upper() for name, target in config["jump_aliases"].items()}
 COMMENT_CHAR = config["special_chars"]["comment"]
+BLOCK_COMMENT_START = config["special_chars"].get("block_comment_start", "/*")
+BLOCK_COMMENT_END = config["special_chars"].get("block_comment_end", "*/")
 LABEL_CHAR = config["special_chars"]["label"]
 CONSTANT_KEYWORD = config["keywords"]["constant"]
 SLICE_RE = re.compile(r"^(?P<base>.+?)\[(?P<hi>\d+):(?P<lo>\d+)\]$")
@@ -191,6 +194,8 @@ class AssemblyHelper:
     def __init__(
         self,
         comment_char: str = COMMENT_CHAR,
+        block_comment_start: str = BLOCK_COMMENT_START,
+        block_comment_end: str = BLOCK_COMMENT_END,
         label_char: str = LABEL_CHAR,
         constant_keyword: str = CONSTANT_KEYWORD,
         number_prefix: str = "#",
@@ -198,6 +203,8 @@ class AssemblyHelper:
         label_prefix: str = "@",
     ):
         self.comment_char = comment_char
+        self.block_comment_start = block_comment_start
+        self.block_comment_end = block_comment_end
         self.label_char = label_char
         self.constant_keyword = constant_keyword.lower()
         self.number_prefix = number_prefix
@@ -210,6 +217,8 @@ class AssemblyHelper:
         self.last_listing: List[ListingEntry] = []
         self.preprocessor = Preprocessor(
             comment_char=self.comment_char,
+            block_comment_start=self.block_comment_start,
+            block_comment_end=self.block_comment_end,
             source_line_factory=lambda line_number, text, src: SourceLine(line_number, text, source_name=src),
             expression_evaluator=lambda expr, vars=None: self.evaluate_expression(expr, vars),
         )
@@ -224,10 +233,13 @@ class AssemblyHelper:
     def format_line_ref(self, source_line: SourceLine) -> str:
         return f"{source_line.source_name}:{source_line.line_number}"
 
-    def strip_comments(self, line: str) -> str:
-        if self.comment_char in line:
-            line = line[: line.index(self.comment_char)]
-        return line.strip()
+    def strip_comments_from_lines(self, lines: List[str], source_name: str = "<input>") -> List[str]:
+        stripper = CommentStripper(
+            line_comment=self.comment_char,
+            block_comment_start=self.block_comment_start,
+            block_comment_end=self.block_comment_end,
+        )
+        return stripper.strip_lines(lines, source_name=source_name)
 
     def to_decimal(self, value: str) -> int:
         value = value.strip()
@@ -402,8 +414,8 @@ class AssemblyHelper:
 
     def clean_lines(self, lines: List[str]) -> List[SourceLine]:
         cleaned: List[SourceLine] = []
-        for index, line in enumerate(lines, start=1):
-            line = self.strip_comments(line)
+        stripped_lines = self.strip_comments_from_lines(lines)
+        for index, line in enumerate(stripped_lines, start=1):
             if not line:
                 continue
             cleaned.append(SourceLine(index, line))
@@ -411,8 +423,8 @@ class AssemblyHelper:
 
     def clean_source_lines(self, lines: List[SourceLine]) -> List[SourceLine]:
         cleaned: List[SourceLine] = []
-        for source_line in lines:
-            line = self.strip_comments(source_line.text)
+        stripped_lines = self.strip_comments_from_lines([source_line.text for source_line in lines])
+        for source_line, line in zip(lines, stripped_lines):
             if not line:
                 continue
             cleaned.append(SourceLine(source_line.line_number, line, source_name=source_line.source_name))

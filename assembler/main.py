@@ -645,7 +645,8 @@ COMMANDS:
         Display this help message
 
 ASSEMBLY SYNTAX:
-    ; Comments start with semicolon
+    ; Inline comments start with semicolon
+    /* ... */                    ; Block comments can span multiple lines
     equ CONSTANT_NAME value     ; Define constants
     label:                      ; Define labels
     *local:                     ; Local label inside nearest global label scope
